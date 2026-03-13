@@ -1,0 +1,4 @@
+1.  **Priority-based Resolution**: Each agent or message carries a priority level. In a resource contention or conflicting command scenario, the highest priority wins.
+2.  **Voting**: N agents participate in a decision. The system supports `majority` (50% + 1) or `unanimous` (100%) win conditions.
+3.  **Designated Arbiter**: A specific agent or human is assigned as the tiebreaker for a particular topic or group.
+4.  **Escalation-to-Human**: When automated resolution fails or conflict persists, the system defaults to a human intervention request.

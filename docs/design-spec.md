@@ -721,31 +721,445 @@ Card publishing behavior:
 
 ## § 6. Agent Discovery & Registry
 
-TBD
+The BobberChat Registry is the central directory of all agents in the mesh. It enables dynamic coordination by allowing agents and humans to discover peers based on declared capabilities rather than hardcoded endpoints.
+
+### 6.1 Registry Data Model
+
+The registry maintains the authoritative state for all workload principals. Registration data includes:
+
+| Field | Type | Description |
+|---|---|---|
+| `agent_id` | UUID | Globally unique identifier (primary key). |
+| `capabilities` | string[] | List of functional capabilities (e.g., `sql-analysis`, `code-review`). |
+| `supported_tags` | string[] | List of protocol message tags the agent understands. |
+| `version` | string | Agent implementation version (semver or commit hash). |
+| `status` | enum | Current operational state (`ONLINE`, `BUSY`, `IDLE`, `OFFLINE`, `DEGRADED`). |
+| `connected_at` | timestamp | Time of the most recent successful connection. |
+| `last_heartbeat` | timestamp | Time of the most recent liveness check. |
+| `owner_id` | UUID | Reference to the human user who owns the agent. |
+
+### 6.2 Discovery Protocol
+
+The discovery flow follows a publish-query-route pattern:
+
+1.  **Advertisement**: Upon successful authentication, the agent SDK publishes an **Agent Card** to the registry. This card contains the capabilities and supported tags defined in the agent's profile (see §5.6).
+2.  **Query API**: Agents or the TUI can query the registry to find peers.
+    *   **Capability Search**: Find agents that support specific functions (e.g., "who can do `sql-analysis`?").
+    *   **Tag Support Search**: Find agents that can handle specific protocol message types (e.g., "who supports `request.approval`?").
+    *   **Status Filtering**: Filter for `ONLINE` or `IDLE` agents to ensure low-latency responses.
+3.  **Discovery Results**: Query results return a list of matching agent profiles, including `agent_id`, `name`, `capabilities`, `status`, and a `latency_estimate` based on recent heartbeat RTT.
+
+### 6.3 Health Monitoring & Heartbeats
+
+Registry accuracy is maintained through a mandatory heartbeat mechanism:
+
+-   **Heartbeat Interval**: Configurable via SDK/Backend policy, defaults to **30 seconds**.
+-   **Missed Heartbeats**: After **3 missed intervals** (90s default), the backend transitions the agent to `OFFLINE` status.
+-   **Auto-Deregistration**: If an agent remains `OFFLINE` for more than 24 hours (configurable), its registry entry is pruned to prevent directory bloat.
+-   **Liveness Probe**: The backend periodically issues a `system.heartbeat` (see §3.3) to the agent; the SDK MUST respond to maintain the `ONLINE` state.
+
+### 6.4 Capability-Based Routing
+
+The BobberChat Broker uses registry data to perform intelligent message routing:
+
+*   **Dynamic Binding**: A requester can send a message to a "capability" instead of a specific `agent_id` (e.g., `to: "capability:code-review"`).
+*   **Load Balancing**: The broker identifies all `ONLINE` agents with the required capability and routes the request to the best match (typically using round-robin or least-busy heuristics).
+*   **Failover**: If the primary target for a capability-based request fails to acknowledge, the broker can transparently retry against another matching peer.
+
+### 6.5 Handling Ephemeral Agent Churn
+
+To support high-churn environments (short-lived agents), the registry implements two protection mechanisms:
+
+1.  **Registration Rate Limiting**: The backend throttles registration requests per user/tenant to prevent "registration storms" from misconfigured scaling logic.
+2.  **Profile Caching**: While an agent may disconnect, its profile and capabilities are cached for a grace period beyond the transport lifetime. This allows the registry to provide "Offline" discovery, where a human can still see what an agent *could* do even if it is currently disconnected.
+
+### 6.6 Discovery & Registration Flow
+
+```mermaid
+sequenceDiagram
+    participant A as Agent (SDK)
+    participant R as Registry (Backend)
+    participant Q as Requester (Agent/TUI)
+
+    A->>R: Authenticate & Register (Agent Card)
+    Note over R: Store capabilities & metadata
+    R-->>A: Registration Confirmed
+
+    loop Liveness
+        A->>R: Heartbeat (IDLE/BUSY)
+        R-->>A: ACK
+    end
+
+    Q->>R: Discovery Query (find: "sql-analysis", status: "ONLINE")
+    R-->>Q: Result: [agent_id: 8f4e..., latency: 12ms]
+
+    Q->>R: Route Message (to: "capability:sql-analysis")
+    R->>R: Select best match (8f4e...)
+    R->>A: Forward Request
+```
 
 ---
 
 ## § 7. Approval Workflows & Coordination Primitives
 
-TBD
+BobberChat provides structured mechanisms for human-in-the-loop (HITL) intervention and multi-agent coordination. These primitives ensure that autonomous agents can safely perform sensitive actions while maintaining human oversight and resolving conflicts within the swarm.
+
+### 7.1 Approval Workflow Lifecycle
+
+The approval workflow is a specialized request/response cycle managed by the Backend and exposed via the TUI. It transitions from an agent's request to a terminal decision by an authorized approver.
+
+1.  **Request Initiation**: An agent sends a message tagged `approval.request`. The payload MUST include:
+    *   `action`: A descriptive string of the intended operation (e.g., "deploy-to-prod").
+    *   `justification`: A rationale for why the action is necessary.
+    *   `urgency`: One of `low`, `medium`, `high`, or `critical`.
+    *   `timeout_ms`: Maximum duration to wait before the timeout policy triggers.
+    *   `max_cost`: (Optional) The estimated or maximum token/financial cost of the action.
+2.  **Routing & Queueing**: The Backend validates the request and routes it to the designated approver's queue. Approvers can be specific human users or supervising agents.
+3.  **TUI Presentation**: The TUI Client receives the pending request and presents it with full conversation context. The human operator is provided with `Approve` and `Deny` actions, along with an optional field for providing a reason.
+4.  **Terminal Decision**:
+    *   **Granted**: The approver sends `approval.granted`. The Backend notifies the requesting agent, allowing it to proceed.
+    *   **Denied**: The approver sends `approval.denied` with a `reason` payload. The requesting agent receives the rejection and MUST halt the specific action.
+5.  **Timeout Handling**: If no decision is reached within `timeout_ms`, the Backend applies a configurable policy:
+    *   `auto-deny`: Default safety-first behavior.
+    *   `auto-approve`: Only for low-risk, verified idempotent actions.
+    *   `escalate`: Moves the request to the next tier in the escalation chain.
+
+### 7.2 Escalation Patterns
+
+Escalation ensures that critical requests do not stall due to inactive primary approvers.
+
+*   **Fallback Chain**: Agent → Primary Approver (e.g., Team Lead) → Secondary Approver (e.g., Manager) → Human Admin (Final Fallback).
+*   **Trigger Conditions**:
+    *   **Timeout**: Primary approver fails to respond within the allotted window.
+    *   **Confidence Threshold**: A supervising agent determines its own confidence in approving is below a configured limit.
+    *   **Cost Threshold**: The `max_cost` exceeds the primary approver's spending authority.
+
+### 7.3 Coordination Primitives
+
+When multiple agents interact in a shared environment, BobberChat provides four primitives to resolve conflicts and synchronize state.
+
+1.  **Priority-based Resolution**: Each agent or message carries a priority level. In a resource contention or conflicting command scenario, the highest priority wins.
+2.  **Voting**: N agents participate in a decision. The system supports `majority` (50% + 1) or `unanimous` (100%) win conditions.
+3.  **Designated Arbiter**: A specific agent or human is assigned as the tiebreaker for a particular topic or group.
+4.  **Escalation-to-Human**: When automated resolution fails or conflict persists, the system defaults to a human intervention request.
+
+### 7.4 Anti-patterns & Safety Mechanics
+
+BobberChat addresses common multi-agent failure modes through protocol-level enforcement.
+
+*   **Token Cost Budgeting**: Every `request.action` or `approval.request` includes a `max_cost` field. The Backend tracks cumulative spending against tenant-level limits and rejects requests that would exceed the budget.
+*   **Circuit Breaker (Infinite Retry Prevention)**: If an agent fails a specific action N times consecutively, the Backend opens a circuit breaker. Subsequent retries are blocked, and the task is automatically escalated to a human for review.
+
+### 7.5 Scenario Flowcharts
+
+#### Happy Path Approval
+```mermaid
+sequenceDiagram
+    participant A as Agent (Requester)
+    participant B as Backend
+    participant H as Human (Approver)
+    
+    A->>B: approval.request (action: "delete-db")
+    B->>H: Notify TUI (Pending Approval)
+    H->>B: approval.granted
+    B->>A: approval.granted (token: "XYZ")
+    Note over A: Agent executes action
+```
+
+#### Timeout Escalation
+```mermaid
+sequenceDiagram
+    participant A as Agent
+    participant B as Backend
+    participant P as Primary Approver
+    participant S as Secondary Approver
+    
+    A->>B: approval.request (timeout: 60s)
+    B->>P: Route to Primary
+    Note right of P: No response (60s)
+    B->>B: Trigger Timeout (Escalate)
+    B->>S: Route to Secondary
+    S->>B: approval.granted
+    B->>A: approval.granted
+```
+
+#### Rejection with Reason
+```mermaid
+sequenceDiagram
+    participant A as Agent
+    participant B as Backend
+    participant H as Human
+    
+    A->>B: approval.request (action: "merge-pr")
+    B->>H: Notify TUI
+    H->>B: approval.denied (reason: "linting-failed")
+    B->>A: approval.denied (reason: "linting-failed")
+    Note over A: Agent enters recovery/fix flow
+```
+
+### 7.6 Tag Definitions: `approval.*`
+
+The `approval` family is strictly enforced for exactly-once delivery and terminal outcomes.
+
+| Tag | Required Fields | Description |
+| :--- | :--- | :--- |
+| `approval.request` | `approval_id`, `action`, `justification`, `urgency`, `timeout_ms` | Initiates a HITL workflow. |
+| `approval.granted` | `approval_id`, `approver`, `token` (optional) | Terminal success state. |
+| `approval.denied` | `approval_id`, `approver`, `reason` | Terminal failure state. |
+
+Field definitions for `approval.request` payload:
+*   `approval_id`: UUIDv4 idempotency key.
+*   `action`: String identifying the operation.
+*   `justification`: Human-readable string.
+*   `urgency`: `low` | `medium` | `high` | `critical`.
+*   `timeout_ms`: Integer (milliseconds).
+*   `max_cost`: Decimal (optional token/USD limit).
 
 ---
 
 ## § 8. Protocol Adapters (MCP/A2A/gRPC Bridging)
 
-TBD
+Protocol Adapters bridge external agent protocols into the BobberChat message fabric without changing BobberChat’s internal envelope or tag semantics (§3). Each adapter performs deterministic translation in both directions where supported.
+
+### 8.1 Adapter Architecture & Interface Contract
+
+All adapters implement a protocol-agnostic contract with three responsibilities: ingest external messages, transform them into BobberChat envelopes, and optionally emit translated outbound messages back to the source protocol.
+
+| Contract Element | Definition |
+|---|---|
+| **Input** | External protocol message/event (e.g., JSON-RPC request, A2A message, gRPC unary/stream frame) plus transport metadata (connection ID, source endpoint, auth context). |
+| **Transform** | Normalize protocol operation to BobberChat intent, assign/resolve identity, map correlation IDs, convert payload to JSON object, and apply tag auto-mapping rules. |
+| **Output** | BobberChat canonical envelope: `{id, from, to, tag, payload, metadata, timestamp, trace_id}` with tag from §3 taxonomy. |
+| **Reverse Transform** | For outbound bridge paths, map BobberChat tag + payload back into target protocol shape while preserving correlation (`request_id`, call ID, task ID). |
+| **Validation** | Reject unmappable or schema-invalid inputs with `response.error`/`error.recoverable` and adapter-specific diagnostics in metadata. |
+
+Normative behavior:
+- Adapters **MUST NOT** alter BobberChat core envelope keys.
+- Adapters **MUST** preserve causality by carrying original protocol IDs in `metadata.adapter.source_id`.
+- Adapters **SHOULD** emit adapter provenance in `metadata.adapter` (adapter name, version, direction, source protocol).
+
+### 8.2 MCP Adapter
+
+The MCP adapter bridges MCP JSON-RPC tool traffic into BobberChat request/response semantics.
+
+#### MCP-specific behavior
+- `tool/call` becomes actionable work (`request.action`).
+- `tool/result` becomes successful completion (`response.success`) or mapped failure (`response.error`) when result indicates an error shape.
+- MCP notifications (non-request events) become informational `context-provide` unless auto-mapped to `progress.*` by payload hints.
+- **Limitation**: MCP does not provide first-class multi-agent identity. Adapter assigns synthetic IDs (for example `mcp:<server-name>` or `mcp:<connection-id>`) and records origin in metadata.
+
+#### MCP ↔ BobberChat Mapping Table
+
+| MCP Primitive | Direction | BobberChat Tag | Mapping Notes |
+|---|---|---|---|
+| `tool/call` | Inbound → BobberChat | `request.action` | Tool name → `payload.action`; params → `payload.args`; JSON-RPC id → `metadata.adapter.source_id`. |
+| `tool/result` | Inbound → BobberChat | `response.success` | Result body → `payload.result`; links to originating request via `payload.request_id`. |
+| `tool/result` (error form) | Inbound → BobberChat | `response.error` | Error code/message mapped into BobberChat error payload fields. |
+| Notification event | Inbound → BobberChat | `context-provide` | Non-blocking informational events fan out to channels/topics. |
+| `request.action` | BobberChat → MCP | `tool/call` | Adapter materializes JSON-RPC call and tracks id correlation. |
+| `response.success` / `response.error` | BobberChat → MCP | `tool/result` | Converted into MCP result/error response bound to original call id. |
+
+### 8.3 A2A Adapter
+
+The A2A adapter bridges agent-to-agent interactions and discovery metadata from A2A systems.
+
+#### A2A-specific behavior
+- `message/send` maps into BobberChat `request.*` family with tag inference from content and declared skill/capability.
+- A2A Agent Cards map to BobberChat Agent Profiles (see §5.6).
+- A2A task lifecycle entities map to BobberChat Topics for threaded execution tracking.
+- Bridging is bi-directional: BobberChat agents can be projected outward as A2A-compatible agents for external orchestrators.
+
+#### A2A ↔ BobberChat Mapping Table
+
+| A2A Primitive | Direction | BobberChat Tag/Model | Mapping Notes |
+|---|---|---|---|
+| `message/send` | Inbound → BobberChat | `request.*` | Adapter infers specific child tag (`request.data`, `request.action`, `request.approval`) from intent + capability metadata. |
+| Agent Card (`.well-known/agent.json`) | Inbound → BobberChat | Agent Profile | Capabilities, endpoints, and supported operations normalized to BobberChat profile fields. |
+| Task create/update | Inbound → BobberChat | Topic (`OPEN/IN_PROGRESS/RESOLVED`) | Task ID becomes topic key; task status translated to topic lifecycle state. |
+| `request.*` | BobberChat → A2A | `message/send` | BobberChat request envelope projected as A2A message payload + routing fields. |
+| Agent Profile publish/update | BobberChat → A2A | Agent Card | BobberChat-native profile exported as A2A discoverable card. |
+| Topic lifecycle events | BobberChat → A2A | Task lifecycle update | Topic transitions emitted as A2A task status changes. |
+
+### 8.4 gRPC Adapter
+
+The gRPC adapter bridges service-oriented agent endpoints into BobberChat request/progress semantics.
+
+#### gRPC-specific behavior
+- Unary service calls map to `request.action`.
+- Protobuf request/response bodies are serialized into JSON `payload` objects (field-preserving, schema-aware conversion).
+- Streaming gRPC is represented as `progress.*` (intermediate frames) followed by terminal `response.success`/`response.error`.
+
+#### gRPC ↔ BobberChat Mapping Table
+
+| gRPC Primitive | Direction | BobberChat Tag | Mapping Notes |
+|---|---|---|---|
+| Unary RPC method call | Inbound → BobberChat | `request.action` | Fully-qualified method name → `payload.action`; protobuf request body → `payload.args`. |
+| Unary RPC return (OK) | Inbound → BobberChat | `response.success` | Protobuf response serialized to JSON `payload.result`. |
+| Unary RPC return (non-OK) | Inbound → BobberChat | `response.error` | gRPC status code/message mapped to BobberChat error schema. |
+| Server/client/bidi stream frame | Inbound → BobberChat | `progress.*` | Frame updates mapped to `progress.milestone` or `progress.percentage` when numeric progress exists. |
+| `request.action` | BobberChat → gRPC | Unary/stream invocation | Adapter selects method mapping table and marshals JSON args into protobuf message. |
+| `progress.*` / `response.*` | BobberChat → gRPC | Stream frames / terminal status | Progress emitted as stream messages; terminal tags close stream with status. |
+
+### 8.5 Tag Auto-Mapping Rules
+
+Inbound messages are auto-tagged before routing when no explicit BobberChat tag exists:
+
+| Inbound Signal Pattern | Auto-Assigned Tag | Rule Rationale |
+|---|---|---|
+| HTTP `POST` with operation intent | `request` (or `request.action` when operation key exists) | POST implies command/request semantics. |
+| HTTP `GET` translated as retrieval intent | `request.data` | Read-oriented pull maps to data request. |
+| SSE/event stream update | `progress` or `progress.milestone` | Streaming event channels are status-oriented by default. |
+| Stream chunk with explicit percent field | `progress.percentage` | Numeric completion signal maps to percentage subtype. |
+| One-way notification/webhook with no reply contract | `context-provide` | Informational, non-actionable broadcast semantics. |
+| Explicit protocol error envelope | `response.error` or `error.recoverable` | Preserves error visibility and retry semantics. |
+
+Conflict resolution:
+1. Explicit adapter mapping table wins over generic auto-rules.
+2. If multiple rules match, most specific subtype wins (e.g., `progress.percentage` over `progress`).
+3. Uncertain intent falls back to `context-provide` to avoid accidental request loops.
+
+### 8.6 Adapter Lifecycle (Backend Plugin Model)
+
+Adapters run as backend service plugins managed by the BobberChat control plane.
+
+Lifecycle stages:
+1. **Register on startup**: Backend loads adapter modules and validates declared protocol support + directionality.
+2. **Capability advertisement**: Adapter publishes bridged capabilities into the registry (e.g., reachable MCP tools, A2A cards, gRPC services).
+3. **Active translation**: Adapter subscribes to ingress/egress streams and performs mapping with correlation tracking.
+4. **Health + backpressure reporting**: Adapter emits `system.heartbeat` and adapter health metadata for observability.
+5. **Hot disable/upgrade**: Adapter can be drained and replaced without stopping core broker routing.
+
+Operational requirements:
+- Adapter registration **MUST** fail fast if mapping rules are incomplete for declared primitives.
+- Adapters **SHOULD** expose versioned capability descriptors so discovery clients can reason about bridge fidelity.
+- Broker **MAY** quarantine a degraded adapter and continue core BobberChat traffic.
+
+### 8.7 Consolidated Translation Reference
+
+| Protocol | External Primitive | BobberChat Translation |
+|---|---|---|
+| MCP | `tool/call` | `request.action` |
+| MCP | `tool/result` | `response.success` / `response.error` |
+| MCP | notification | `context-provide` |
+| A2A | `message/send` | `request.*` |
+| A2A | Agent Card | Agent Profile |
+| A2A | task lifecycle | Topic lifecycle |
+| gRPC | unary call | `request.action` |
+| gRPC | unary response | `response.success` / `response.error` |
+| gRPC | streaming frame | `progress.*` |
 
 ---
 
 ## § 9. TUI Client Design & Layout
 
-TBD
+### 9.1 Layout Concept
+The primary client interface uses a classic three-pane layout to balance navigation, conversation context, and agent metadata.
+
+```text
+┌────────────────────┬────────────────────────────────────────┬────────────────────┐
+│ Agent Directory    │ [Topic: Release 1.2]                   │ Context Panel      │
+│                    │                                        │                    │
+│ ◉ build-agent      │ ◉ build-agent: [10:04]                 │ Agent Details      │
+│ ◎ doc-writer       │ Starting compile step...               │ Name: test-runner  │
+│ ✗ test-runner      │                                        │ Role: QA           │
+│                    │ ◎ doc-writer: [10:05]                  │ Status: ◎ idle     │
+│ [Groups]           │ Acknowledged, updating readme.         │                    │
+│ > Core Dev (3)     │                                        │ Topic State        │
+│ v Writers (2)      │ ✗ test-runner: [10:06]                 │ Active: Release 1.2│
+│                    │ Error in suite B.                      │ Assignees: 3       │
+│                    │                                        │                    │
+│                    │                                        │ Pending Approvals  │
+│                    │                                        │ [Approve Deploy]   │
+└────────────────────┴────────────────────────────────────────┴────────────────────┘
+```
+
+**Pane Breakdown**:
+* **Left Pane (Agent/Group List)**: Displays active agents, agent groups, and status indicators (◉ online, ◎ idle, ✗ offline).
+* **Center Pane (Message View)**: Threaded conversation view, color-coded by tag type, featuring timestamps and sender identities.
+* **Right Pane (Context Panel)**: Surface contextual details such as agent capabilities, active topic state, and actionable items like pending approvals.
+
+### 9.2 Key Views
+The TUI is organized into five primary views to manage multi-agent environments:
+1. **Conversation View**: The core interface showing threaded messages with tag badges, sender information, and timestamps.
+2. **Agent Directory**: A live, searchable list displaying agent capabilities, statuses, and basic health metrics.
+3. **Approval Queue**: Dedicated view for pending user approvals containing necessary context and approve/deny actions.
+4. **Topic Board**: Tracks active topics showing status, assigned agents, and progress summaries.
+5. **Observability Dashboard**: High-level summary of throughput, active connections, and error rates.
+
+### 9.3 Information Density at Scale
+Handling 100+ concurrent agents requires aggressive noise reduction and grouping:
+* **Grouping**: Agents are collapsed by owner, capability, or status to prevent UI saturation.
+* **Filter/Search**: Global search capabilities to pinpoint specific agents or topics.
+* **Summary/Aggregation Mode**: Automatically collapses high-volume machine-to-machine chatter into aggregate blocks.
+* **Notification Priority Levels**:
+  * **CRITICAL**: Immediate visual interruption/pop-up.
+  * **INFO**: Subtle badge updates in the directory or topic list.
+  * **DEBUG**: Hidden by default, exposed only via log inspection.
+* **Focus Mode**: Allows the user to track specific agents or topics while suppressing all other activity.
+
+### 9.4 Interaction Model
+The client optimizes for keyboard-driven workflows, avoiding mouse dependency:
+* **Vim-Style Keybindings**: Conceptual navigation mappings for pane traversal, scrolling, and selection.
+* **Command Palette**: Accessed via `:`, offering omnibar-style fuzzy search for commands, agents, and topics.
+* **Tab-Based View Switching**: Rapid toggling between the Key Views defined above.
+
+### 9.5 Responsive Design
+The interface adapts gracefully to constrained terminal dimensions. If the terminal width drops below 120 columns (<120 cols), the TUI transitions to a **compact mode**, automatically hiding the right Context Pane. Further reductions switch to a single-pane tabbed layout.
 
 ---
 
 ## § 10. Observability & Debugging
 
-TBD
+BobberChat treats observability as a first-class citizen of the coordination layer. By providing structured visibility into agent reasoning, message flow, and system health, BobberChat enables operators to debug complex swarm behaviors that are otherwise opaque.
+
+### 10.1 Observability Data Model
+
+The observability model is built on distributed tracing principles, ensuring every interaction can be reconstructed from a single causal chain.
+
+*   **Trace Propagation**: Every message MUST carry a `trace_id` (UUIDv4) and SHOULD include a `parent_span_id`. This allows the Backend and TUI to reconstruct the full tree of agent-to-agent requests and sub-task delegations.
+*   **Span Naming Convention**: Spans are named using the pattern `agent:{agent_id}:{tag}`. For example, a research agent performing a data fetch would emit a span named `agent:researcher-01:request.data`.
+*   **OpenTelemetry Compatibility**: The Backend implements an OpenTelemetry-compatible collector. It exports traces, metrics, and logs to OTLP-compliant endpoints such as Jaeger or Grafana Tempo, allowing BobberChat to integrate into existing enterprise observability stacks.
+
+### 10.2 Key Metrics
+
+BobberChat tracks six core metrics to monitor mesh health and agent performance.
+
+| Metric Name | Type | Semantics |
+| :--- | :--- | :--- |
+| `bobberchat.messages.sent` | Counter | Total messages sent, partitioned by `agent_id` and `tag`. |
+| `bobberchat.messages.latency_ms` | Histogram | Request-to-response latency for all `request.*` tagged messages. |
+| `bobberchat.agents.online` | Gauge | Count of currently connected and authenticated agents. |
+| `bobberchat.topics.active` | Gauge | Count of currently open topics in the `OPEN` or `IN_PROGRESS` state. |
+| `bobberchat.approvals.pending` | Gauge | Count of `approval.request` messages awaiting a terminal decision. |
+| `bobberchat.errors.count` | Counter | Total error occurrences, partitioned by `agent_id` and `error_type`. |
+
+### 10.3 Debugging Features
+
+The TUI Client and Backend provide four primary features for diagnosing agent failures and coordination bottlenecks.
+
+1.  **Message Replay**: Operators can select a historical message and trigger a "Replay." The Backend re-emits the message to the original recipient with a new `id` but the same `trace_id`, allowing developers to test agent idempotency or recovery logic.
+2.  **Conversation Trace**: A visual tree view in the TUI that follows a `trace_id` through all participants. This displays the causal relationship between a parent agent's request and all subsequent subagent tool calls or responses.
+3.  **State Diff Viewer**: For agents that publish state updates, the TUI provides a diff viewer. This shows the specific changes to a Topic's state or an agent's context window at each step in the conversation.
+4.  **Dependency Graph**: A real-time visualization of agent relationships. It highlights blocked agents waiting on `request.*` responses, helping operators identify deadlocks or high-latency bottlenecks in the swarm.
+
+### 10.4 Structured Logging
+
+All system events are logged using a consistent metadata schema, making logs highly searchable and filterable. Required metadata fields include:
+*   `agent_id` / `user_id`
+*   `tag` (Protocol tag)
+*   `trace_id` (Trace correlation)
+*   `group_id` / `topic_id`
+*   `timestamp` (ISO8601 UTC)
+
+### 10.5 Alerting
+
+The Backend monitors system telemetry and triggers alerts based on specific coordination failure patterns.
+
+*   **Alert Conditions**:
+    *   **Stalled Agent**: "Agent X has > 10 unanswered requests for > 5 minutes."
+    *   **Approval Bottleneck**: "More than 5 critical approvals pending for > 15 minutes."
+    *   **Loop Detected**: "Trace Y has generated > 50 messages in 10 seconds."
+*   **Notification**: Alerts are delivered as CRITICAL notifications in the TUI and can be forwarded to external sinks (e.g., Slack, PagerDuty) via Backend plugins.
 
 ---
 

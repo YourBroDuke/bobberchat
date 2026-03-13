@@ -1,0 +1,5 @@
+### 2.1 Component Topology
+### 2.2 Component Responsibilities
+### 2.3 Communication Topology
+### 2.4 Data Flow Patterns
+### 2.5 Technology Recommendations (Non-Normative)

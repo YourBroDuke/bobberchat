@@ -1,0 +1,11 @@
+The discovery flow follows a publish-query-route pattern:
+2.  **Query API**: Agents or the TUI can query the registry to find peers.
+    *   **Capability Search**: Find agents that support specific functions (e.g., "who can do `sql-analysis`?").
+    *   **Tag Support Search**: Find agents that can handle specific protocol message types (e.g., "who supports `request.approval`?").
+3.  **Discovery Results**: Query results return a list of matching agent profiles, including `agent_id`, `name`, `capabilities`, `status`, and a `latency_estimate` based on recent heartbeat RTT.
+### 6.4 Capability-Based Routing
+*   **Dynamic Binding**: A requester can send a message to a "capability" instead of a specific `agent_id` (e.g., `to: "capability:code-review"`).
+*   **Load Balancing**: The broker identifies all `ONLINE` agents with the required capability and routes the request to the best match (typically using round-robin or least-busy heuristics).
+*   **Failover**: If the primary target for a capability-based request fails to acknowledge, the broker can transparently retry against another matching peer.
+    Q->>R: Discovery Query (find: "sql-analysis", status: "ONLINE")
+    Q->>R: Route Message (to: "capability:sql-analysis")

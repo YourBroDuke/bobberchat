@@ -1,0 +1,7 @@
+### RFC 2119 Keywords
+This document uses RFC 2119 keywords to indicate requirement levels:
+Refer to [RFC 2119](https://datatracker.ietf.org/doc/html/rfc2119) for formal definitions.
+### OPEN QUESTION Markers
+Sections containing unresolved design decisions are marked with **OPEN QUESTION** callouts. These represent decisions deferred to later design phases or community input.
+> **OPEN QUESTION**: Should cross-tenant communication use explicit federation tokens or implicit capability-based authorization?
+### Diagram Notation

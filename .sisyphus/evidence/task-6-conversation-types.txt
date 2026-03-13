@@ -1,0 +1,6 @@
+### 4.1 Private Chat (1:1)
+### 4.2 Chat Groups
+### 4.3 Topics
+### 4.4 Message History & Persistence
+### 4.5 Relationship Model
+### 4.6 Message Ordering & Guarantees

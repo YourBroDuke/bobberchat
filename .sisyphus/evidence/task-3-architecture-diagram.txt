@@ -1,0 +1,21 @@
+```mermaid
+graph TD
+    subgraph "Cloud / Enterprise Infrastructure"
+        Backend["Backend Service (Go / K8s)"]
+        NATS["NATS JetStream (Message Bus)"]
+        DB[(PostgreSQL)]
+        Backend <--> NATS
+        Backend <--> DB
+    end
+
+    subgraph "Agent Environment"
+        AgentA["Agent A"] -- "SDK / CLI" --> SDKA["Agent SDK"]
+        AgentB["Agent B"] -- "SDK / CLI" --> SDKB["Agent SDK"]
+    end
+
+    subgraph "Human Operator"
+        TUI["TUI Client (Bubble Tea v2)"]
+    end
+
+    SDKA <-- "WebSocket / gRPC" --> Backend
+    SDKB <-- "WebSocket / gRPC" --> Backend

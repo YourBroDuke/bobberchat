@@ -1,0 +1,4 @@
+sequenceDiagram
+    U->>B: Email registration/login
+    B-->>U: agent_id + API secret (shown once)
+    A->>B: Connection request with Authorization: Bearer API secret

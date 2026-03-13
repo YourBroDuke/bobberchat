@@ -1,0 +1,6 @@
+`no-response`:
+  "tag": "no-response",
+| `no-response` | root | Explicitly suppresses replies to prevent loops. Required payload: `reason` (string). | Best-effort. | Yes (drop generated responses) | `{ "reason": "heartbeat" }` |
+### 3.4 Loop Prevention Mechanics (Broker Circuit Breaker)
+BobberChat enforces loop prevention in the broker using a circuit-breaker policy tied to tag semantics:
+1. Messages tagged `no-response` are terminal for reply generation. Any adapter, SDK helper, or auto-responder that attempts a direct response to a `no-response` parent MUST be blocked by the broker.

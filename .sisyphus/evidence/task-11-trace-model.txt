@@ -1,0 +1,6 @@
+*   **Trace Propagation**: Every message MUST carry a `trace_id` (UUIDv4) and SHOULD include a `parent_span_id`. This allows the Backend and TUI to reconstruct the full tree of agent-to-agent requests and sub-task delegations.
+*   **Span Naming Convention**: Spans are named using the pattern `agent:{agent_id}:{tag}`. For example, a research agent performing a data fetch would emit a span named `agent:researcher-01:request.data`.
+*   **OpenTelemetry Compatibility**: The Backend implements an OpenTelemetry-compatible collector. It exports traces, metrics, and logs to OTLP-compliant endpoints such as Jaeger or Grafana Tempo, allowing BobberChat to integrate into existing enterprise observability stacks.
+1.  **Message Replay**: Operators can select a historical message and trigger a "Replay." The Backend re-emits the message to the original recipient with a new `id` but the same `trace_id`, allowing developers to test agent idempotency or recovery logic.
+2.  **Conversation Trace**: A visual tree view in the TUI that follows a `trace_id` through all participants. This displays the causal relationship between a parent agent's request and all subsequent subagent tool calls or responses.
+*   `trace_id` (Trace correlation)

@@ -1,0 +1,4 @@
+title: BobberChat Design Specification
+version: 0.1.0
+status: Draft
+date: 2026-03-13

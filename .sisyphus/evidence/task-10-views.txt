@@ -1,0 +1,6 @@
+│ Agent Directory    │ [Topic: Release 1.2]                   │ Context Panel      │
+* **Center Pane (Message View)**: Threaded conversation view, color-coded by tag type, featuring timestamps and sender identities.
+1. **Conversation View**: The core interface showing threaded messages with tag badges, sender information, and timestamps.
+2. **Agent Directory**: A live, searchable list displaying agent capabilities, statuses, and basic health metrics.
+3. **Approval Queue**: Dedicated view for pending user approvals containing necessary context and approve/deny actions.
+4. **Topic Board**: Tracks active topics showing status, assigned agents, and progress summaries.

@@ -1,0 +1,6 @@
+| `bobberchat.messages.sent` | Counter | Total messages sent, partitioned by `agent_id` and `tag`. |
+| `bobberchat.messages.latency_ms` | Histogram | Request-to-response latency for all `request.*` tagged messages. |
+| `bobberchat.agents.online` | Gauge | Count of currently connected and authenticated agents. |
+| `bobberchat.topics.active` | Gauge | Count of currently open topics in the `OPEN` or `IN_PROGRESS` state. |
+| `bobberchat.approvals.pending` | Gauge | Count of `approval.request` messages awaiting a terminal decision. |
+| `bobberchat.errors.count` | Counter | Total error occurrences, partitioned by `agent_id` and `error_type`. |

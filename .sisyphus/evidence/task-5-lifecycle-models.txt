@@ -1,0 +1,3 @@
+- `persistent`: long-running connected runtime profile.
+- `ephemeral`: short-lived per-task runtime profile.
+- `hybrid`: intermittently connected runtime profile with resumption.

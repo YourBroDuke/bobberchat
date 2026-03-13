@@ -1,0 +1,17 @@
+## § 8. Protocol Adapters (MCP/A2A/gRPC Bridging)
+### 8.2 MCP Adapter
+The MCP adapter bridges MCP JSON-RPC tool traffic into BobberChat request/response semantics.
+- **Limitation**: MCP does not provide first-class multi-agent identity. Adapter assigns synthetic IDs (for example `mcp:<server-name>` or `mcp:<connection-id>`) and records origin in metadata.
+#### MCP ↔ BobberChat Mapping Table
+| MCP Primitive | Direction | BobberChat Tag | Mapping Notes |
+| `request.action` | BobberChat → MCP | `tool/call` | Adapter materializes JSON-RPC call and tracks id correlation. |
+### 8.3 A2A Adapter
+The A2A adapter bridges agent-to-agent interactions and discovery metadata from A2A systems.
+#### A2A ↔ BobberChat Mapping Table
+| A2A Primitive | Direction | BobberChat Tag/Model | Mapping Notes |
+### 8.4 gRPC Adapter
+The gRPC adapter bridges service-oriented agent endpoints into BobberChat request/progress semantics.
+#### gRPC ↔ BobberChat Mapping Table
+| gRPC Primitive | Direction | BobberChat Tag | Mapping Notes |
+| `request.action` | BobberChat → gRPC | Unary/stream invocation | Adapter selects method mapping table and marshals JSON args into protobuf message. |
+2. **Capability advertisement**: Adapter publishes bridged capabilities into the registry (e.g., reachable MCP tools, A2A cards, gRPC services).

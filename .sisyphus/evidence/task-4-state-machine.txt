@@ -1,0 +1,10 @@
+stateDiagram-v2
+    [*] --> request_sent: request.* published
+    request_sent --> awaiting_response: broker accepted
+    awaiting_response --> response_received: response.success | response.partial | response.error
+    awaiting_response --> request_timeout: timeout_ms exceeded
+    request_timeout --> error_emitted: error.recoverable
+    response_received --> success_terminal: response.success
+    response_received --> error_terminal: response.error
+    response_received --> awaiting_response: response.partial (final=false)
+    error_emitted --> error_terminal

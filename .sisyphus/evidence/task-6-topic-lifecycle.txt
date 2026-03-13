@@ -1,0 +1,5 @@
+*   **Hierarchical Structure**: Topics support sub-threads for subtasks. Each sub-thread maintains a reference to its parent topic ID, allowing for deep recursive task visualization in the TUI.
+    *   `OPEN`: Task initialized, awaiting initial action.
+    *   `IN_PROGRESS`: Active execution or reasoning occurring.
+    *   `RESOLVED`: Task completed successfully; final output delivered.
+    *   `ARCHIVED`: Context moved to cold storage; no longer active in "Hot" memory.

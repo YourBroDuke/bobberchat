@@ -1,0 +1,7 @@
+### 8.1 Adapter Architecture & Interface Contract
+All adapters implement a protocol-agnostic contract with three responsibilities: ingest external messages, transform them into BobberChat envelopes, and optionally emit translated outbound messages back to the source protocol.
+| Contract Element | Definition |
+| **Input** | External protocol message/event (e.g., JSON-RPC request, A2A message, gRPC unary/stream frame) plus transport metadata (connection ID, source endpoint, auth context). |
+| **Output** | BobberChat canonical envelope: `{id, from, to, tag, payload, metadata, timestamp, trace_id}` with tag from §3 taxonomy. |
+| **Validation** | Reject unmappable or schema-invalid inputs with `response.error`/`error.recoverable` and adapter-specific diagnostics in metadata. |
+| One-way notification/webhook with no reply contract | `context-provide` | Informational, non-actionable broadcast semantics. |

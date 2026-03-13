@@ -1,0 +1,4 @@
+1. **Protocol Implementors**: Engineers building protocol adapters, custom protocol extensions, or cross-node communication bridges. Focus on §3 (Custom Protocol & Message Tag Taxonomy) and §8 (Protocol Adapters).
+2. **SDK Developers**: Engineers building SDKs for Agent frameworks (Python, Rust, Node.js, etc.). Focus on §5 (Identity, Authentication & Agent Lifecycle), §6 (Agent Discovery & Registry), and §4 (Conversation Model).
+3. **TUI Contributors**: Engineers building the terminal user interface and observability tooling. Focus on §9 (TUI Client Design & Layout) and §10 (Observability & Debugging).
+4. **Enterprise Evaluators**: Operators assessing BobberChat for production deployment. Focus on §11 (Security Considerations) and §12 (Scalability & Performance).
