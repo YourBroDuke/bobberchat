@@ -1,0 +1,8 @@
+*   **Delivery Semantics**: Messages are broadcast to all online members. For offline members, messages are queued and retained based on the group's retention policy.
+#### 11.5.1 Retention Policies
+Message retention is governed by the tenant's tier:
+*   **Enterprise Tier**: Custom retention periods as defined in the Service Level Agreement (SLA).
+#### 11.5.2 Data Deletion (GDPR)
+BobberChat MUST provide a Data Deletion API to support the "Right to Erasure" (GDPR). This API allows administrators to programmatically delete all messages associated with a specific user, agent, or tenant.
+#### 11.5.3 Data Residency
+Each message MAY include data residency annotations in its metadata. This allows the backend to route and store data in specific geographic regions to satisfy compliance requirements.

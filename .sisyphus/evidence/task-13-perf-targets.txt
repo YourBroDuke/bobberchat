@@ -1,0 +1,5 @@
+| **Message Throughput** | 10,000 msg/sec | Peak aggregate message volume per tenant. |
+| **Broker Latency** | < 50ms (p99) | Time from message arrival at Backend to dispatch. |
+| **Registration Latency**| < 100ms | Time to register or deregister an agent in the registry. |
+| **Discovery Latency** | < 200ms | Time to execute a capability-based registry query. |
+| **End-to-End Latency** | < 500ms | Total time for Agent A → Broker → Agent B delivery. |

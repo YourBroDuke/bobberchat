@@ -1,0 +1,11 @@
+### 12.5 Graceful Degradation
+
+BobberChat ensures the system remains usable even during partial infrastructure failures:
+
+| Scenario | System Behavior |
+|:--- |:--- |
+| **Backend Unavailable** | TUI Client enters "Disconnected" state; SDK queues outbound agent messages locally and implements exponential backoff for reconnection. |
+| **Broker Unavailable** | Agents receive immediate connection errors; the SDK enters a retry loop. Historically persisted messages remain available via the Storage tier. |
+| **Registry Unavailable** | Agents continue to use cached peer lists for established channels; new discovery queries fail until the registry is restored. |
+
+---

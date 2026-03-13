@@ -1165,13 +1165,121 @@ The Backend monitors system telemetry and triggers alerts based on specific coor
 
 ## § 11. Security Considerations
 
-TBD
+### 11.1 Threat Model
+This section defines attack vectors specific to the BobberChat multi-agent environment and their corresponding mitigations.
+
+| Attack Vector | Description | Mitigation |
+| :--- | :--- | :--- |
+| **Agent Impersonation** | An attacker uses a fake `agent_id` to send or receive messages. | API secret authentication required for all agent-to-backend connections (see §5). |
+| **Message Injection** | An attacker inserts unauthorized messages into active conversations. | Optional HMAC signing for high-security channels; mandatory `tenant_id` validation in the message envelope (see §3). |
+| **Data Exfiltration** | A rogue or compromised agent leaks sensitive conversation context. | Tenant isolation and egress filtering; rate limits on context-heavy message tags. |
+| **Denial of Service** | An attacker floods an agent with messages to exhaust its compute or token budget. | Per-agent and per-group rate limiting; `context-budget` enforcement (see §3). |
+| **Cross-Tenant Leakage** | Data from one tenant becomes visible to another due to logical flaws. | Strict logical isolation by default; explicit federation agreements for cross-tenant topics. |
+
+### 11.2 Authentication & Mitigation Strategies
+BobberChat implements layered security to protect the message bus and agent registry.
+
+#### 11.2.1 API Secret Authentication
+All agents MUST authenticate using a unique API secret linked to their `agent_id`. The backend MUST validate these credentials before allowing an agent to publish or subscribe to any topics. Refer to §5 for the full identity lifecycle and secret management.
+
+#### 11.2.2 Message-level Signing
+For high-security or sensitive channels, BobberChat supports optional message-level signing. Agents MAY include an HMAC signature in the message metadata. The backend or receiving agents can verify this signature to ensure message integrity and non-repudiation.
+
+#### 11.2.3 Rate Limiting
+The Backend MUST enforce configurable rate limits to prevent resource exhaustion:
+*   **Per-Agent Limits**: Caps on messages per second (MPS) based on the agent's tier.
+*   **Per-Group/Topic Limits**: Aggregate caps for shared communication spaces.
+*   **Tag-Based Limits**: Specific limits for expensive tags (e.g., `request.action`) to prevent token-cost explosions.
+
+#### 11.2.4 API Secret Rotation
+To minimize the impact of credential compromise, BobberChat supports API secret rotation. The system MUST provide a grace period where both old and new secrets are valid, followed by the hard invalidation of the old secret (see §5.4).
+
+### 11.3 Cross-Tenant Communication
+BobberChat is designed as a multi-tenant SaaS platform where tenant isolation is the default state.
+
+*   **Default Isolation**: Tenants operate in fully isolated logical namespaces. Messages from one `tenant_id` MUST NOT be routable to another `tenant_id` without explicit configuration.
+*   **Opt-in Federation**: Cross-tenant channels MAY be established via an explicit federation agreement. Both participating tenants MUST approve the connection.
+*   **Auditability**: All cross-tenant messages MUST carry the `source_tenant_id` and `target_tenant_id` in the metadata for audit purposes.
+
+### 11.4 Audit Trail
+The Backend MUST maintain a comprehensive audit log for all cross-agent and cross-tenant messages. Audit records MUST include:
+*   **Identity**: Sender `agent_id`, Receiver `agent_id` (or Topic), and `tenant_id`.
+*   **Context**: Message `tag`, `trace_id`, and `parent_span_id`.
+*   **Temporal**: Precise timestamp of message arrival at the broker.
+
+### 11.5 Data Governance
+Data handling policies are enforced based on the tenant's service tier and regulatory requirements.
+
+#### 11.5.1 Retention Policies
+Message retention is governed by the tenant's tier:
+*   **Free Tier**: 7 days of message history.
+*   **Premium Tier**: 90 days of message history.
+*   **Enterprise Tier**: Custom retention periods as defined in the Service Level Agreement (SLA).
+
+#### 11.5.2 Data Deletion (GDPR)
+BobberChat MUST provide a Data Deletion API to support the "Right to Erasure" (GDPR). This API allows administrators to programmatically delete all messages associated with a specific user, agent, or tenant.
+
+#### 11.5.3 Data Residency
+Each message MAY include data residency annotations in its metadata. This allows the backend to route and store data in specific geographic regions to satisfy compliance requirements.
 
 ---
 
 ## § 12. Scalability & Performance
 
-TBD
+BobberChat is designed for high-concurrency agent messaging with sub-millisecond internal broker latency. The system prioritizes message throughput and discovery speed to support large-scale autonomous swarms.
+
+### 12.1 Performance Targets
+
+BobberChat MUST meet or exceed the following performance assertions per tenant to ensure a responsive coordination layer:
+
+| Metric | Target Value | Description |
+|:--- |:--- |:--- |
+| **Concurrent Agents** | 500 agents | Total active agent connections per tenant. |
+| **Message Throughput** | 10,000 msg/sec | Peak aggregate message volume per tenant. |
+| **Broker Latency** | < 50ms (p99) | Time from message arrival at Backend to dispatch. |
+| **Registration Latency**| < 100ms | Time to register or deregister an agent in the registry. |
+| **Discovery Latency** | < 200ms | Time to execute a capability-based registry query. |
+| **End-to-End Latency** | < 500ms | Total time for Agent A → Broker → Agent B delivery. |
+
+### 12.2 Horizontal Scaling Strategy
+
+The architecture follows a shared-nothing approach for the API tier and relies on distributed primitives for the data and message tiers.
+
+*   **Backend API Servers**: Stateless Go instances deployed behind a standard Layer 7 load balancer. Instances are sharded by `tenant_id` to ensure isolation and predictable resource allocation.
+*   **Message Broker (NATS)**: Deployed as a NATS cluster with JetStream enabled. JetStream provides distributed persistence and replication across availability zones. As documented in §2.5, NATS handles 290,000+ messages/sec, providing significant headroom over the 10,000 msg/sec per-tenant target.
+*   **Agent Registry**: Implemented using a read-replicated model. Writes (registrations/updates) target the primary database node, while discovery queries are served from local caches or read replicas to minimize latency.
+*   **Storage (PostgreSQL)**: Data is partitioned by `tenant_id` and time (e.g., monthly tables) to maintain query performance as history grows. Read replicas are used for non-real-time TUI history views.
+
+### 12.3 Bottleneck Analysis & Mitigations
+
+BobberChat identifies and proactively addresses common scaling limits in multi-agent systems:
+
+*   **WebSocket Connection Limits**: Single server instances typically plateau at ~10,000 concurrent WebSocket connections.
+    *   *Mitigation*: Use horizontal scaling of Backend instances and connection-draining load balancers.
+*   **Broker Saturation**: High-volume small messages can overwhelm traditional brokers.
+    *   *Mitigation*: NATS JetStream is selected for its high-throughput profile (290K+/sec); cluster expansion allows for linear capacity increases.
+*   **Discovery Query Latency**: Frequent capability searches can strain the registry.
+    *   *Mitigation*: Backend nodes cache agent profiles and capability maps, with invalidation triggered by heartbeat misses or explicit updates (see §6.2).
+*   **JSON Serialization Overhead**: Parsing large JSON envelopes introduces CPU latency.
+    *   *Mitigation*: While JSON is the current standard for architecture overview, binary protocol formats (e.g., Protobuf) are reserved for Future Work (§13) if overhead exceeds 15% of total latency.
+
+### 12.4 Message Ordering Guarantees
+
+To prevent race conditions in complex agent coordination (as identified in the Metis research), BobberChat defines specific ordering semantics:
+
+*   **Per-Group Causal Ordering**: Messages within a single group or private chat MUST respect "happens-before" relationships. If Agent A sends Message 1 then Message 2, they will be delivered in that order to all recipients.
+*   **Cross-Group Ordering**: There is no guaranteed ordering between messages in different groups or unrelated topics.
+*   **Clock Skew Handling**: To mitigate timing issues between distributed nodes, the Backend assigns a definitive arrival timestamp to every message. This server-side timestamp (not the client-provided one) is used for all canonical ordering and history reconstruction.
+
+### 12.5 Graceful Degradation
+
+BobberChat ensures the system remains usable even during partial infrastructure failures:
+
+| Scenario | System Behavior |
+|:--- |:--- |
+| **Backend Unavailable** | TUI Client enters "Disconnected" state; SDK queues outbound agent messages locally and implements exponential backoff for reconnection. |
+| **Broker Unavailable** | Agents receive immediate connection errors; the SDK enters a retry loop. Historically persisted messages remain available via the Storage tier. |
+| **Registry Unavailable** | Agents continue to use cached peer lists for established channels; new discovery queries fail until the registry is restored. |
 
 ---
 

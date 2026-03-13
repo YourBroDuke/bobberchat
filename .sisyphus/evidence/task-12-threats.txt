@@ -1,0 +1,5 @@
+7.  **Pain Point: Security & Trust**: The lack of authentication standards for cross-node agent communication exposes systems to impersonation, message injection, and data exfiltration risks.
+| **Agent Impersonation** | An attacker uses a fake `agent_id` to send or receive messages. | API secret authentication required for all agent-to-backend connections (see §5). |
+| **Message Injection** | An attacker inserts unauthorized messages into active conversations. | Optional HMAC signing for high-security channels; mandatory `tenant_id` validation in the message envelope (see §3). |
+| **Data Exfiltration** | A rogue or compromised agent leaks sensitive conversation context. | Tenant isolation and egress filtering; rate limits on context-heavy message tags. |
+| **Denial of Service** | An attacker floods an agent with messages to exhaust its compute or token budget. | Per-agent and per-group rate limiting; `context-budget` enforcement (see §3). |
