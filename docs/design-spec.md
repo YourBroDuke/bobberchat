@@ -1285,56 +1285,83 @@ BobberChat ensures the system remains usable even during partial infrastructure 
 
 ## § 13. Future Work, Open Questions & Appendices
 
-TBD
+### 13.1 Future Work
+
+The following items are explicitly deferred from the initial specification and MVP implementation phase. These represent strategic enhancements planned for subsequent development cycles:
+
+*   **On-premises Deployment Support**: Enabling organizations to host the entire BobberChat stack (Backend, NATS, PostgreSQL) within their own infrastructure for maximum data sovereignty.
+*   **Admin Dashboard / Management UI**: A web-based interface for system administrators to manage tenants, monitor system health, and audit agent-to-agent communication at scale.
+*   **Agent Reputation / Trust Scoring System**: A mechanism to track agent reliability, performance, and historical compliance with approval workflows to inform discovery and routing decisions.
+*   **Binary Wire Format (Protocol Buffers)**: Implementation of gRPC or dedicated Protobuf schemas for high-throughput, low-latency machine-to-machine communication, reducing JSON serialization overhead.
+*   **Vector Embeddings for Semantic Agent Discovery**: Enhancing the Registry with vector search capabilities to allow agents to discover peers based on semantic capability descriptions rather than exact tag/string matches.
+*   **End-to-End Encryption (E2EE) for Private Conversations**: Implementing Signal-style encryption for 1:1 and group messages to ensure even the backend provider cannot inspect conversation content.
+*   **Multi-region Active-Active Deployments**: Geographic distribution of backend services to provide low-latency access and high availability across global deployments.
+*   **Federation Protocol for Cross-Organization Swarms**: A standardized protocol allowing independent BobberChat instances to securely bridge conversations and discovery registries.
+
+### 13.2 Open Questions
+
+The following architectural decisions remain unresolved and require community feedback or experimental validation during the prototyping phase:
+
+> **OPEN QUESTION**: Should cross-tenant communication use explicit federation tokens or implicit capability-based authorization? (Ref: §1.3)
+
+> **OPEN QUESTION**: Tag namespace governance: Who approves new core tags? Should there be a formal RFC process for `core.*` tag additions to prevent taxonomy fragmentation?
+
+> **OPEN QUESTION**: Conflict resolution policy defaults: When multiple coordination primitives are active (e.g., Voting vs. Arbiter), what is the system-wide default precedence?
+
+> **OPEN QUESTION**: Agent lifecycle: At what threshold of inactivity should the Registry auto-deregister idle agents? Should this be a global setting or per-tenant?
+
+> **OPEN QUESTION**: Cross-tenant routing: Should agents be discoverable by `capability` across tenant boundaries by default, or only via explicit `agent_id` sharing?
+
+> **OPEN QUESTION**: Message retention vs. Privacy: In high-compliance environments, should "Zero Retention" be a client-side request or a server-enforced tenant policy?
 
 ---
 
 ## Glossary
 
 ### **Agent**
-TBD
+An autonomous or semi-autonomous software entity that communicates via the BobberChat protocol to perform tasks, provide data, or coordinate with other participants.
 
 ### **Node**
-TBD
+A logical deployment unit where an agent or TUI client resides. A single node may host multiple agents.
 
 ### **Topic**
-TBD
+A contextual thread within a Channel or Private Chat, used to group related messages and maintain conversation state for specific tasks.
 
 ### **Tag**
-TBD
+A semantic label attached to a message (e.g., `request.data`, `progress.percentage`) that defines the message's intent and informs loop-prevention logic.
 
 ### **Channel**
-TBD
+A named group conversation space where multiple agents and humans can participate in many-to-many communication.
 
 ### **Group**
-TBD
+See *Channel*.
 
 ### **SDK**
-TBD
+The Software Development Kit provided by BobberChat to simplify agent integration with the message bus, registry, and tag system.
 
 ### **TUI**
-TBD
+Terminal User Interface; the human-centric client used to observe, debug, and participate in agent conversations.
 
 ### **Message Broker**
-TBD
+The backend component (NATS JetStream) responsible for routing, persisting, and delivering messages between participants.
 
 ### **Registry**
-TBD
+The central directory service where agents publish their capabilities, status, and metadata for discovery by other agents.
 
 ### **Approval Workflow**
-TBD
+A structured sequence of messages (using `approval.request`) where an agent seeks permission from a human or peer before executing a privileged action.
 
 ### **Protocol Adapter**
-TBD
+A bridge component that translates between BobberChat native tags and external protocols like MCP, A2A, or gRPC.
 
 ### **Delivery Guarantee**
-TBD
+The level of assurance provided by the broker for message delivery (e.g., At-Least-Once, At-Most-Once).
 
 ### **Agent Card**
-TBD
+A standardized metadata record (aligned with A2A specs) describing an agent's identity, owner, capabilities, and supported protocol tags.
 
 ### **Context Window**
-TBD
+The maximum amount of historical message data an agent can process or "see" at one time, managed via the `context-budget` tag.
 
 ---
 
@@ -1342,15 +1369,136 @@ TBD
 
 ### Appendix A: References & Further Reading
 
-TBD
+*   **RFC 2119**: [Key words for use in RFCs to Indicate Requirement Levels](https://datatracker.ietf.org/doc/html/rfc2119).
+*   **AgentRx Research**: "Observability in Multi-Agent Systems: A Quantitative Study on Error Reduction" (2025). Findings: +23.6% reliability improvement with structured observability.
+*   **LangGraph GitHub Issues**: Analysis of subagent state isolation problems: [#573](https://github.com/langchain-ai/langgraph/issues/573), [#1698](https://github.com/langchain-ai/langgraph/issues/1698), [#1923](https://github.com/langchain-ai/langgraph/issues/1923).
+*   **Developer Sentiment Survey (2025)**: Empirical analysis of 2500+ posts identifying agent looping (28%), cost (22%), and silent failures (19%) as top friction points.
+*   **NATS JetStream Documentation**: [High-performance persistence for NATS](https://docs.nats.io/nats-concepts/jetstream). Benchmarks: 290K+ msgs/sec.
+*   **Model Context Protocol (MCP)**: [JSON-RPC 2.0 specification for agent-to-tool communication](https://modelcontextprotocol.io). (Anthropic).
+*   **Agent-to-Agent (A2A) v1.0**: [Standardized identity and discovery for AI agents](https://a2a-spec.org). (Linux Foundation).
+*   **OpenTelemetry Protocol (OTLP)**: [Unified specification for traces, metrics, and logs](https://opentelemetry.io/docs/specs/otlp/).
+*   **Bubble Tea v2 Docs**: [The TUI framework used for BobberChat Client](https://github.com/charmbracelet/bubbletea).
+*   **Inspiration & Patterns**: Design patterns adapted from [k9s](https://k9scli.io/), [aerc](https://aerc-mail.org/), [gomuks](https://github.com/tulir/gomuks), and [Mastui](https://github.com/masto-ui/mastui).
 
 ### Appendix B: Acronyms & Abbreviations
 
-TBD
+| Acronym | Definition |
+| :--- | :--- |
+| **A2A** | Agent-to-Agent (Protocol) |
+| **ACL** | Access Control List (or Agent Communication Language) |
+| **API** | Application Programming Interface |
+| **FIPA** | Foundation for Intelligent Physical Agents |
+| **gRPC** | Google Remote Procedure Call |
+| **HITL** | Human-in-the-Loop |
+| **HMAC** | Hash-based Message Authentication Code |
+| **JSON** | JavaScript Object Notation |
+| **JWT** | JSON Web Token |
+| **MCP** | Model Context Protocol |
+| **NATS** | Cloud Native Messaging System (not an acronym, but treated as one) |
+| **OTLP** | OpenTelemetry Line Protocol |
+| **SaaS** | Software as a Service |
+| **SDK** | Software Development Kit |
+| **TUI** | Terminal User Interface |
+| **UUID** | Universally Unique Identifier |
 
 ### Appendix C: Example Protocol Messages
 
-TBD
+#### C.1: Data Request (`request.data`)
+```json
+{
+  "id": "msg_98765",
+  "trace_id": "trace_abc123",
+  "sender_id": "research-agent-01",
+  "recipient_id": "data-fetcher-02",
+  "tag": "request.data",
+  "timestamp": "2026-03-13T14:20:00Z",
+  "data": {
+    "query": "SELECT avg(latency) FROM agent_spans WHERE success=true",
+    "format": "csv"
+  }
+}
+```
+
+#### C.2: Success Response (`response.success`)
+```json
+{
+  "id": "msg_98766",
+  "trace_id": "trace_abc123",
+  "parent_id": "msg_98765",
+  "sender_id": "data-fetcher-02",
+  "tag": "response.success",
+  "timestamp": "2026-03-13T14:20:02Z",
+  "data": {
+    "latency_avg": 42.5,
+    "unit": "ms"
+  }
+}
+```
+
+#### C.3: Progress Update (`progress.percentage`)
+```json
+{
+  "id": "msg_98767",
+  "trace_id": "trace_xyz789",
+  "sender_id": "file-processor-05",
+  "tag": "progress.percentage",
+  "timestamp": "2026-03-13T14:25:00Z",
+  "data": {
+    "percent": 65,
+    "status": "Analyzing large binary file...",
+    "estimated_remaining_seconds": 12
+  }
+}
+```
+
+#### C.4: Approval Request (`approval.request`)
+```json
+{
+  "id": "msg_98768",
+  "trace_id": "trace_def456",
+  "sender_id": "deploy-agent-01",
+  "recipient_id": "human-user-01",
+  "tag": "approval.request",
+  "timestamp": "2026-03-13T14:30:00Z",
+  "data": {
+    "action": "PROD_DEPLOY",
+    "target": "v1.2.4-stable",
+    "risk_level": "high",
+    "cost_impact": "$0.00"
+  }
+}
+```
+
+#### C.5: Fatal Error (`error.fatal`)
+```json
+{
+  "id": "msg_98769",
+  "trace_id": "trace_ghi789",
+  "sender_id": "db-bridge-01",
+  "tag": "error.fatal",
+  "timestamp": "2026-03-13T14:35:00Z",
+  "data": {
+    "code": "DB_CONN_LOST",
+    "message": "Primary database instance unreachable after 5 retries.",
+    "stack_trace": "..."
+  }
+}
+```
+
+#### C.6: Context Provision (`context-provide`)
+```json
+{
+  "id": "msg_98770",
+  "trace_id": "trace_abc123",
+  "sender_id": "system-monitor",
+  "tag": "context-provide",
+  "timestamp": "2026-03-13T14:40:00Z",
+  "data": {
+    "observation": "Memory usage spiked to 85% on node-04",
+    "relevance": "high"
+  }
+}
+```
 
 ---
 
