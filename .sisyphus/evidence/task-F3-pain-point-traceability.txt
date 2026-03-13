@@ -1,0 +1,80 @@
+=== F3: PAIN POINT TRACEABILITY ===
+
+[1/7] OBSERVABILITY GAPS
+Problem Statement: Found in §1 Problem Statement (lines 95-95).
+Design Solution: §10 Observability & Debugging (lines 1154-1210), plus protocol trace field in §3.1 (lines 251-267).
+  - Mechanism: Required `trace_id` in canonical envelope (`trace_id` is required field) (§3.1, lines 251, 266).
+  - Mechanism: Trace propagation requirement (`trace_id` MUST + `parent_span_id` SHOULD) (§10.1, line 1166).
+  - Mechanism: Six explicitly named core metrics (`bobberchat.messages.sent`, `bobberchat.messages.latency_ms`, `bobberchat.agents.online`, `bobberchat.topics.active`, `bobberchat.approvals.pending`, `bobberchat.errors.count`) (§10.2, lines 1172-1181).
+  - Mechanism: Concrete debugging tooling: Message Replay, Conversation Trace, State Diff Viewer, Dependency Graph (§10.3, lines 1187-1190).
+Concreteness: CONCRETE (required fields, metric names, explicit features).
+Score: FULLY_ADDRESSED
+
+[2/7] CONTEXT & STATE LOSS
+Problem Statement: Found in §1 Problem Statement (lines 96-96).
+Design Solution: §4 Conversation Model (lines 460-547) + persistence tiers (§4.4, lines 507-513) + context-preservation summary (§1, line 108).
+  - Mechanism: Topics are threaded and hierarchical with parent references for subthreads, preserving execution structure (§4.3, lines 494-497).
+  - Mechanism: Full private chat history persisted and replayable (§4.1, line 474).
+  - Mechanism: Three-tier history model (Hot/Warm/Cold) with explicit windows and purposes for thread reconstruction/context loading (§4.4, lines 509-513).
+  - Mechanism: State Diff Viewer shows topic/context changes step-by-step for reconstruction (§10.3, line 1189).
+Concreteness: CONCRETE (explicit conversation model, storage tiers, lifecycle states, replay/diff capabilities).
+Score: FULLY_ADDRESSED
+
+[3/7] AGENT DISCOVERY
+Problem Statement: Found in §1 Problem Statement (lines 97-97).
+Design Solution: §6 Agent Discovery & Registry (lines 749-832), with registry-backed routing in §6.4 (lines 792-799).
+  - Mechanism: Registry schema with concrete fields (`agent_id`, `capabilities`, `supported_tags`, `status`, `last_heartbeat`, etc.) (§6.1, lines 761-770).
+  - Mechanism: Publish-query-route discovery protocol with capability search/tag support/status filtering and structured result payload (§6.2, lines 774-781).
+  - Mechanism: Heartbeat liveness policy (30s default, 3 misses -> OFFLINE, auto-deregistration >24h) (§6.3, lines 787-790).
+  - Mechanism: Capability-based routing (`to: "capability:..."`), load balancing, and failover (§6.4, lines 796-798).
+Concreteness: CONCRETE (data model + protocol steps + routing algorithm behavior).
+Score: FULLY_ADDRESSED
+
+[4/7] COORDINATION FAILURES
+Problem Statement: Found in §1 Problem Statement (lines 98-98), plus issue prevalence in market context (line 89).
+Design Solution: §3.4 Loop Prevention Mechanics (lines 400-409), §7 Coordination Primitives + anti-pattern controls (lines 872-887), and ordering semantics (§12.4, lines 1323-1327).
+  - Mechanism: Broker-enforced `no-response` terminal semantics blocking auto-replies (§3.4, line 404).
+  - Mechanism: `context-provide` marked `non_actionable=true` to suppress unintended request/response loops (§3.4, line 405).
+  - Mechanism: Circuit breaker based on `trace_id + from + to + tag` repetition window; emits `error.recoverable` and requires cooldown/operator override (§3.4, lines 406-407).
+  - Mechanism: Explicit coordination primitives (priority, voting, designated arbiter, escalation-to-human) (§7.3, lines 876-879).
+  - Mechanism: Infinite retry prevention circuit breaker + automatic human escalation (§7.4, line 886).
+  - Mechanism: Causal ordering + server-side timestamp ordering rules to reduce race/order failures (§12.4, lines 1325-1327).
+Concreteness: CONCRETE (specific broker policies, fields, thresholds, and conflict primitives).
+Score: FULLY_ADDRESSED
+
+[5/7] PROTOCOL FRAGMENTATION
+Problem Statement: Found in §1 Problem Statement (lines 99-99).
+Design Solution: §8 Protocol Adapters (lines 955-1090), plus unified envelope in §3.1 (lines 232-267).
+  - Mechanism: Deterministic adapter contract defining Input/Transform/Output/Reverse Transform/Validation (§8.1, lines 965-973).
+  - Mechanism: MCP mapping table (`tool/call` <-> `request.action`, `tool/result` <-> `response.*`, notifications -> `context-provide`) (§8.2, lines 992-999).
+  - Mechanism: A2A mapping table (`message/send` <-> `request.*`, Agent Card <-> Agent Profile, task lifecycle <-> Topic lifecycle) (§8.3, lines 1013-1020).
+  - Mechanism: gRPC mapping table (unary/stream primitives <-> `request.action`, `progress.*`, `response.*`) (§8.4, lines 1033-1040).
+  - Mechanism: Normative constraints preserving causality and provenance (`metadata.adapter.source_id`) (§8.1, lines 977-978).
+Concreteness: CONCRETE (explicit bidirectional mapping tables and contract fields).
+Score: FULLY_ADDRESSED
+
+[6/7] SCALABILITY BOTTLENECKS
+Problem Statement: Found in §1 Problem Statement (lines 100-100).
+Design Solution: §12 Scalability & Performance (lines 1278-1338), with architecture support in §2.1/§2.3.
+  - Mechanism: Explicit numeric SLO/targets: 500 concurrent agents, 10,000 msg/sec, p99 broker latency <50ms, discovery <200ms, registration <100ms (§12.1, lines 1292-1297).
+  - Mechanism: Horizontal scaling architecture: stateless backend instances behind L7 LB, tenant sharding, clustered NATS JetStream, read-replicated registry, partitioned PostgreSQL (§12.2, lines 1303-1306).
+  - Mechanism: Bottleneck-specific mitigations for WebSocket limits, broker saturation, discovery latency, and serialization overhead (§12.3, lines 1312-1319).
+Concreteness: CONCRETE (quantified targets + concrete scaling/mitigation mechanisms).
+Score: FULLY_ADDRESSED
+
+[7/7] SECURITY & TRUST
+Problem Statement: Found in §1 Problem Statement (lines 101-101).
+Design Solution: §11 Security Considerations (lines 1213-1275) + identity/auth in §5 (lines 549-746).
+  - Mechanism: Threat model table mapping attack vectors (impersonation, injection, exfiltration, DoS, cross-tenant leakage) to concrete mitigations (§11.1, lines 1222-1228).
+  - Mechanism: Mandatory API-secret auth for agents; backend must validate before publish/subscribe (§11.2.1, line 1234; §5.2, lines 603-606).
+  - Mechanism: Optional message-level HMAC signing for integrity/non-repudiation in sensitive groups (§11.2.2, line 1237).
+  - Mechanism: Enforced rate limits (per-agent, per-group/topic, tag-based) including expensive tag control (§11.2.3, lines 1240-1243).
+  - Mechanism: Tenant isolation defaults + explicit federation approval for cross-tenant communication (§11.3, lines 1251-1253).
+  - Mechanism: Mandatory audit trail fields including identity, tenant, tag, trace_id, parent_span_id, timestamp (§11.4, lines 1256-1259).
+  - Mechanism: Secret rotation with grace period and invalidation (§11.2.4, line 1246; §5.5, lines 703-707).
+Concreteness: CONCRETE (explicit controls, enforcement points, and required fields).
+Score: FULLY_ADDRESSED
+
+Result: 7/7 FULLY_ADDRESSED | 0/7 PARTIALLY_ADDRESSED | 0/7 NOT_ADDRESSED
+
+VERDICT: APPROVE (7/7 fully addressed)

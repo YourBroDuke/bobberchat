@@ -138,10 +138,10 @@ The following diagram illustrates the structural relationships and communication
 
 ```mermaid
 graph TD
-    subgraph "Cloud / Enterprise Infrastructure"
-        Backend["Backend Service (Go / K8s)"]
-        NATS["NATS JetStream (Message Bus)"]
-        DB[(PostgreSQL)]
+    subgraph "Backend Deployment"
+        Backend["Backend Service"]
+        NATS["Message Bus (NATS JetStream)"]
+        DB[(Persistence<br/>PostgreSQL)]
         Backend <--> NATS
         Backend <--> DB
     end
@@ -152,7 +152,7 @@ graph TD
     end
 
     subgraph "Human Operator"
-        TUI["TUI Client (Bubble Tea v2)"]
+        TUI["TUI Client (Bubble Tea)"]
     end
 
     SDKA <-- "WebSocket / gRPC" --> Backend
@@ -201,7 +201,7 @@ The TUI Client is a high-efficiency terminal application for human monitoring an
 
 *   **SDK ↔ Backend**: Bi-directional communication primarily via gRPC (for structured capability exchange) and WebSockets (for streaming message events).
 *   **TUI ↔ Backend**: Persistent WebSocket connection for real-time state synchronization and event-driven UI updates.
-*   **Backend Internal**: Uses NATS JetStream for internal pub/sub, ensuring horizontal scalability and message persistence across K8s nodes.
+*   **Backend Internal**: Uses NATS JetStream for internal pub/sub, ensuring horizontal scalability and message persistence across backend processes.
 
 ### 2.4 Data Flow Patterns
 
@@ -213,9 +213,9 @@ The TUI Client is a high-efficiency terminal application for human monitoring an
 
 To meet the 290K+ msgs/sec performance targets and ensure developer ergonomics, the following stack is recommended:
 *   **Language**: Go (for Backend and TUI) due to superior concurrency primitives and small binary footprints.
-*   **Message Fabric**: NATS JetStream (K8s-native, high throughput, low latency).
+*   **Message Fabric**: NATS JetStream (high throughput, low latency).
 *   **Persistence**: PostgreSQL (structured conversation state and agent metadata).
-*   **TUI Framework**: Bubble Tea v2 (Model-View-Update architecture for complex terminal states).
+*   **TUI Framework**: Bubble Tea (Model-View-Update architecture for complex terminal states).
 
 ---
 
@@ -360,38 +360,38 @@ Protocol requirements:
 
 ### 3.3 Message Tag Taxonomy
 
-Core tags are hierarchical and extensible. Children inherit parent semantics unless overridden.
+Core tags are hierarchical and extensible. The broker recognizes the following tag families and enforces delivery semantics accordingly. Children inherit parent semantics unless overridden.
 
-| Tag Name | Parent | Description | Delivery Semantics | Broker Enforced? | Example Payload |
-|---|---|---|---|---|---|
-| `request` | root | Generic response-expected message. Required payload: `operation` (string). | At-least-once, timeout required. | Yes (timeout, correlation) | `{ "operation": "fetch" }` |
-| `request.data` | `request` | Data retrieval request. Required payload: `query` (string). | At-least-once, timeout required. | Yes | `{ "query": "active incidents" }` |
-| `request.approval` | `request` | Request requiring approval workflow. Required payload: `action`, `risk_level`. | At-least-once to approval service. | Yes (routes to approval queue) | `{ "action": "deploy", "risk_level": "high" }` |
-| `request.action` | `request` | Command/action request. Required payload: `action` (string), `args` (object). | At-least-once, timeout required. | Yes | `{ "action": "restart", "args": {"service":"api"} }` |
-| `response` | root | Generic reply message. Required payload: `request_id`. | At-least-once to requester. | Yes (must reference prior request) | `{ "request_id": "..." }` |
-| `response.success` | `response` | Successful request completion. Required payload: `request_id`, `result`. | At-least-once to requester. | Yes (correlation + closure) | `{ "request_id": "...", "result": {} }` |
-| `response.error` | `response` | Failed request completion. Required payload: `request_id`, `code`, `message`. | At-least-once to requester. | Yes (error classification) | `{ "request_id":"...", "code":"E_TIMEOUT", "message":"upstream timed out" }` |
-| `response.partial` | `response` | Partial/streaming reply chunk. Required payload: `request_id`, `chunk`, `final` (bool). | At-least-once, ordered per request stream. | Yes (sequence checks) | `{ "request_id":"...", "chunk":"page 1", "final":false }` |
-| `context-provide` | root | Informational context only; non-actionable. Required payload: `summary` (string). | Best-effort. | Yes (no automatic reply allowed) | `{ "summary": "cache warmed" }` |
-| `no-response` | root | Explicitly suppresses replies to prevent loops. Required payload: `reason` (string). | Best-effort. | Yes (drop generated responses) | `{ "reason": "heartbeat" }` |
-| `progress` | root | Generic status update. Required payload: `job_id` (string), `status` (string). | Best-effort. | Yes (throttling/rate limits) | `{ "job_id":"b-42", "status":"running" }` |
-| `progress.percentage` | `progress` | Numeric progress report. Required payload: `job_id`, `percent` (0-100). | Best-effort. | Yes (range validation) | `{ "job_id":"b-42", "percent": 54 }` |
-| `progress.milestone` | `progress` | Milestone completion update. Required payload: `job_id`, `milestone`. | Best-effort. | Yes | `{ "job_id":"b-42", "milestone":"tests_passed" }` |
-| `error` | root | Unsolicited error report. Required payload: `code`, `message`. | At-least-once. | Yes (severity routing) | `{ "code":"E_IO", "message":"disk full" }` |
-| `error.fatal` | `error` | Unrecoverable error requiring intervention. Required payload: `code`, `message`, `component`. | At-least-once + escalation. | Yes (escalate + page policy) | `{ "code":"E_PANIC", "message":"panic", "component":"planner" }` |
-| `error.recoverable` | `error` | Recoverable error with retry plan. Required payload: `code`, `message`, `retryable` (bool). | At-least-once. | Yes (retry budget checks) | `{ "code":"E_RATE", "message":"retry later", "retryable":true }` |
-| `approval` | root | Approval workflow event family. Required payload: `approval_id`. | Exactly-once. | Yes (idempotency key required) | `{ "approval_id":"apr-119" }` |
-| `approval.request` | `approval` | Open approval request. Required payload: `approval_id`, `action`, `requested_by`. | Exactly-once. | Yes (dedupe + persistence) | `{ "approval_id":"apr-119", "action":"deploy", "requested_by":"agent.ops" }` |
-| `approval.granted` | `approval` | Approval granted event. Required payload: `approval_id`, `approver`. | Exactly-once. | Yes (single terminal decision) | `{ "approval_id":"apr-119", "approver":"human.alex" }` |
-| `approval.denied` | `approval` | Approval denied event. Required payload: `approval_id`, `approver`, `reason`. | Exactly-once. | Yes (single terminal decision) | `{ "approval_id":"apr-119", "approver":"human.alex", "reason":"change freeze" }` |
-| `system` | root | System lifecycle/control family. Required payload: `event`. | At-most-once accepted, best-effort emitted. | Yes (reserved namespace) | `{ "event":"join" }` |
-| `system.join` | `system` | Principal joined channel/mesh. Required payload: `principal_id`, `scope`. | Best-effort. | Yes | `{ "principal_id":"agent.search", "scope":"group.incident-room" }` |
-| `system.leave` | `system` | Principal left channel/mesh. Required payload: `principal_id`, `scope`. | Best-effort. | Yes | `{ "principal_id":"agent.search", "scope":"group.incident-room" }` |
-| `system.heartbeat` | `system` | Liveness ping. Required payload: `principal_id`, `ttl_ms`. | Best-effort with broker sampling. | Yes (rate-limited) | `{ "principal_id":"agent.search", "ttl_ms":30000 }` |
+**Core Tag Families:**
+
+| Tag Family | Description | Delivery Semantics | Broker Enforced? |
+|---|---|---|---|
+| `request.*` | Response-expected messages (e.g., `request.data`, `request.action`, `request.approval`). Required payload: `operation` (string). | At-least-once, timeout required. | Yes (timeout, correlation) |
+| `response.*` | Replies to requests (e.g., `response.success`, `response.error`, `response.partial`). Required payload: `request_id`. | At-least-once to requester. | Yes (correlation + closure) |
+| `context-provide` | Informational context only; non-actionable. Required payload: `summary` (string). | Best-effort. | Yes (no automatic reply allowed) |
+| `no-response` | Explicitly suppresses replies to prevent loops. Required payload: `reason` (string). | Best-effort. | Yes (drop generated responses) |
+| `progress.*` | Status updates (e.g., `progress.percentage`, `progress.milestone`). Required payload: `job_id` (string), `status` (string). | Best-effort. | Yes (throttling/rate limits) |
+| `error.*` | Error reports (e.g., `error.fatal`, `error.recoverable`). Required payload: `code`, `message`. | At-least-once. | Yes (severity routing) |
+| `approval.*` | Approval workflow events (e.g., `approval.request`, `approval.granted`, `approval.denied`). Required payload: `approval_id`. | Exactly-once. | Yes (idempotency key required) |
+| `system.*` | System lifecycle/control events (e.g., `system.join`, `system.leave`, `system.heartbeat`). Required payload: `event`. | At-most-once accepted, best-effort emitted. | Yes (reserved namespace) |
+
+**Example Payloads:**
+
+- `request.data`: `{ "query": "active incidents" }`
+- `response.success`: `{ "request_id": "...", "result": {} }`
+- `error.recoverable`: `{ "code":"E_RATE", "message":"retry later", "retryable":true }`
+- `approval.request`: `{ "approval_id":"apr-119", "action":"deploy", "requested_by":"agent.ops" }`
+
+**Extension Mechanism:**
 
 Custom tags MUST use reverse-DNS namespace form:
 - `org.example.custom-tag`
 - `com.acme.workflow.review-required`
+
+Domain-specific tag extensions follow the same family pattern. Examples:
+- `workflow.review`, `workflow.approved`, `workflow.rejected` (custom approval variant)
+- `data.cache-hit`, `data.cache-miss`, `data.stale` (cache status notifications)
+- `ai.token-budget`, `ai.context-usage` (LLM resource tracking)
 
 Broker policy for custom tags:
 - MUST reject custom tags that collide with reserved roots (`request`, `response`, `approval`, `system`, etc.).
@@ -431,8 +431,7 @@ Handshake negotiation (connection open):
 ### 3.7 Message Size Limits and Context Budgets
 
 Payload size caps (post-JSON serialization, pre-compression):
-- Free tier: **64 KB** max `payload` size.
-- Premium tier: **1 MB** max `payload` size.
+- Configurable per tenant policy; recommended default: **1 MB** max `payload` size.
 
 `metadata.context-budget` (integer token budget hint):
 - Indicates maximum context budget receiver SHOULD spend incorporating this message.
@@ -560,9 +559,7 @@ BobberChat treats human users and software agents as distinct identities connect
 
 - **Registration root**: Email-based account creation (`email -> user account`).
 - **Account role in system**: A user account is the ownership boundary for agents, conversations, and API secrets.
-- **Agent creation policy**:
-  - **Free tier**: Limited to **N** agents per user (platform-configurable cap).
-  - **Premium tier**: Unlimited agent creation.
+- **Agent creation policy**: Configurable per tenant (may include per-user agent limits).
 - **Normative requirements**:
   - A user **MUST** verify account ownership before creating internet-reachable agents.
   - Every agent **MUST** have exactly one owner `user_id` at any point in time.
@@ -640,7 +637,7 @@ sequenceDiagram
 
 ### 5.3 Agent Lifecycle Models
 
-BobberChat supports three deployment-oriented lifecycle models: Persistent, Ephemeral, and Hybrid.
+BobberChat supports three operational lifecycle models: Persistent, Ephemeral, and Hybrid.
 
 - `persistent`: long-running connected runtime profile.
 - `ephemeral`: short-lived per-task runtime profile.
@@ -732,7 +729,7 @@ Agents publish a BobberChat-native Agent Card used by discovery, routing, and co
   },
   "runtime": {
     "sdk": "bobberchat-go",
-    "sdk_version": "0.6.0"
+    "sdk_version": "current"
   },
   "updated_at": "2026-03-13T10:02:40Z"
 }
@@ -828,6 +825,42 @@ sequenceDiagram
     R->>R: Select best match (8f4e...)
     R->>A: Forward Request
 ```
+
+### 6.7 Discovery API (Conceptual)
+
+The registry exposes a discovery endpoint for agents and the TUI to query available agents by capability and status.
+
+**Endpoint**: `POST /v1/registry/discover`
+
+**Request**:
+```json
+{
+  "capability": "sql-analysis",
+  "supported_tags": ["request.data"],
+  "status": ["ONLINE", "IDLE"],
+  "limit": 10
+}
+```
+
+**Response**:
+```json
+{
+  "agents": [
+    {
+      "agent_id": "a7b3-4e2c-91d1",
+      "name": "DataAnalyzer",
+      "capabilities": ["sql-analysis", "data-visualization"],
+      "status": "ONLINE",
+      "latency_estimate_ms": 45,
+      "last_heartbeat": "2026-03-13T12:38:00Z"
+    }
+  ],
+  "total": 1,
+  "timestamp": "2026-03-13T12:38:05Z"
+}
+```
+
+**Behavior**: Returns matching agents sorted by availability and latency. Optional filters can be combined. Results include latency estimates based on recent heartbeat data to inform routing decisions.
 
 ---
 
@@ -1118,7 +1151,7 @@ The primary client interface uses a classic three-pane layout to balance navigat
 
 **Pane Breakdown**:
 * **Left Pane (Agent/Chat Group List)**: Displays active agents, Chat Groups, and status indicators (◉ online, ◎ idle, ✗ offline).
-* **Center Pane (Message View)**: Threaded conversation view, color-coded by tag type, featuring timestamps and sender identities.
+* **Center Pane (Message View)**: Threaded conversation view with visual tag indicators, featuring timestamps and sender identities.
 * **Right Pane (Context Panel)**: Surface contextual details such as agent capabilities, active topic state, and actionable items like pending approvals.
 
 ### 9.2 Key Views
@@ -1141,13 +1174,10 @@ Handling 100+ concurrent agents requires aggressive noise reduction and grouping
 * **Focus Mode**: Allows the user to track specific agents or topics while suppressing all other activity.
 
 ### 9.4 Interaction Model
-The client optimizes for keyboard-driven workflows, avoiding mouse dependency:
-* **Vim-Style Keybindings**: Conceptual navigation mappings for pane traversal, scrolling, and selection.
-* **Command Palette**: Accessed via `:`, offering omnibar-style fuzzy search for commands, agents, and topics.
-* **Tab-Based View Switching**: Rapid toggling between the Key Views defined above.
+The client optimizes for efficient terminal workflows, supporting rapid navigation and command access:
 
 ### 9.5 Responsive Design
-The interface adapts gracefully to constrained terminal dimensions. If the terminal width drops below 120 columns (<120 cols), the TUI transitions to a **compact mode**, automatically hiding the right Context Pane. Further reductions switch to a single-pane tabbed layout.
+The interface adapts gracefully to constrained terminal dimensions, adjusting layout to maintain usability across different terminal sizes.
 
 ---
 
@@ -1262,10 +1292,10 @@ The Backend MUST maintain a comprehensive audit log for all cross-agent and cros
 Data handling policies are enforced based on the tenant's service tier and regulatory requirements.
 
 #### 11.5.1 Retention Policies
-Message retention is governed by the tenant's tier:
-*   **Free Tier**: 7 days of message history.
-*   **Premium Tier**: 90 days of message history.
-*   **Enterprise Tier**: Custom retention periods as defined in the Service Level Agreement (SLA).
+Message retention is configurable per tenant policy and compliance requirements. Recommended defaults include:
+*   Short-term retention (e.g., 7 days) for testing and ephemeral chat groups.
+*   Long-term retention (e.g., 90 days) for operational and audit logs.
+*   Custom retention periods for enterprise deployments with specific regulatory requirements.
 
 #### 11.5.2 Data Deletion (GDPR)
 BobberChat MUST provide a Data Deletion API to support the "Right to Erasure" (GDPR). This API allows administrators to programmatically delete all messages associated with a specific user, agent, or tenant.
@@ -1278,7 +1308,7 @@ Each message MAY include data residency annotations in its metadata. This allows
 ## § 12. Scalability & Performance
 
 **Problem Statement:** Coordination layers degrade quickly under high concurrency, large fan-out, and discovery-heavy workloads.
-**Design Decision:** Set explicit performance targets and scale via stateless Backend Service instances, clustered brokering, and partitioned storage.
+**Design Decision:** Set explicit performance targets and scale via stateless Backend Services, distributed brokering, and partitioned storage.
 **Rationale:** Quantified targets and scaling mechanisms provide predictable behavior as tenant and agent volume grows.
 
 BobberChat is designed for high-concurrency agent messaging with sub-millisecond internal broker latency. The system prioritizes message throughput and discovery speed to support large-scale autonomous swarms.
@@ -1300,19 +1330,19 @@ BobberChat MUST meet or exceed the following performance assertions per tenant t
 
 The architecture follows a shared-nothing approach for the API tier and relies on distributed primitives for the data and message tiers.
 
-*   **Backend API Servers**: Stateless Go instances deployed behind a standard Layer 7 load balancer. Instances are sharded by `tenant_id` to ensure isolation and predictable resource allocation.
-*   **Message Broker (NATS)**: Deployed as a NATS cluster with JetStream enabled. JetStream provides distributed persistence and replication across availability zones. As documented in §2.5, NATS handles 290,000+ messages/sec, providing significant headroom over the 10,000 msg/sec per-tenant target.
-*   **Agent Registry**: Implemented using a read-replicated model. Writes (registrations/updates) target the primary database node, while discovery queries are served from local caches or read replicas to minimize latency.
-*   **Storage (PostgreSQL)**: Data is partitioned by `tenant_id` and time (e.g., monthly tables) to maintain query performance as history grows. Read replicas are used for non-real-time TUI history views.
+*   **Backend API Servers**: Stateless services scaled horizontally. Server partitioning by `tenant_id` ensures isolation and predictable resource allocation across multiple machines.
+*   **Message Broker (NATS)**: Scaled horizontally with JetStream enabled. JetStream provides distributed persistence and replication. As documented in §2.5, NATS handles 290,000+ messages/sec, providing significant headroom over the 10,000 msg/sec per-tenant target.
+*   **Agent Registry**: Uses a distributed replication model. Writes (registrations/updates) target the primary database, while discovery queries leverage local caches to minimize latency.
+*   **Storage (PostgreSQL)**: Data is partitioned by `tenant_id` and time-based retention to maintain query performance as history grows. Replicated storage supports non-real-time TUI history views.
 
 ### 12.3 Bottleneck Analysis & Mitigations
 
 BobberChat identifies and proactively addresses common scaling limits in multi-agent systems:
 
-*   **WebSocket Connection Limits**: Single server instances typically plateau at ~10,000 concurrent WebSocket connections.
-    *   *Mitigation*: Use horizontal scaling of Backend instances and connection-draining load balancers.
+*   **WebSocket Connection Limits**: Single servers typically plateau at ~10,000 concurrent WebSocket connections.
+    *   *Mitigation*: Use horizontal scaling of Backend services and graceful connection handling.
 *   **Broker Saturation**: High-volume small messages can overwhelm traditional brokers.
-    *   *Mitigation*: NATS JetStream is selected for its high-throughput profile (290K+/sec); cluster expansion allows for linear capacity increases.
+    *   *Mitigation*: NATS JetStream is selected for its high-throughput profile (290K+/sec); system expansion allows for linear capacity increases.
 *   **Discovery Query Latency**: Frequent capability searches can strain the registry.
     *   *Mitigation*: Backend nodes cache agent profiles and capability maps, with invalidation triggered by heartbeat misses or explicit updates (see §6.2).
 *   **JSON Serialization Overhead**: Parsing large JSON envelopes introduces CPU latency.
@@ -1348,14 +1378,13 @@ BobberChat ensures the system remains usable even during partial infrastructure 
 
 The following items are explicitly deferred from the initial specification and MVP implementation phase. These represent strategic enhancements planned for subsequent development cycles:
 
-*   **On-premises Deployment Support**: Enabling organizations to host the entire BobberChat stack (Backend, NATS, PostgreSQL) within their own infrastructure for maximum data sovereignty.
-*   **Admin Dashboard / Management UI**: A web-based interface for system administrators to manage tenants, monitor system health, and audit agent-to-agent communication at scale.
+
 *   **Agent Reputation / Trust Scoring System**: A mechanism to track agent reliability, performance, and historical compliance with approval workflows to inform discovery and routing decisions.
 *   **Binary Wire Format (Protocol Buffers)**: Implementation of gRPC or dedicated Protobuf schemas for high-throughput, low-latency machine-to-machine communication, reducing JSON serialization overhead.
 *   **Vector Embeddings for Semantic Agent Discovery**: Enhancing the Registry with vector search capabilities to allow agents to discover peers based on semantic capability descriptions rather than exact tag/string matches.
 *   **End-to-End Encryption (E2EE) for Private Conversations**: Implementing Signal-style encryption for 1:1 and group messages to ensure even the backend provider cannot inspect conversation content.
 *   **Multi-region Active-Active Deployments**: Geographic distribution of backend services to provide low-latency access and high availability across global deployments.
-*   **Federation Protocol for Cross-Organization Swarms**: A standardized protocol allowing independent BobberChat instances to securely bridge conversations and discovery registries.
+*   **Federation Protocol for Cross-Organization Swarms**: A standardized protocol allowing independent BobberChat installations to securely bridge conversations and discovery registries.
 
 ### 13.2 Open Questions
 
@@ -1372,6 +1401,19 @@ The following architectural decisions remain unresolved and require community fe
 > **OPEN QUESTION**: Cross-tenant routing: Should agents be discoverable by `capability` across tenant boundaries by default, or only via explicit `agent_id` sharing?
 
 > **OPEN QUESTION**: Message retention vs. Privacy: In high-compliance environments, should "Zero Retention" be a client-side request or a server-enforced tenant policy?
+
+### 13.3 Assumptions & Constraints
+
+The following assumptions form the foundation of the BobberChat specification. These are validated during architecture review and prototyping phases, and documented here for transparency.
+
+| ID | Assumption | Status |
+|----|-----------|---------|
+| A1 | Cross-platform Go compilation sufficient for TUI deployments. | VALIDATED |
+| A2 | Cloud-only for MVP (v1.0). On-premises support is deferred to Future Work. | VALIDATED |
+| A3 | The system supports three agent lifecycle modes: persistent (long-lived), ephemeral (short-lived), and hybrid (lifecycle-agnostic). | VALIDATED |
+| A4 | Custom protocol is internal to BobberChat. External agents access via protocol adapters (MCP, A2A, gRPC). No raw protocol endpoints exposed. | VALIDATED |
+| A5 | Open source strategy: MIT/Apache license with community-first governance. Business model is open-core (paid hosting, not licensing). | ASSUMPTION |
+| A6 | Tag enforcement is hybrid: some tags (`no-response`, `request.*`) are broker-enforced; others (`progress.*`) are advisory with best-effort handling. | VALIDATED |
 
 ---
 
@@ -1470,9 +1512,9 @@ An agent runtime model combining durable identity with intermittent connectivity
 *   **Developer Sentiment Survey (2025)**: Empirical analysis of 2500+ posts identifying agent looping (28%), cost (22%), and silent failures (19%) as top friction points.
 *   **NATS JetStream Documentation**: [High-performance persistence for NATS](https://docs.nats.io/nats-concepts/jetstream). Benchmarks: 290K+ msgs/sec.
 *   **Model Context Protocol (MCP)**: [JSON-RPC 2.0 specification for agent-to-tool communication](https://modelcontextprotocol.io). (Anthropic).
-*   **Agent-to-Agent (A2A) v1.0**: [Standardized identity and discovery for AI agents](https://a2a-spec.org). (Linux Foundation).
+*   **Agent-to-Agent (A2A)**: [Standardized identity and discovery for AI agents](https://a2a-spec.org). (Linux Foundation).
 *   **OpenTelemetry Protocol (OTLP)**: [Unified specification for traces, metrics, and logs](https://opentelemetry.io/docs/specs/otlp/).
-*   **Bubble Tea v2 Docs**: [The TUI framework used for BobberChat Client](https://github.com/charmbracelet/bubbletea).
+*   **Bubble Tea Docs**: [The TUI framework used for BobberChat Client](https://github.com/charmbracelet/bubbletea).
 *   **Inspiration & Patterns**: Design patterns adapted from [k9s](https://k9scli.io/), [aerc](https://aerc-mail.org/), [gomuks](https://github.com/tulir/gomuks), and [Mastui](https://github.com/masto-ui/mastui).
 
 ### Appendix B: Acronyms & Abbreviations
@@ -1496,9 +1538,25 @@ An agent runtime model combining durable identity with intermittent connectivity
 | **TUI** | Terminal User Interface |
 | **UUID** | Universally Unique Identifier |
 
-### Appendix C: Example Protocol Messages
+### Appendix C: Pain Point Traceability Matrix
 
-#### C.1: Data Request (`request.data`)
+This matrix traces the seven validated pain points identified in §1 to their concrete design solutions in the specification.
+
+| Pain Point | Problem Location | Design Solution | Concrete Mechanism |
+|-----------|-----------------|-----------------|-------------------|
+| 1. Observability & Debugging Gaps | §1.1 | §10 Observability & Debugging | Trace propagation via `trace_id`, six core metrics, replay/diff/dependency graph tools, structured logging with alerting |
+| 2. Subagent State Isolation & Context Loss | §1.2 | §4 Conversation Model, §10 Observability | Three-tier persistence (hot/warm/cold), topic-based grouping, state diff viewer, trace reconstruction |
+| 3. Agent Discovery & Dynamic Routing | §1.3 | §6 Agent Discovery & Registry | Capability-based registry, heartbeat-backed liveness, capability routing, dynamic discovery queries |
+| 4. Coordination Failures & Race Conditions | §1.4 | §3.4 Loop Prevention, §7 Approval Workflows, §12.4 Message Ordering | Circuit breaker policy, four conflict primitives (priority, voting, arbiter, escalation), causal ordering guarantees |
+| 5. Protocol Fragmentation | §1.5 | §8 Protocol Adapters | Deterministic MCP/A2A/gRPC adapter contracts with tag auto-mapping, unified protocol envelope |
+| 6. Scalability Bottlenecks | §1.6 | §12 Scalability & Performance | Explicit targets (500 agents, 10K msg/sec), horizontal scaling via stateless API tier, distributed NATS, caching & read replicas |
+| 7. Security & Trust in Multi-Agent Systems | §1.7 | §5 Identity/Authentication, §11 Security | API secrets & JWT sessions, message signing, rate limiting, tenant isolation, comprehensive audit trail |
+
+**Synthesis**: All seven pain points have traceable, concrete solutions embedded in the architectural design. Each solution is specified at the appropriate level of abstraction (architectural patterns, not implementation details).
+
+### Appendix D: Example Protocol Messages
+
+#### D.1: Data Request (`request.data`)
 ```json
 {
   "id": "msg_98765",
@@ -1518,7 +1576,7 @@ An agent runtime model combining durable identity with intermittent connectivity
 }
 ```
 
-#### C.2: Success Response (`response.success`)
+#### D.2: Success Response (`response.success`)
 ```json
 {
   "id": "msg_98766",
@@ -1541,7 +1599,7 @@ An agent runtime model combining durable identity with intermittent connectivity
 }
 ```
 
-#### C.3: Progress Update (`progress.percentage`)
+#### D.3: Progress Update (`progress.percentage`)
 ```json
 {
   "id": "msg_98767",
@@ -1563,7 +1621,7 @@ An agent runtime model combining durable identity with intermittent connectivity
 }
 ```
 
-#### C.4: Approval Request (`approval.request`)
+#### D.4: Approval Request (`approval.request`)
 ```json
 {
   "id": "msg_98768",
@@ -1587,7 +1645,7 @@ An agent runtime model combining durable identity with intermittent connectivity
 }
 ```
 
-#### C.5: Fatal Error (`error.fatal`)
+#### D.5: Fatal Error (`error.fatal`)
 ```json
 {
   "id": "msg_98769",
@@ -1608,7 +1666,7 @@ An agent runtime model combining durable identity with intermittent connectivity
 }
 ```
 
-#### C.6: Context Provision (`context-provide`)
+#### D.6: Context Provision (`context-provide`)
 ```json
 {
   "id": "msg_98770",

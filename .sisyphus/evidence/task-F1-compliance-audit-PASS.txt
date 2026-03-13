@@ -1,0 +1,54 @@
+=== F1: PLAN COMPLIANCE AUDIT (FINAL PASS) ===
+
+MUST HAVE (9 items):
+[1/9] Custom message tag taxonomy with extensible hierarchy: FOUND in §3.3 (lines 361-398)
+[2/9] Three-component architecture (backend, SDK, TUI): FOUND in §2.1-§2.3 (lines 130-204)
+[3/9] Conversation model (private, groups, topics): FOUND in §4.1-§4.6 (lines 459-544)
+[4/9] SaaS identity/auth model with API secrets: FOUND in §5.1-§5.5 (lines 551-708)
+[5/9] Agent discovery and registry design: FOUND in §6.1-§6.7 (lines 746-863)
+[6/9] Approval workflow design: FOUND in §7.1-§7.6 (lines 867-984)
+[7/9] Protocol adapter strategy (MCP/A2A bridging): FOUND in §8.1-§8.7 (lines 988-1121)
+[8/9] Security considerations: FOUND in §11.1-§11.5 (lines 1243-1304)
+[9/9] Observability data model: FOUND in §10.1-§10.5 (lines 1184-1239)
+Result: 9/9 FOUND
+
+MUST NOT HAVE (8 guardrails):
+[1/8] Runnable code: CLEAN. Fenced blocks are limited to `mermaid`, `json`, and `text` examples (e.g. lines 139-161, 234-359, 442-455, 518-538, 581-591, 614-636, 676-690, 714-736, 806-861, 924-966, 1134-1150, 1560-1687).
+[2/8] Full SDK API surface design: CLEAN. SDK content remains capability/responsibility oriented (§2.2, lines 178-187), and the single discovery endpoint example in §6.7 (lines 829-863) is conceptual rather than an exhaustive SDK/API surface.
+[3/8] Billing/payment/pricing system design: CLEAN. No billing/payment/pricing system design content found; remaining `max_cost` references (lines 884, 903, 918, 984) are approval-budget controls, not billing design.
+[4/8] Admin dashboard design: CLEAN. No admin dashboard / management UI content found.
+[5/8] Deployment infrastructure: CLEAN. No Helm/Terraform/CI/CD/K8s/cluster/instance-based deployment design remains. Remaining occurrences of deployment-adjacent wording are non-infrastructure contexts only: audience/problem framing (lines 21, 93), glossary definition of `Node` (line 1426), traceability summary wording (line 1552), and example payload text (line 1657).
+[6/8] Exhaustive tag catalog beyond ~15 core tags + extension mechanism: CLEAN. §3.3 defines 8 core tag families (lines 367-376) and an explicit extension mechanism (lines 385-398).
+[7/8] Exact library versions or dependency trees: CLEAN. No exact library versions or dependency-tree design found in the current document.
+[8/8] UI details like key bindings or color schemes: CLEAN. §9 remains conceptual (lines 1125-1180) and contains no key-binding, color-scheme, or concrete interaction-binding details.
+Result: 8/8 CLEAN
+
+PAIN POINTS (7 items):
+[1/7] Context loss across agent interactions: CONCRETE → problem at line 96; solved by §4.3-§4.4 (lines 493-512) with topic-based execution context and three-tier persistence, plus §10.3 (lines 1218-1219) with conversation trace and state diff viewer.
+[2/7] No shared observability across frameworks: CONCRETE → problem at line 95; solved by §10.1-§10.5 (lines 1192-1239) with `trace_id`, OpenTelemetry-compatible export, metrics, replay, structured logging, and alerting.
+[3/7] Brittle point-to-point integrations: CONCRETE → problem at line 97; solved by §6.2-§6.4 and §6.7 (lines 771-795, 829-863) with registry advertisement, capability search, dynamic routing, and discovery API.
+[4/7] Security/compliance gaps in multi-agent systems: CONCRETE → problem at line 101; solved by §5.2-§5.5 and §11.1-§11.5 (lines 593-708, 1249-1304) with API secrets, JWT sessions, signing, rate limiting, tenant isolation, audit trail, deletion, and residency controls.
+[5/7] No standardized human approval patterns: CONCRETE → solved by §7.1-§7.6 (lines 875-984) with normalized `approval.request` / `approval.granted` / `approval.denied` semantics, timeout policies, escalation, and terminal outcomes.
+[6/7] Agent discovery is framework-locked: CONCRETE → problem at line 97; solved by §6.1-§6.7 and §8.3 (lines 754-863, 1034-1053) with BobberChat-native Agent Cards, capability registry, discovery API, and A2A profile bridging.
+[7/7] Protocol incompatibilities (MCP/A2A/custom): CONCRETE → problem at line 99; solved by §8.1-§8.7 (lines 996-1121) with deterministic MCP/A2A/gRPC mapping contracts and tag auto-mapping.
+Result: 7/7 CONCRETE
+
+EVIDENCE FILES:
+- task-1-*: EXISTS (7 files)
+- task-2-*: EXISTS (3 files)
+- task-3-*: EXISTS (2 files)
+- task-4-*: EXISTS (4 files)
+- task-5-*: EXISTS (2 files)
+- task-6-*: EXISTS (2 files)
+- task-7-*: EXISTS (2 files)
+- task-8-*: EXISTS (2 files)
+- task-9-*: EXISTS (2 files)
+- task-10-*: EXISTS (3 files)
+- task-11-*: EXISTS (2 files)
+- task-12-*: EXISTS (2 files)
+- task-13-*: EXISTS (2 files)
+- task-14-*: EXISTS (6 files)
+- task-15-*: EXISTS (4 files)
+Result: 15/15 complete
+
+VERDICT: APPROVE

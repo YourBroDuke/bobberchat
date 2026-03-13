@@ -1,0 +1,92 @@
+=== F4: SCOPE FIDELITY CHECK ===
+
+SECTION ANALYSIS:
+
+[§1] Executive Summary & Problem Statement (Task 2)
+Plan Requirements: 1-2 paragraph summary, 7 pain points with evidence, Why BobberChat, competitive landscape, market context; must avoid protocol-level technical detail.
+Actual Content: Includes clear value proposition, market context (72%/40%), seven pain points with named evidence sources, Why BobberChat mapping, and competitive landscape.
+Scope Assessment: COMPLIANT
+
+[§2] System Architecture Overview (Task 3)
+Plan Requirements: Three-component architecture (Backend, SDK/CLI, TUI), topology, responsibilities/does-not, Mermaid diagram, data flow patterns, non-normative tech recommendations; must avoid deployment infrastructure and deep microservice decomposition.
+Actual Content: Contains required three-component architecture, Mermaid topology, responsibilities + boundaries for each component, communication topology, data flows, and tech recommendations.
+Scope Assessment: COMPLIANT
+
+[§3] Custom Protocol Design & Message Tag Taxonomy (Task 4)
+Plan Requirements: JSON envelope, required/optional fields, 3-5 examples, ~15 core tags + extension mechanism, loop prevention, delivery guarantees, versioning, size limits, state machine; must avoid exhaustive custom tag catalog.
+Actual Content: Covers all required protocol elements and includes extension mechanism. However taxonomy defines 24 core tags (counted from taxonomy table), exceeding the planned ~15 range.
+Scope Assessment: SCOPE_CREEP
+Issue: Core tag catalog is too broad for architecture-overview scope and violates plan guardrail on exhaustive tag catalogs (>~15).
+
+[§4] Conversation Model (Task 6)
+Plan Requirements: Private chat, chat groups, topics, topic lifecycle, three-tier persistence model, relationship diagram, ordering guarantees; must avoid storage implementation schemas.
+Actual Content: Includes all three conversation types, lifecycle states, tiered persistence model, relationship diagram, and ordering semantics. No schema-level implementation detail.
+Scope Assessment: COMPLIANT
+
+[§5] Identity, Authentication & Agent Lifecycle (Task 5)
+Plan Requirements: User/agent identity model, API secret and JWT auth flow + diagram, persistent/ephemeral/hybrid lifecycle, state machine, secret rotation/revocation, agent cards; must avoid billing design, auth crypto implementation details, admin UI design.
+Actual Content: Includes all required identity/auth/lifecycle/card elements and diagrams; avoids billing mechanics and cryptographic implementation details.
+Scope Assessment: COMPLIANT
+
+[§6] Agent Discovery & Registry (Task 7)
+Plan Requirements: Registry model, discovery protocol, health model, capability routing, ephemeral churn handling, sequence diagram, and key API sketch (endpoint/input/output) without full implementation.
+Actual Content: Strong architecture coverage for registry/discovery/health/routing/churn + diagram. API behavior is described, but no concrete endpoint-level sketch is provided.
+Scope Assessment: TOO_THIN
+Issue: Missing explicit key endpoint sketch expected by task scope (plan called for API sketch while avoiding full API implementation).
+
+[§7] Approval Workflows & Coordination Primitives (Task 8)
+Plan Requirements: Approval lifecycle, escalation patterns, conflict-resolution primitives, anti-pattern controls, >=3 scenario diagrams, approval.* field definitions; must avoid UI detail, voting algorithm implementation, audit storage design.
+Actual Content: Fully covers lifecycle/escalation/primitives, includes anti-pattern controls, three scenario diagrams, and approval.* definitions without implementation-level algorithms.
+Scope Assessment: COMPLIANT
+
+[§8] Protocol Adapters (Task 9)
+Plan Requirements: Adapter contract, MCP/A2A/gRPC mappings, auto-mapping rules, lifecycle model, protocol↔tag tables; must avoid implementation code and full edge-case completeness.
+Actual Content: Meets all required adapter scope elements with clear contract + per-adapter mapping tables + lifecycle.
+Scope Assessment: COMPLIANT
+
+[§9] TUI Client Design & Layout (Task 10)
+Plan Requirements: Conceptual three-pane layout/wireframe, key views, scale handling, conceptual interaction model, responsive behavior; must avoid exact keybindings/colors/themes.
+Actual Content: Contains conceptual wireframe, required views, scale strategies, conceptual interaction model (no exhaustive bindings), and responsive behavior.
+Scope Assessment: COMPLIANT
+
+[§10] Observability & Debugging (Task 11)
+Plan Requirements: observability data model, six core metrics, debugging features, structured logging, alerting conditions; must avoid full alert engine/dashboard implementation.
+Actual Content: Includes required trace model, metrics definitions, debugging features, logging schema, and alert conditions at architecture level.
+Scope Assessment: COMPLIANT
+
+[§11] Security Considerations (Task 12)
+Plan Requirements: threat vectors + mitigations, cross-tenant communication model, audit trail, data governance (retention/deletion/residency); must avoid full STRIDE, crypto implementation specifics, IAM hierarchy design.
+Actual Content: Covers required vectors/mitigations, cross-tenant controls, audit and data governance. Stays at architecture-policy level.
+Scope Assessment: COMPLIANT
+
+[§12] Scalability & Performance (Task 13)
+Plan Requirements: concrete targets, horizontal scaling strategy, bottlenecks+mitigations, ordering guarantees, graceful degradation scenarios; must avoid sharding algorithm/hardware-level spec/benchmark execution.
+Actual Content: Includes explicit targets, scaling model, bottleneck analysis, ordering and degradation behavior; avoids low-level implementation detail.
+Scope Assessment: COMPLIANT
+
+[§13] Future Work, Open Questions & Appendices (Task 14)
+Plan Requirements: deferred future work, open questions, assumptions & constraints A1-A6 with status markers, Appendix A recommended stack, Appendix B glossary, Appendix C pain point traceability matrix; must not design deferred items in detail.
+Actual Content: Includes Future Work and Open Questions, plus appendices; however section omits required A1-A6 assumptions/status block, does not include required Appendix C pain point traceability matrix, and Appendix A content differs from planned scope (references list instead of recommended stack).
+Scope Assessment: TOO_THIN
+Issue: Missing key synthesis artifacts explicitly required by Task 14.
+
+Result: 10/13 COMPLIANT | 1/13 SCOPE_CREEP | 2/13 TOO_THIN
+
+GLOBAL GUARDRAILS:
+[1/8] No runnable code: RESPECTED
+[2/8] No full SDK API surface design: RESPECTED
+[3/8] No billing/payment system design: RESPECTED
+[4/8] No admin dashboard design: RESPECTED (only listed as deferred future work)
+[5/8] No deployment infrastructure (Helm/Terraform/CI-CD): RESPECTED
+[6/8] No exhaustive core tag catalog (>~15 without extension mechanism): VIOLATED (§3 taxonomy table lines 365-390 defines 24 core tags)
+[7/8] No exact library versions/dependency trees: RESPECTED
+[8/8] No UI keybindings/color schemes beyond conceptual: RESPECTED
+
+Result: 7/8 RESPECTED | 1/8 VIOLATED
+
+VERDICT: REJECT
+
+Required fixes before approval:
+1) §3: Reduce core taxonomy to approximately 12-18 tags (target ~15) and keep extension mechanism for growth.
+2) §6: Add a compact discovery API sketch with key endpoint(s), request input shape, and output shape (architecture-level only).
+3) §13: Add Assumptions & Constraints A1-A6 with validation status markers; restore Appendix A to recommended stack; add Appendix C pain-point traceability matrix.

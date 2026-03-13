@@ -1,0 +1,111 @@
+=== F4 RE-EXECUTION: SCOPE FIDELITY CHECK (POST-COMPLIANCE FIXES) ===
+
+Target Document: docs/design-spec.md (1693 lines)
+Plan Reference: .sisyphus/plans/bobberchat-design.md (Tasks 1-14)
+Review Mode: Full section-by-section scope fidelity + global guardrails
+
+SUMMARY SCORECARD
+- Sections Compliant: 13/13
+- Sections Too Thin: 0/13
+- Sections Scope Creep: 0/13
+- Guardrails Respected: 8/8
+- Abstraction Level: ARCHITECTURE-LEVEL MAINTAINED
+
+VERDICT: APPROVE
+
+---
+
+SECTION-BY-SECTION ASSESSMENT
+
+[Task 1 / Structure] Document skeleton completeness
+- Evidence: §1-§13 headers present at lines 77, 127, 222, 459, 548, 746, 867, 988, 1125, 1184, 1243, 1308, 1371; ToC at lines 25-39; notation at lines 43-74; glossary + appendices at lines 1420-1688.
+- Assessment: COMPLIANT
+
+[Task 2 / §1] Executive Summary & Problem Statement
+- Evidence: Executive + problem framing lines 79-86; market context lines 87-90; 7 pain points lines 93-101; Why BobberChat lines 103-113; competitive landscape lines 114-123.
+- Assessment: COMPLIANT
+
+[Task 3 / §2] System Architecture
+- Evidence: 3-component topology + diagram lines 139-161; responsibilities/boundaries lines 165-199; communication topology lines 200-205; data flows lines 206-210; tech recommendations lines 212-219.
+- Assessment: COMPLIANT
+
+[Task 4 / §3] Protocol & Message Tags
+- Evidence: envelope + fields lines 230-272; examples lines 273-359; hierarchical tag families lines 365-377; extension mechanism lines 385-399; loop prevention lines 400-409; guarantees lines 411-417; versioning lines 419-430; size/context budget lines 431-439; state machine lines 442-455.
+- Assessment: COMPLIANT
+
+[Task 6 / §4] Conversation Model
+- Evidence: private chat lines 467-475; chat groups lines 476-490; topics + lifecycle lines 491-503; persistence tiers lines 504-513; relationship diagram lines 518-538; ordering guarantees lines 540-545.
+- Assessment: COMPLIANT
+
+[Task 5 / §5] Identity, Tenancy & Auth
+- Evidence: dual-principal identity lines 556-577; auth flows + sequence diagram lines 593-636; persistent/ephemeral/hybrid lines 638-663; lifecycle state machine lines 664-690; secret management lines 692-709; agent cards lines 710-743.
+- Assessment: COMPLIANT
+
+[Task 7 / §6] Agent Discovery & Registry
+- Evidence: registry model lines 754-768; discovery mechanism lines 769-779; health model lines 780-788; capability routing lines 789-796; churn handling lines 797-803; sequence diagram lines 806-827; conceptual discovery API sketch lines 829-864.
+- Assessment: COMPLIANT
+
+[Task 8 / §7] Approval Workflows
+- Evidence: workflow lifecycle lines 875-894; escalation patterns lines 895-904; conflict primitives lines 905-913; anti-pattern controls lines 914-920; 3 scenario diagrams lines 923-966; approval.* definitions lines 968-985.
+- Assessment: COMPLIANT
+
+[Task 9 / §8] Protocol Adapters
+- Evidence: adapter interface contract lines 996-1012; MCP mapping lines 1013-1033; A2A mapping lines 1034-1054; gRPC mapping lines 1055-1074; auto-mapping rules lines 1075-1092; lifecycle/plugin model lines 1093-1108.
+- Assessment: COMPLIANT
+
+[Task 10 / §9] TUI Design (conceptual)
+- Evidence: three-pane ASCII wireframe lines 1134-1150; key views lines 1157-1164; scale handling lines 1165-1175; interaction model (conceptual) lines 1176-1178; responsive behavior lines 1179-1180.
+- Assessment: COMPLIANT
+
+[Task 11 / §10] Observability & Tracing
+- Evidence: trace model lines 1192-1199; six core metrics lines 1200-1212; debugging capabilities lines 1213-1221; structured logging lines 1222-1230; alert conditions lines 1231-1239.
+- Assessment: COMPLIANT
+
+[Task 12 / §11] Security Considerations
+- Evidence: threat vectors + mitigations lines 1249-1259; auth/signing/rate limit/rotation lines 1260-1277; cross-tenant model lines 1278-1284; audit trail lines 1285-1290; governance (retention/deletion/residency) lines 1291-1305.
+- Assessment: COMPLIANT
+
+[Task 13 / §12] Scalability & Performance
+- Evidence: measurable targets lines 1316-1328; scaling strategy lines 1329-1337; bottlenecks/mitigations lines 1338-1350; ordering guarantees lines 1351-1358; graceful degradation lines 1359-1368.
+- Assessment: COMPLIANT
+
+[Task 14 / §13 + Appendices] Future Work + assumptions + traceability
+- Evidence: future work lines 1377-1387; open questions lines 1389-1404; assumptions table A1-A6 lines 1405-1417; appendix C traceability matrix lines 1541-1556.
+- Assessment: COMPLIANT
+
+---
+
+GUARDRAILS CHECK (GLOBAL)
+
+1) Runnable code: RESPECTED
+- No executable code blocks/language-runtime instructions; only Mermaid/ASCII/JSON examples.
+
+2) Full SDK API surface: RESPECTED
+- SDK discussed at capability/contract level only (e.g., lines 178-188, 996-1012).
+
+3) Billing/payment/pricing system design: RESPECTED
+- No billing architecture present.
+
+4) Admin dashboard design: RESPECTED
+- No admin dashboard specification.
+
+5) Deployment infrastructure (Helm/Terraform/CI/CD/K8s/clusters/instances): RESPECTED
+- No deployment-system design sections. One contextual word "instance" appears only inside example error payload text at line 1657, not as architecture/deployment design.
+
+6) Exhaustive tag catalog beyond ~15 core tags without families/extension: RESPECTED
+- Taxonomy is now family-based (8 core families) with extension mechanism (lines 365-399).
+
+7) Exact library versions: RESPECTED
+- No dependency pinning/library version prescriptions (e.g., no Bubble Tea v2 pins).
+
+8) UI key bindings or color schemes: RESPECTED
+- No concrete keybindings/color-scheme specs; TUI remains conceptual.
+
+---
+
+ABSTRACTION-LEVEL VALIDATION
+- Document consistently remains at architecture/policy/contract level.
+- No implementation code, infra runbooks, deployment manifests, or operational playbooks.
+- Section depth aligns with design-spec intent while avoiding low-level build/deploy detail.
+
+FINAL RESULT: APPROVE

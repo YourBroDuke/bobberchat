@@ -1,0 +1,62 @@
+=== F1: PLAN COMPLIANCE AUDIT ===
+
+MUST HAVE (9 items):
+[1/9] Custom message tag taxonomy: FOUND in §3.3 (lines 361-399)
+[2/9] Three-component architecture: FOUND in §2.1-§2.3 (lines 130-204)
+[3/9] Conversation model: FOUND in §4.1-§4.6 (lines 460-546)
+[4/9] SaaS identity/auth model with API secrets: FOUND in §5.1-§5.5 (lines 552-712)
+[5/9] Agent discovery and registry design: FOUND in §6.1-§6.6 (lines 749-830)
+[6/9] Approval workflow design: FOUND in §7.1-§7.6 (lines 834-952)
+[7/9] Protocol adapter strategy: FOUND in §8.1-§8.7 (lines 955-1088)
+[8/9] Security considerations: FOUND in §11.1-§11.5 (lines 1213-1274)
+[9/9] Observability data model: FOUND in §10.1-§10.5 (lines 1154-1209)
+Result: 9/9 FOUND
+
+MUST NOT HAVE (8 guardrails):
+[1/8] Runnable code: CLEAN (fenced blocks are limited to `mermaid`, `json`, and `text`; no runnable language blocks found)
+[2/8] Full SDK API surface design: CLEAN (§2.2, §5, and §6 describe capabilities and flows, not an exhaustive SDK method catalog)
+[3/8] Billing/payment/pricing system design: VIOLATED in §3.7 (lines 434-435), §5.1 (lines 564-565), and §11.5.1 (lines 1265-1268) via Free/Premium/Enterprise tier rules and limits
+[4/8] Admin dashboard design: VIOLATED in §13.1 (lines 1352-1353) via the deferred but described "Admin Dashboard / Management UI"
+[5/8] Deployment infrastructure: VIOLATED in §2.1-§2.5 (lines 139-218), §4.4 (lines 511-513), §12.2 (lines 1303-1306), and §13.1 (line 1351)
+[6/8] Exhaustive message tag catalog beyond ~15 core tags: VIOLATED in §3.3 (lines 365-390); 24 core/reserved tags are enumerated before the extension mechanism
+[7/8] Exact library versions or dependency trees: VIOLATED at lines 155, 218, 735, 1473, and 1475 (`Bubble Tea v2`, `sdk_version: 0.6.0`, `A2A v1.0`)
+[8/8] UI details like key bindings or color schemes: VIOLATED in §9.1-§9.5 (lines 1121, 1145-1150) with color-coded tags, Vim-style keybindings, `:` command palette, tab switching, and compact-mode threshold
+Result: 2/8 CLEAN, 6/8 VIOLATED
+
+PAIN POINTS (7 items):
+[1/7] Observability gaps: TRACEABLE → problem in §1 (line 95); addressed by §10.1-§10.5 (lines 1162-1209) with trace propagation, metrics, replay, trace view, diff view, dependency graph, logging, and alerting
+[2/7] Context/state loss across agent interactions: TRACEABLE → problem in §1 (line 96); addressed by §4.3-§4.4 (lines 492-513) and §10.3 (lines 1188-1189) with topics, three-tier persistence, trace reconstruction, and state diffing
+[3/7] Agent discovery: TRACEABLE → problem in §1 (line 97); addressed by §6.2-§6.4 (lines 772-799) with registry queries, capability search, heartbeat-backed liveness, and capability-based routing
+[4/7] Coordination failures: TRACEABLE → problem in §1 (line 98); addressed by §3.4 (lines 402-409), §7.3-§7.4 (lines 872-887), and §12.4 (lines 1321-1327) with circuit breakers, coordination primitives, retry limits, and ordering guarantees
+[5/7] Protocol fragmentation: TRACEABLE → problem in §1 (line 99); addressed by §8.1-§8.5 (lines 963-1059) with deterministic MCP/A2A/gRPC adapter contracts and tag auto-mapping
+[6/7] Scalability bottlenecks: TRACEABLE → problem in §1 (line 100); addressed by §12.1-§12.3 (lines 1286-1319) and §6.5 (lines 802-806) with explicit performance targets, horizontal scaling, cache/read-replica strategy, and churn protections
+[7/7] Security/trust: TRACEABLE → problem in §1 (line 101); addressed by §5.2-§5.5 (lines 596-711) and §11.1-§11.4 (lines 1219-1260) with API secrets, JWT sessions, signing, rate limits, tenant isolation, and audit trails
+Result: 7/7 TRACEABLE
+
+EVIDENCE FILES:
+task-1-*: EXISTS (7 files)
+task-2-*: EXISTS (3 files)
+task-3-*: EXISTS (2 files)
+task-4-*: EXISTS (4 files)
+task-5-*: EXISTS (2 files)
+task-6-*: EXISTS (2 files)
+task-7-*: EXISTS (2 files)
+task-8-*: EXISTS (2 files)
+task-9-*: EXISTS (2 files)
+task-10-*: EXISTS (3 files)
+task-11-*: EXISTS (2 files)
+task-12-*: EXISTS (2 files)
+task-13-*: EXISTS (2 files)
+task-14-*: EXISTS (6 files)
+task-15-*: EXISTS (4 files)
+Result: 15/15 tasks have evidence, 0/15 missing
+
+VERDICT: REJECT
+
+Specific violations:
+- Service-tier/package rules introduce pricing-related design content (lines 434-435, 564-565, 1265-1268).
+- Admin dashboard content is present, even though deferred (lines 1352-1353).
+- Infrastructure/deployment design details are present throughout architecture and scaling sections (lines 139-218, 511-513, 1303-1306, 1351).
+- The core tag list exceeds the planned ~15-tag ceiling (lines 365-390).
+- Exact version references are present (lines 155, 218, 735, 1473, 1475).
+- TUI implementation details go beyond conceptual wireframing (lines 1121, 1145-1150).
