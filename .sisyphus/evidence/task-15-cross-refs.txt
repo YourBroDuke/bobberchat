@@ -1,0 +1,30 @@
+Cross-Reference Audit
+Broken references count (should be 0): 0
+Broken references:
+All references found:
+§1
+§10
+§11
+§12
+§13
+§2
+§3
+§4
+§5
+§6
+§8
+§9
+Defined sections:
+§1
+§10
+§11
+§12
+§13
+§2
+§3
+§4
+§5
+§6
+§7
+§8
+§9
