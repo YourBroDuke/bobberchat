@@ -32,8 +32,8 @@ resource "azurerm_storage_account" "tfstate" {
   account_tier                  = "Standard"
   account_replication_type      = "GRS"
   https_traffic_only_enabled    = true
-  shared_access_key_enabled     = false
-  public_network_access_enabled = false
+  shared_access_key_enabled     = true
+  public_network_access_enabled = true
   min_tls_version               = "TLS1_2"
 
   blob_properties {
