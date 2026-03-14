@@ -35,7 +35,7 @@ spec:
       initContainers:
         - name: wait-for-postgres
           image: "{{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}"
-          command: ["sh", "-c", "until pg_isready -h {{ include "bobberchat.fullname" . }}-postgres -U bobberchat; do sleep 2; done"]
+          command: ['sh', '-c', 'until pg_isready -h {{ if .Values.postgres.enabled }}{{ include "bobberchat.fullname" . }}-postgres{{ else }}{{ .Values.postgres.external.host }}{{ end }} -U bobberchat; do sleep 2; done']
       containers:
         - name: migrate
           image: "{{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}"
@@ -43,16 +43,21 @@ spec:
             - name: PGPASSWORD
               valueFrom:
                 secretKeyRef:
+                  {{ if .Values.postgres.enabled }}
                   name: {{ include "bobberchat.fullname" . }}-db-credentials
                   key: password
+                  {{ else }}
+                  name: {{ include "bobberchat.fullname" . }}-secrets
+                  key: postgres-password
+                  {{ end }}
           command:
             - psql
             - -h
-            - {{ include "bobberchat.fullname" . }}-postgres
+            - {{ if .Values.postgres.enabled }}{{ include "bobberchat.fullname" . }}-postgres{{ else }}{{ .Values.postgres.external.host }}{{ end }}
             - -U
-            - bobberchat
+            - {{ if .Values.postgres.enabled }}bobberchat{{ else }}{{ .Values.postgres.external.user }}{{ end }}
             - -d
-            - bobberchat
+            - {{ if .Values.postgres.enabled }}bobberchat{{ else }}{{ .Values.postgres.external.database }}{{ end }}
             - -f
             - /migrations/001_initial_schema.sql
           volumeMounts:

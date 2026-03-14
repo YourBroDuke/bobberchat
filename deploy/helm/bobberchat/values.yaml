@@ -62,6 +62,12 @@ postgres:
     limits:
       cpu: "1"
       memory: 1Gi
+  external:
+    host: ""
+    port: 5432
+    user: "bobberchat"
+    database: "bobberchat"
+    password: ""
 
 secrets:
   postgresDsn: "postgres://bobberchat:CHANGE_ME@postgres:5432/bobberchat?sslmode=require"
