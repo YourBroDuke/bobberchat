@@ -1,0 +1,78 @@
+replicaCount: 2
+
+image:
+  repository: ghcr.io/yourbroduke/bobberchat
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: bobberchat.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+config:
+  listenAddress: ":8080"
+  rateLimits:
+    perAgent: 100
+    perGroup: 500
+    perTag: 200
+    burstFactor: 2.0
+
+nats:
+  enabled: true
+  image:
+    repository: nats
+    tag: "2.10"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+postgres:
+  enabled: true
+  image:
+    repository: postgres
+    tag: "15"
+  storage: 10Gi
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+secrets:
+  postgresDsn: "postgres://bobberchat:CHANGE_ME@postgres:5432/bobberchat?sslmode=require"
+  jwtSecret: "CHANGE_ME_TO_A_RANDOM_SECRET"
+  postgresPassword: "CHANGE_ME"
+
+migration:
+  enabled: true
+  backoffLimit: 3
+  # To supply migration SQL inline, set this value.
+  # Alternatively, create the ConfigMap externally:
+  #   kubectl create configmap <release>-bobberchat-migrations \
+  #     --from-file=migrations/ -n <namespace>
+  sql: ""

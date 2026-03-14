@@ -1,0 +1,150 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bobberd
+  namespace: bobberchat
+  labels:
+    app.kubernetes.io/name: bobberchat
+    app.kubernetes.io/component: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: bobberchat
+        app.kubernetes.io/component: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/v1/metrics"
+    spec:
+      containers:
+        - name: bobberd
+          image: ghcr.io/yourbroduke/bobberchat:latest
+          args: ["--config", "/app/configs/backend.yaml"]
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: BOBBERD_POSTGRES_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: bobberchat-secrets
+                  key: postgres-dsn
+            - name: BOBBERD_AUTH_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: bobberchat-secrets
+                  key: jwt-secret
+            - name: BOBBERD_NATS_URL
+              value: nats://nats.bobberchat.svc.cluster.local:4222
+            - name: BOBBERD_SERVER_LISTEN_ADDRESS
+              value: ":8080"
+          readinessProbe:
+            httpGet:
+              path: /v1/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /v1/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          volumeMounts:
+            - name: config
+              mountPath: /app/configs
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: bobberchat-config
+            items:
+              - key: backend.yaml
+                path: backend.yaml
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bobberd
+  namespace: bobberchat
+  labels:
+    app.kubernetes.io/name: bobberchat
+    app.kubernetes.io/component: backend
+spec:
+  selector:
+    app.kubernetes.io/component: backend
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate
+  namespace: bobberchat
+  labels:
+    app.kubernetes.io/name: bobberchat
+    app.kubernetes.io/component: migration
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:15
+          command: ["sh", "-c", "until pg_isready -h postgres.bobberchat.svc.cluster.local -U bobberchat; do sleep 2; done"]
+      containers:
+        - name: migrate
+          image: postgres:15
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: bobberchat-db-credentials
+                  key: password
+          command:
+            - psql
+            - -h
+            - postgres.bobberchat.svc.cluster.local
+            - -U
+            - bobberchat
+            - -d
+            - bobberchat
+            - -f
+            - /migrations/001_initial_schema.sql
+          volumeMounts:
+            - name: migrations
+              mountPath: /migrations
+              readOnly: true
+      volumes:
+        - name: migrations
+          configMap:
+            name: bobberchat-migrations
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bobberchat-migrations
+  namespace: bobberchat
+  labels:
+    app.kubernetes.io/name: bobberchat
+    app.kubernetes.io/component: migration
+data:
+  001_initial_schema.sql: |
+    -- Create this ConfigMap from the actual migration file:
+    -- kubectl create configmap bobberchat-migrations --from-file=migrations/ -n bobberchat
+    -- Then delete this placeholder ConfigMap and re-apply.

@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "bobberchat.fullname" . }}
+  labels:
+    {{- include "bobberchat.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "bobberchat.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      labels:
+        {{- include "bobberchat.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: backend
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/v1/metrics"
+    spec:
+      containers:
+        - name: bobberd
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["--config", "/app/configs/backend.yaml"]
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: BOBBERD_POSTGRES_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "bobberchat.fullname" . }}-secrets
+                  key: postgres-dsn
+            - name: BOBBERD_AUTH_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "bobberchat.fullname" . }}-secrets
+                  key: jwt-secret
+            - name: BOBBERD_NATS_URL
+              value: "nats://{{ include "bobberchat.fullname" . }}-nats:4222"
+            - name: BOBBERD_SERVER_LISTEN_ADDRESS
+              value: {{ .Values.config.listenAddress | quote }}
+          readinessProbe:
+            httpGet:
+              path: /v1/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /v1/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /app/configs
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "bobberchat.fullname" . }}-config
+            items:
+              - key: backend.yaml
+                path: backend.yaml
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "bobberchat.fullname" . }}
+  labels:
+    {{- include "bobberchat.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "bobberchat.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http

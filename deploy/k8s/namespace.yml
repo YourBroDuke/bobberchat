@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bobberchat
+  labels:
+    app.kubernetes.io/name: bobberchat
+    app.kubernetes.io/part-of: bobberchat

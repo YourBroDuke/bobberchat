@@ -1,0 +1,14 @@
+apiVersion: v2
+name: bobberchat
+description: BobberChat - Slack for Agents. Multi-agent coordination layer with NATS JetStream and PostgreSQL.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - agents
+  - multi-agent
+  - nats
+  - messaging
+  - coordination
+maintainers:
+  - name: BobberChat Team

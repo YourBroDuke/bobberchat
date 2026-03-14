@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bobberchat-config
+  namespace: bobberchat
+  labels:
+    app.kubernetes.io/name: bobberchat
+    app.kubernetes.io/component: backend
+data:
+  backend.yaml: |
+    server:
+      listen_address: ":8080"
+    nats:
+      url: "nats://nats.bobberchat.svc.cluster.local:4222"
+    postgres:
+      dsn: ""
+    auth:
+      jwt_secret: ""
+    rate_limits:
+      per_agent: 100
+      per_group: 500
+      per_tag: 200
+      burst_factor: 2.0
