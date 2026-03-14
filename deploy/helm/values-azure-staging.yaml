@@ -1,0 +1,81 @@
+# Azure Staging Helm Values Overlay
+# ===================================
+# This file overrides base values.yaml for Azure staging deployment.
+#
+# Key overrides:
+# - Disables in-cluster PostgreSQL (uses Azure Database for PostgreSQL)
+# - Enables nginx Ingress with cert-manager for TLS
+# - Uses staging Let's Encrypt issuer (letsencrypt-staging) to avoid rate limits
+# - Configures Azure-specific secrets and host names
+#
+# NOTE: Several values use PLACEHOLDER tokens that must be overridden at deploy time:
+#   - postgres.external.host: Set to Azure PostgreSQL FQDN (from Terraform outputs)
+#   - postgres.external.password: Set to PostgreSQL admin password (from secrets management)
+#   - secrets.jwtSecret: Set to a random 256-bit secret (from secrets management)
+#
+# Example deploy command:
+#   helm upgrade --install bobberchat deploy/helm/bobberchat/ \
+#     -f deploy/helm/values-azure-staging.yaml \
+#     --set postgres.external.host=postgres-bobberchat-staging.postgres.database.azure.com \
+#     --set postgres.external.password=$POSTGRES_PASSWORD \
+#     --set secrets.jwtSecret=$JWT_SECRET \
+#     --set-file migration.sql=migrations/001_initial_schema.sql
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/yourbroduke/bobberchat
+  tag: latest  # Overridden by CI/CD pipeline with --set
+  pullPolicy: IfNotPresent
+
+# Disable in-cluster PostgreSQL; use external Azure Database
+postgres:
+  enabled: false
+  external:
+    host: "PLACEHOLDER_FROM_TERRAFORM"
+    port: 5432
+    user: "bobberchat"
+    database: "bobberchat"
+    password: "PLACEHOLDER_FROM_SECRETS"
+
+# Keep NATS enabled for message streaming
+nats:
+  enabled: true
+
+# Enable nginx Ingress with TLS via cert-manager
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-staging"  # Staging issuer (avoids rate limits)
+  hosts:
+    - host: staging.bobbers.cc
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: bobberchat-staging-tls
+      hosts:
+        - staging.bobbers.cc
+
+# PostgreSQL DSN with SSL enforcement (required by Azure)
+# Password placeholder is replaced at deploy time via --set
+secrets:
+  postgresDsn: "postgres://bobberchat:PLACEHOLDER_FROM_SECRETS@PLACEHOLDER_FROM_TERRAFORM:5432/bobberchat?sslmode=require"
+  jwtSecret: "CHANGE_ME_SET_VIA_HELM_DEPLOY"
+
+# Enable database migrations
+# NOTE: migration.sql is NOT set here. It MUST be provided at deploy time via:
+#   --set-file migration.sql=migrations/001_initial_schema.sql
+# Without this, the migrations ConfigMap won't be created and the Job will fail.
+migration:
+  enabled: true
+
+# Staging resource requests/limits (conservative)
+resources:
+  requests:
+    cpu: 100m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
