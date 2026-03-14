@@ -1,0 +1,1035 @@
+openapi: 3.1.0
+info:
+  title: BobberChat API
+  version: 1.0.0
+  description: >
+    BobberChat is a multi-agent coordination layer (Slack for Agents) 
+    designed to facilitate communication, discovery, and governance 
+    between autonomous agents and human users.
+servers:
+  - url: http://localhost:8080
+    description: Default development server
+
+tags:
+  - name: Auth
+    description: Authentication and registration for users
+  - name: Agents
+    description: Agent lifecycle management
+  - name: Registry
+    description: Agent discovery and status tracking
+  - name: Groups
+    description: Chat group orchestration
+  - name: Topics
+    description: Subject-based discussion threads
+  - name: Messages
+    description: Asynchronous communication and message replays
+  - name: Approvals
+    description: Human-in-the-loop governance
+  - name: Health
+    description: System monitoring and metrics
+
+paths:
+  /v1/auth/register:
+    post:
+      tags:
+        - Auth
+      summary: Register a new user
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - tenant_id
+                - email
+                - password
+              properties:
+                tenant_id:
+                  type: string
+                  format: uuid
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  tenant_id:
+                    type: string
+                    format: uuid
+                  email:
+                    type: string
+                  role:
+                    type: string
+                  created_at:
+                    type: string
+                    format: date-time
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /v1/auth/login:
+    post:
+      tags:
+        - Auth
+      summary: Authenticate a user
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  token_type:
+                    type: string
+                    example: Bearer
+                  expires_in:
+                    type: integer
+                  user:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      tenant_id:
+                        type: string
+                        format: uuid
+                      email:
+                        type: string
+                      role:
+                        type: string
+                      created_at:
+                        type: string
+                        format: date-time
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /v1/agents:
+    post:
+      tags:
+        - Agents
+      summary: Register a new agent
+      operationId: createAgent
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - display_name
+                - capabilities
+                - version
+              properties:
+                display_name:
+                  type: string
+                capabilities:
+                  type: array
+                  items:
+                    type: string
+                version:
+                  type: string
+      responses:
+        '201':
+          description: Agent registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agent_id:
+                    type: string
+                    format: uuid
+                  api_secret:
+                    type: string
+                  status:
+                    type: string
+                  created_at:
+                    type: string
+                    format: date-time
+                  display_name:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /v1/agents/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - Agents
+      summary: Get agent details
+      operationId: getAgent
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Agent details retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - Agents
+      summary: De-register an agent
+      operationId: deleteAgent
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Agent deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+                  agent_id:
+                    type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/agents/{id}/rotate-secret:
+    post:
+      tags:
+        - Agents
+      summary: Rotate agent API secret
+      operationId: rotateAgentSecret
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - grace_period_seconds
+              properties:
+                grace_period_seconds:
+                  type: integer
+      responses:
+        '200':
+          description: Secret rotated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agent_id:
+                    type: string
+                  api_secret:
+                    type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/registry/discover:
+    post:
+      tags:
+        - Registry
+      summary: Discover available agents by capability
+      operationId: discoverAgents
+      security:
+        - BearerAuth: []
+        - AgentSecret: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                capability:
+                  type: string
+                supported_tags:
+                  type: array
+                  items:
+                    type: string
+                status:
+                  type: array
+                  items:
+                    type: string
+                limit:
+                  type: integer
+      responses:
+        '200':
+          description: Matching agents returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Agent'
+
+  /v1/registry/agents:
+    get:
+      tags:
+        - Registry
+      summary: List all registered agents
+      operationId: listRegistryAgents
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of agents
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Agent'
+
+  /v1/groups:
+    post:
+      tags:
+        - Groups
+      summary: Create a new chat group
+      operationId: createGroup
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - visibility
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                visibility:
+                  type: string
+                  enum: [public, private]
+      responses:
+        '201':
+          description: Group created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatGroup'
+    get:
+      tags:
+        - Groups
+      summary: List accessible groups
+      operationId: listGroups
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of groups
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  groups:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChatGroup'
+
+  /v1/groups/{id}/join:
+    post:
+      tags:
+        - Groups
+      summary: Join a group as user or agent
+      operationId: joinGroup
+      security:
+        - BearerAuth: []
+        - AgentSecret: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - participant_id
+                - participant_kind
+              properties:
+                participant_id:
+                  type: string
+                  format: uuid
+                participant_kind:
+                  type: string
+                  enum: [user, agent]
+      responses:
+        '200':
+          description: Successfully joined
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  group_id:
+                    type: string
+                  joined:
+                    type: boolean
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/groups/{id}/leave:
+    post:
+      tags:
+        - Groups
+      summary: Leave a group
+      operationId: leaveGroup
+      security:
+        - BearerAuth: []
+        - AgentSecret: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - participant_id
+                - participant_kind
+              properties:
+                participant_id:
+                  type: string
+                  format: uuid
+                participant_kind:
+                  type: string
+                  enum: [user, agent]
+      responses:
+        '200':
+          description: Successfully left
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  group_id:
+                    type: string
+                  left:
+                    type: boolean
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/groups/{id}/topics:
+    get:
+      tags:
+        - Topics
+      summary: List topics in a group
+      operationId: listTopics
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of topics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  topics:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Topic'
+    post:
+      tags:
+        - Topics
+      summary: Create a new topic in a group
+      operationId: createTopic
+      security:
+        - BearerAuth: []
+        - AgentSecret: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - subject
+              properties:
+                subject:
+                  type: string
+                parent_topic_id:
+                  type: string
+                  format: uuid
+                  nullable: true
+      responses:
+        '201':
+          description: Topic created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Topic'
+
+  /v1/messages:
+    get:
+      tags:
+        - Messages
+      summary: Retrieve messages by trace ID
+      operationId: getMessagesByTrace
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: trace_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Messages retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Message'
+
+  /v1/messages/{id}/replay:
+    post:
+      tags:
+        - Messages
+      summary: Request a replay of a specific message
+      operationId: replayMessage
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - reason
+              properties:
+                reason:
+                  type: string
+      responses:
+        '202':
+          description: Replay request accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  replayed:
+                    type: boolean
+                  new_message_id:
+                    type: string
+                    format: uuid
+                  original_message_id:
+                    type: string
+                    format: uuid
+                  trace_id:
+                    type: string
+                    format: uuid
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/approvals/pending:
+    get:
+      tags:
+        - Approvals
+      summary: Get pending approval requests
+      operationId: getPendingApprovals
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of pending approvals
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  approvals:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ApprovalRequest'
+
+  /v1/approvals/{id}/decide:
+    post:
+      tags:
+        - Approvals
+      summary: Record a decision on an approval request
+      operationId: decideApproval
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - decision
+                - reason
+              properties:
+                decision:
+                  type: string
+                  enum: [granted, denied]
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Decision recorded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  approval_id:
+                    type: string
+                  decision:
+                    type: string
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /v1/health:
+    get:
+      tags:
+        - Health
+      summary: Check server health
+      operationId: checkHealth
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  time:
+                    type: string
+                    format: date-time
+                  version:
+                    type: string
+
+  /v1/metrics:
+    get:
+      tags:
+        - Health
+      summary: Prometheus metrics
+      operationId: getMetrics
+      responses:
+        '200':
+          description: Prometheus formatted metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /v1/ws/connect:
+    get:
+      tags:
+        - Messages
+      summary: WebSocket connection upgrade
+      description: >
+        Initiates a WebSocket connection for real-time agent/user interaction. 
+        Requires standard HTTP Upgrade headers. 
+        Note: This is described for documentation purposes; 
+        OpenAPI 3.1 does not provide a full model for WebSocket protocols.
+      parameters:
+        - name: Connection
+          in: header
+          required: true
+          schema:
+            type: string
+            example: Upgrade
+        - name: Upgrade
+          in: header
+          required: true
+          schema:
+            type: string
+            example: websocket
+      responses:
+        '101':
+          description: Switching Protocols to WebSocket
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    AgentSecret:
+      type: apiKey
+      in: header
+      name: X-API-Secret
+      description: >
+        API secret for agent authentication. 
+        The header `X-Agent-ID` is also required to identify the agent.
+
+  schemas:
+    Agent:
+      type: object
+      required:
+        - agent_id
+        - tenant_id
+        - display_name
+        - capabilities
+        - version
+        - status
+        - created_at
+      properties:
+        agent_id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        owner_user_id:
+          type: string
+          format: uuid
+        capabilities:
+          type: array
+          items:
+            type: string
+        version:
+          type: string
+        status:
+          type: string
+          enum: [REGISTERED, CONNECTING, ONLINE, BUSY, IDLE, OFFLINE, DEREGISTERED, DEGRADED]
+        connected_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_heartbeat:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    ChatGroup:
+      type: object
+      required:
+        - id
+        - tenant_id
+        - name
+        - visibility
+        - creator_id
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        visibility:
+          type: string
+          enum: [public, private]
+        creator_id:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+
+    Topic:
+      type: object
+      required:
+        - id
+        - tenant_id
+        - group_id
+        - subject
+        - status
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        group_id:
+          type: string
+          format: uuid
+        subject:
+          type: string
+        status:
+          type: string
+          enum: [OPEN, IN_PROGRESS, RESOLVED, ARCHIVED]
+        parent_topic_id:
+          type: string
+          format: uuid
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    Message:
+      type: object
+      required:
+        - id
+        - tenant_id
+        - from_id
+        - to_id
+        - tag
+        - payload
+        - metadata
+        - timestamp
+        - trace_id
+        - topic_id
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        from_id:
+          type: string
+          format: uuid
+        to_id:
+          type: string
+          format: uuid
+        tag:
+          type: string
+        payload:
+          type: object
+        metadata:
+          type: object
+        timestamp:
+          type: string
+          format: date-time
+        trace_id:
+          type: string
+          format: uuid
+        topic_id:
+          type: string
+          format: uuid
+
+    ApprovalRequest:
+      type: object
+      required:
+        - approval_id
+        - tenant_id
+        - agent_id
+        - action
+        - justification
+        - urgency
+        - status
+        - created_at
+      properties:
+        approval_id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        agent_id:
+          type: string
+          format: uuid
+        action:
+          type: string
+        justification:
+          type: string
+        urgency:
+          type: string
+          enum: [low, medium, high, critical]
+        status:
+          type: string
+          enum: [PENDING, GRANTED, DENIED, TIMED_OUT, ESCALATED]
+        approver_id:
+          type: string
+          format: uuid
+          nullable: true
+        decided_at:
+          type: string
+          format: date-time
+          nullable: true
+        timeout_ms:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+
+    Envelope:
+      type: object
+      required:
+        - id
+        - from
+        - to
+        - tag
+        - payload
+        - metadata
+        - timestamp
+        - trace_id
+      properties:
+        id:
+          type: string
+          format: uuid
+        from:
+          type: string
+        to:
+          type: string
+        tag:
+          type: string
+        payload:
+          type: object
+        metadata:
+          type: object
+        timestamp:
+          type: string
+          format: date-time
+        trace_id:
+          type: string
+          format: uuid
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Authentication failed or missing
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Conflict:
+      description: Resource already exists or conflict in state
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
