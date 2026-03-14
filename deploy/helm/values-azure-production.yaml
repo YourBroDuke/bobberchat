@@ -1,0 +1,83 @@
+# Azure Production Helm Values Overlay
+# =====================================
+# This file overrides base values.yaml for Azure production deployment.
+#
+# Key overrides:
+# - Disables in-cluster PostgreSQL (uses Azure Database for PostgreSQL)
+# - Enables nginx Ingress with cert-manager for TLS
+# - Uses production Let's Encrypt issuer (letsencrypt-prod) for real certificates
+# - Configures Azure-specific secrets and host names
+# - Sets replicaCount: 2 for high availability
+# - Higher resource limits for production workloads
+#
+# NOTE: Several values use PLACEHOLDER tokens that must be overridden at deploy time:
+#   - postgres.external.host: Set to Azure PostgreSQL FQDN (from Terraform outputs)
+#   - postgres.external.password: Set to PostgreSQL admin password (from secrets management)
+#   - secrets.jwtSecret: Set to a random 256-bit secret (from secrets management)
+#
+# Example deploy command:
+#   helm upgrade --install bobberchat deploy/helm/bobberchat/ \
+#     -f deploy/helm/values-azure-production.yaml \
+#     --set postgres.external.host=postgres-bobberchat-production.postgres.database.azure.com \
+#     --set postgres.external.password=$POSTGRES_PASSWORD \
+#     --set secrets.jwtSecret=$JWT_SECRET \
+#     --set-file migration.sql=migrations/001_initial_schema.sql
+
+replicaCount: 2
+
+image:
+  repository: ghcr.io/yourbroduke/bobberchat
+  tag: latest  # Overridden by CI/CD pipeline with --set
+  pullPolicy: IfNotPresent
+
+# Disable in-cluster PostgreSQL; use external Azure Database
+postgres:
+  enabled: false
+  external:
+    host: "PLACEHOLDER_FROM_TERRAFORM"
+    port: 5432
+    user: "bobberchat"
+    database: "bobberchat"
+    password: "PLACEHOLDER_FROM_SECRETS"
+
+# Keep NATS enabled for message streaming
+nats:
+  enabled: true
+
+# Enable nginx Ingress with TLS via cert-manager
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"  # Production issuer (real certificates)
+  hosts:
+    - host: api.bobbers.cc
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: bobberchat-production-tls
+      hosts:
+        - api.bobbers.cc
+
+# PostgreSQL DSN with SSL enforcement (required by Azure)
+# Password placeholder is replaced at deploy time via --set
+secrets:
+  postgresDsn: "postgres://bobberchat:PLACEHOLDER_FROM_SECRETS@PLACEHOLDER_FROM_TERRAFORM:5432/bobberchat?sslmode=require"
+  jwtSecret: "CHANGE_ME_SET_VIA_HELM_DEPLOY"
+
+# Enable database migrations
+# NOTE: migration.sql is NOT set here. It MUST be provided at deploy time via:
+#   --set-file migration.sql=migrations/001_initial_schema.sql
+# Without this, the migrations ConfigMap won't be created and the Job will fail.
+migration:
+  enabled: true
+
+# Production resource requests/limits (higher than staging)
+resources:
+  requests:
+    cpu: 100m
+    memory: 64Mi
+  limits:
+    cpu: 1000m
+    memory: 512Mi
