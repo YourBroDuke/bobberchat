@@ -5,6 +5,11 @@ services:
     ports:
       - "4222:4222"
       - "8222:8222"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz || exit 1"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
 
   postgres:
     image: postgres:15
@@ -14,16 +19,38 @@ services:
       POSTGRES_DB: bobberchat
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bobberchat"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  init-db:
+    image: postgres:15
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: bobberchat
+    volumes:
+      - ./migrations:/migrations:ro
+    entrypoint: ["sh", "-c", "psql -h postgres -U bobberchat -d bobberchat -f /migrations/001_initial_schema.sql"]
+    restart: "no"
 
   bobberd:
     build: .
     command: ["/app/bobberd", "--config", "/app/configs/backend.yaml"]
     depends_on:
-      - nats
-      - postgres
+      nats:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      init-db:
+        condition: service_completed_successfully
     environment:
       BOBBERD_NATS_URL: nats://nats:4222
       BOBBERD_POSTGRES_DSN: postgres://bobberchat:bobberchat@postgres:5432/bobberchat?sslmode=disable
       BOBBERD_SERVER_LISTEN_ADDRESS: :8080
     ports:
       - "8080:8080"
+    restart: unless-stopped

@@ -122,3 +122,5 @@ WHERE status = 'PENDING';
 
 CREATE INDEX idx_audit_tenant_time ON audit_log (tenant_id, created_at DESC);
 CREATE INDEX idx_audit_event_type ON audit_log (tenant_id, event_type, created_at DESC);
+
+CREATE TABLE messages_default PARTITION OF messages DEFAULT;

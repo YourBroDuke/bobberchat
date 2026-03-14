@@ -1,4 +1,4 @@
-FROM golang:1.22-alpine AS builder
+FROM golang:latest AS builder
 
 WORKDIR /src
 COPY go.mod go.sum ./
@@ -16,6 +16,7 @@ COPY --from=builder /out/bobberd /app/bobberd
 COPY --from=builder /out/bobber /app/bobber
 COPY --from=builder /out/bobber-tui /app/bobber-tui
 COPY configs/backend.yaml /app/configs/backend.yaml
+COPY migrations/ /app/migrations/
 
 EXPOSE 8080
 CMD ["/app/bobberd", "--config", "/app/configs/backend.yaml"]
