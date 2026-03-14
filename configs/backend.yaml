@@ -18,6 +18,14 @@ auth:
   jwt_access_ttl_seconds: 3600
   api_secret_hash_algorithm: "argon2id"
 
+rate_limits:
+  enabled: true
+  per_agent_mps: 100
+  per_group_mps: 500
+  per_tag_mps: 50
+  burst_factor: 10
+  cleanup_seconds: 300
+
 logging:
   level: "info"
   format: "json"

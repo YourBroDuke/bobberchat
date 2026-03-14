@@ -62,88 +62,88 @@ const (
 )
 
 type User struct {
-	ID           uuid.UUID
-	TenantID     uuid.UUID
-	Email        string
-	PasswordHash string
-	Role         string
-	CreatedAt    time.Time
+	ID           uuid.UUID `json:"id"`
+	TenantID     uuid.UUID `json:"tenant_id"`
+	Email        string    `json:"email"`
+	PasswordHash string    `json:"-"`
+	Role         string    `json:"role"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 type Agent struct {
-	AgentID       uuid.UUID
-	TenantID      uuid.UUID
-	DisplayName   string
-	OwnerUserID   uuid.UUID
-	Capabilities  []string
-	Version       string
-	Status        AgentStatus
-	APISecretHash string
-	ConnectedAt   *time.Time
-	LastHeartbeat *time.Time
-	CreatedAt     time.Time
+	AgentID       uuid.UUID   `json:"agent_id"`
+	TenantID      uuid.UUID   `json:"tenant_id"`
+	DisplayName   string      `json:"display_name"`
+	OwnerUserID   uuid.UUID   `json:"owner_user_id"`
+	Capabilities  []string    `json:"capabilities"`
+	Version       string      `json:"version"`
+	Status        AgentStatus `json:"status"`
+	APISecretHash string      `json:"-"`
+	ConnectedAt   *time.Time  `json:"connected_at,omitempty"`
+	LastHeartbeat *time.Time  `json:"last_heartbeat,omitempty"`
+	CreatedAt     time.Time   `json:"created_at"`
 }
 
 type ChatGroup struct {
-	ID          uuid.UUID
-	TenantID    uuid.UUID
-	Name        string
-	Description *string
-	Visibility  GroupVisibility
-	CreatorID   uuid.UUID
-	CreatedAt   time.Time
+	ID          uuid.UUID       `json:"id"`
+	TenantID    uuid.UUID       `json:"tenant_id"`
+	Name        string          `json:"name"`
+	Description *string         `json:"description,omitempty"`
+	Visibility  GroupVisibility `json:"visibility"`
+	CreatorID   uuid.UUID       `json:"creator_id"`
+	CreatedAt   time.Time       `json:"created_at"`
 }
 
 type ChatGroupMember struct {
-	GroupID          uuid.UUID
-	ParticipantID    uuid.UUID
-	ParticipantKind  ParticipantType
-	JoinedAt         time.Time
+	GroupID         uuid.UUID       `json:"group_id"`
+	ParticipantID   uuid.UUID       `json:"participant_id"`
+	ParticipantKind ParticipantType `json:"participant_kind"`
+	JoinedAt        time.Time       `json:"joined_at"`
 }
 
 type Topic struct {
-	ID            uuid.UUID
-	TenantID      uuid.UUID
-	GroupID       uuid.UUID
-	Subject       string
-	Status        TopicStatus
-	ParentTopicID *uuid.UUID
-	CreatedAt     time.Time
+	ID            uuid.UUID   `json:"id"`
+	TenantID      uuid.UUID   `json:"tenant_id"`
+	GroupID       uuid.UUID   `json:"group_id"`
+	Subject       string      `json:"subject"`
+	Status        TopicStatus `json:"status"`
+	ParentTopicID *uuid.UUID  `json:"parent_topic_id,omitempty"`
+	CreatedAt     time.Time   `json:"created_at"`
 }
 
 type Message struct {
-	ID        uuid.UUID
-	TenantID  uuid.UUID
-	FromID    uuid.UUID
-	ToID      uuid.UUID
-	Tag       string
-	Payload   map[string]any
-	Metadata  map[string]any
-	Timestamp time.Time
-	TraceID   uuid.UUID
-	TopicID   *uuid.UUID
+	ID        uuid.UUID      `json:"id"`
+	TenantID  uuid.UUID      `json:"tenant_id"`
+	FromID    uuid.UUID      `json:"from_id"`
+	ToID      uuid.UUID      `json:"to_id"`
+	Tag       string         `json:"tag"`
+	Payload   map[string]any `json:"payload"`
+	Metadata  map[string]any `json:"metadata"`
+	Timestamp time.Time      `json:"timestamp"`
+	TraceID   uuid.UUID      `json:"trace_id"`
+	TopicID   *uuid.UUID     `json:"topic_id,omitempty"`
 }
 
 type ApprovalRequest struct {
-	ApprovalID     uuid.UUID
-	TenantID       uuid.UUID
-	AgentID        uuid.UUID
-	Action         string
-	Justification  string
-	Urgency        Urgency
-	Status         ApprovalStatus
-	ApproverID     *uuid.UUID
-	DecidedAt      *time.Time
-	TimeoutMS      int
-	CreatedAt      time.Time
+	ApprovalID    uuid.UUID      `json:"approval_id"`
+	TenantID      uuid.UUID      `json:"tenant_id"`
+	AgentID       uuid.UUID      `json:"agent_id"`
+	Action        string         `json:"action"`
+	Justification string         `json:"justification"`
+	Urgency       Urgency        `json:"urgency"`
+	Status        ApprovalStatus `json:"status"`
+	ApproverID    *uuid.UUID     `json:"approver_id,omitempty"`
+	DecidedAt     *time.Time     `json:"decided_at,omitempty"`
+	TimeoutMS     int            `json:"timeout_ms"`
+	CreatedAt     time.Time      `json:"created_at"`
 }
 
 type AuditLogEntry struct {
-	ID        int64
-	EventType string
-	ActorID   *uuid.UUID
-	AgentID   *uuid.UUID
-	TenantID  uuid.UUID
-	Details   map[string]any
-	CreatedAt time.Time
+	ID        int64          `json:"id"`
+	EventType string         `json:"event_type"`
+	ActorID   *uuid.UUID     `json:"actor_id,omitempty"`
+	AgentID   *uuid.UUID     `json:"agent_id,omitempty"`
+	TenantID  uuid.UUID      `json:"tenant_id"`
+	Details   map[string]any `json:"details,omitempty"`
+	CreatedAt time.Time      `json:"created_at"`
 }

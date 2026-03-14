@@ -15,6 +15,9 @@ type Metrics struct {
 	TopicsActive     prometheus.Gauge
 	ApprovalsPending prometheus.Gauge
 	ErrorsCount      *prometheus.CounterVec
+	RateLimited      *prometheus.CounterVec
+	AuditLogged      prometheus.Counter
+	ActiveWSConns    prometheus.Gauge
 }
 
 func NewMetrics(registry *prometheus.Registry) *Metrics {
@@ -59,6 +62,25 @@ func NewMetrics(registry *prometheus.Registry) *Metrics {
 			},
 			[]string{"agent_id", "error_type"},
 		),
+		RateLimited: prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "bobberchat_rate_limited_total",
+				Help: "Total rate-limited requests",
+			},
+			[]string{"dimension", "key"},
+		),
+		AuditLogged: prometheus.NewCounter(
+			prometheus.CounterOpts{
+				Name: "bobberchat_audit_logged_total",
+				Help: "Total audit log entries written",
+			},
+		),
+		ActiveWSConns: prometheus.NewGauge(
+			prometheus.GaugeOpts{
+				Name: "bobberchat_active_ws_connections",
+				Help: "Number of active WebSocket connections",
+			},
+		),
 	}
 
 	if registry != nil {
@@ -69,6 +91,9 @@ func NewMetrics(registry *prometheus.Registry) *Metrics {
 			m.TopicsActive,
 			m.ApprovalsPending,
 			m.ErrorsCount,
+			m.RateLimited,
+			m.AuditLogged,
+			m.ActiveWSConns,
 		)
 	}
 

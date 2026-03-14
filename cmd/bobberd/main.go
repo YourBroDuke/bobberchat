@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,6 +16,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/bobberchat/bobberchat/internal/adapter"
+	"github.com/bobberchat/bobberchat/internal/adapter/a2a"
+	grpcadapter "github.com/bobberchat/bobberchat/internal/adapter/grpc"
+	"github.com/bobberchat/bobberchat/internal/adapter/mcp"
 	"github.com/bobberchat/bobberchat/internal/approval"
 	"github.com/bobberchat/bobberchat/internal/auth"
 	"github.com/bobberchat/bobberchat/internal/broker"
@@ -22,6 +27,7 @@ import (
 	"github.com/bobberchat/bobberchat/internal/observability"
 	"github.com/bobberchat/bobberchat/internal/persistence"
 	"github.com/bobberchat/bobberchat/internal/protocol"
+	"github.com/bobberchat/bobberchat/internal/ratelimit"
 	"github.com/bobberchat/bobberchat/internal/registry"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -53,9 +59,14 @@ type config struct {
 	Observability struct {
 		MetricsPath string `mapstructure:"metrics_path"`
 	} `mapstructure:"observability"`
+	RateLimits ratelimit.Config `mapstructure:"rate_limits"`
 }
 
 type contextKey string
+
+type messagePublisher interface {
+	PublishMessage(ctx context.Context, env *protocol.Envelope) error
+}
 
 const (
 	ctxTenantID contextKey = "tenant_id"
@@ -71,9 +82,15 @@ type app struct {
 	convSvc      *conversation.Service
 	approvalSvc  *approval.Service
 	broker       *broker.Broker
+	publisher    messagePublisher
+	adapters     map[string]adapter.Adapter
 	metricsReg   *prometheus.Registry
+	metrics      *observability.Metrics
+	limiter      *ratelimit.Limiter
+	auditRepo    persistence.AuditLogRepository
 	wsUpgrader   websocket.Upgrader
 	heartbeatTTL time.Duration
+	activeConns  sync.WaitGroup
 }
 
 func main() {
@@ -105,6 +122,19 @@ func main() {
 		logger.Fatal().Err(err).Msg("failed to setup jetstream")
 	}
 
+	adapters := map[string]adapter.Adapter{
+		"mcp":  mcp.NewMCPAdapter(),
+		"a2a":  a2a.NewA2AAdapter(),
+		"grpc": grpcadapter.NewGRPCAdapter(),
+	}
+
+	repos := persistence.NewPostgresRepositories(db)
+
+	rlCfg := cfg.RateLimits
+	if rlCfg.BurstFactor == 0 && rlCfg.PerAgentMPS == 0 {
+		rlCfg = ratelimit.DefaultConfig()
+	}
+
 	a := &app{
 		db:          db,
 		authSvc:     auth.NewService(db, cfg.Auth.JWTSecret),
@@ -112,7 +142,12 @@ func main() {
 		convSvc:     conversation.NewService(db),
 		approvalSvc: approval.NewService(db, brok),
 		broker:      brok,
+		publisher:   brok,
+		adapters:    adapters,
 		metricsReg:  metricsReg,
+		metrics:     metrics,
+		limiter:     ratelimit.New(rlCfg),
+		auditRepo:   repos.AuditLogs,
 		wsUpgrader: websocket.Upgrader{
 			ReadBufferSize:  4096,
 			WriteBufferSize: 4096,
@@ -120,6 +155,8 @@ func main() {
 		},
 		heartbeatTTL: 30 * time.Second,
 	}
+
+	logger.Info().Int("count", len(adapters)).Msg("protocol adapters registered")
 
 	mux := http.NewServeMux()
 	a.registerRoutes(mux)
@@ -141,11 +178,24 @@ func main() {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
+	logger.Info().Msg("shutdown signal received, draining connections")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		logger.Error().Err(err).Msg("graceful shutdown failed")
+	}
+
+	done := make(chan struct{})
+	go func() {
+		a.activeConns.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		logger.Info().Msg("all connections drained")
+	case <-ctx.Done():
+		logger.Warn().Msg("connection drain timed out")
 	}
 }
 
@@ -210,6 +260,9 @@ func (a *app) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/health", a.handleHealth)
 	mux.Handle("GET /v1/metrics", promhttp.HandlerFor(a.metricsReg, promhttp.HandlerOpts{}))
 	mux.HandleFunc("GET /v1/ws/connect", a.handleWebSocket)
+
+	mux.HandleFunc("POST /v1/adapter/{name}/ingest", a.requireAuth(true, true, a.handleAdapterIngest))
+	mux.HandleFunc("GET /v1/adapter", a.requireJWT(a.handleListAdapters))
 }
 
 func (a *app) requireJWT(next http.HandlerFunc) http.HandlerFunc {
@@ -677,7 +730,15 @@ func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
 		TraceID:   newTraceID,
 	}
 
-	if err := a.broker.PublishMessage(r.Context(), env); err != nil {
+	if err := a.publishAndAudit(r.Context(), env, tenantIDRaw); err != nil {
+		if errors.Is(err, errRateLimited) {
+			writeError(w, http.StatusTooManyRequests, "rate limited")
+			return
+		}
+		if errors.Is(err, errCrossTenantDenied) {
+			writeError(w, http.StatusForbidden, err.Error())
+			return
+		}
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -722,6 +783,81 @@ func (a *app) handleDecideApproval(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"approval_id": id, "decision": req.Decision})
 }
 
+func (a *app) handleAdapterIngest(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(r.PathValue("name"))
+	adp, ok := a.adapters[name]
+	if !ok {
+		writeError(w, http.StatusNotFound, fmt.Sprintf("adapter %q not found", name))
+		return
+	}
+
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	defer r.Body.Close()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "failed to read request body")
+		return
+	}
+
+	if len(body) == 0 {
+		writeError(w, http.StatusBadRequest, "request body is empty")
+		return
+	}
+
+	meta := adapter.TransportMeta{
+		ConnectionID: strings.TrimSpace(r.Header.Get("X-Connection-ID")),
+		SourceAddr:   r.RemoteAddr,
+		TenantID:     contextString(r.Context(), ctxTenantID),
+		AgentID:      contextString(r.Context(), ctxAgentID),
+		Headers:      map[string]string{},
+	}
+	if target := strings.TrimSpace(r.Header.Get("X-Target-Agent")); target != "" {
+		meta.Headers["X-Target-Agent"] = target
+	}
+
+	env, err := adp.Ingest(r.Context(), body, meta)
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+
+	if env.Metadata == nil {
+		env.Metadata = map[string]any{}
+	}
+	env.Metadata["tenant_id"] = meta.TenantID
+
+	if err := a.publishAndAudit(r.Context(), env, meta.TenantID); err != nil {
+		if errors.Is(err, errRateLimited) {
+			writeError(w, http.StatusTooManyRequests, "rate limited")
+			return
+		}
+		if errors.Is(err, errCrossTenantDenied) {
+			writeError(w, http.StatusForbidden, err.Error())
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"accepted":   true,
+		"adapter":    name,
+		"message_id": env.ID,
+		"tag":        env.Tag,
+		"trace_id":   env.TraceID,
+	})
+}
+
+func (a *app) handleListAdapters(w http.ResponseWriter, _ *http.Request) {
+	result := make([]map[string]string, 0, len(a.adapters))
+	for _, adp := range a.adapters {
+		result = append(result, map[string]string{
+			"name":     adp.Name(),
+			"protocol": adp.Protocol(),
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"adapters": result})
+}
+
 func (a *app) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":  "ok",
@@ -751,6 +887,17 @@ func (a *app) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
+
+	a.activeConns.Add(1)
+	if a.metrics != nil {
+		a.metrics.ActiveWSConns.Inc()
+	}
+	defer func() {
+		a.activeConns.Done()
+		if a.metrics != nil {
+			a.metrics.ActiveWSConns.Dec()
+		}
+	}()
 
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
@@ -804,7 +951,7 @@ func (a *app) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				_ = conn.WriteJSON(map[string]any{"error": err.Error()})
 				continue
 			}
-			if err := a.broker.PublishMessage(ctx, &env); err != nil {
+			if err := a.publishAndAudit(ctx, &env, claims.TenantID); err != nil {
 				_ = conn.WriteJSON(map[string]any{"error": err.Error()})
 			}
 		}
@@ -848,6 +995,82 @@ func readJSON(r *http.Request, dst any) error {
 	if err := dec.Decode(dst); err != nil {
 		return fmt.Errorf("invalid json: %w", err)
 	}
+	return nil
+}
+
+var (
+	errRateLimited       = errors.New("rate limited")
+	errCrossTenantDenied = errors.New("cross-tenant message routing denied")
+)
+
+func (a *app) publishAndAudit(ctx context.Context, env *protocol.Envelope, callerTenantID string) error {
+	envTenantID, _ := env.Metadata["tenant_id"].(string)
+	if envTenantID == "" {
+		envTenantID = callerTenantID
+	}
+
+	if callerTenantID != "" && envTenantID != callerTenantID {
+		if a.metrics != nil {
+			a.metrics.ErrorsCount.WithLabelValues(env.From, "cross_tenant_denied").Inc()
+		}
+		return errCrossTenantDenied
+	}
+
+	if a.limiter != nil {
+		agentKey := ratelimit.AgentKey(envTenantID, env.From)
+		if !a.limiter.Allow(ratelimit.DimensionAgent, agentKey) {
+			if a.metrics != nil {
+				a.metrics.RateLimited.WithLabelValues(ratelimit.DimensionAgent, agentKey).Inc()
+			}
+			return errRateLimited
+		}
+
+		if strings.HasPrefix(env.To, "group:") {
+			groupKey := ratelimit.GroupKey(envTenantID, strings.TrimPrefix(env.To, "group:"))
+			if !a.limiter.Allow(ratelimit.DimensionGroup, groupKey) {
+				if a.metrics != nil {
+					a.metrics.RateLimited.WithLabelValues(ratelimit.DimensionGroup, groupKey).Inc()
+				}
+				return errRateLimited
+			}
+		}
+
+		tagKey := ratelimit.TagKey(envTenantID, env.Tag)
+		if !a.limiter.Allow(ratelimit.DimensionTag, tagKey) {
+			if a.metrics != nil {
+				a.metrics.RateLimited.WithLabelValues(ratelimit.DimensionTag, tagKey).Inc()
+			}
+			return errRateLimited
+		}
+	}
+
+	if err := a.publisher.PublishMessage(ctx, env); err != nil {
+		return err
+	}
+
+	if a.auditRepo != nil {
+		tid, _ := uuid.Parse(envTenantID)
+		fromID, _ := uuid.Parse(env.From)
+		toID, _ := uuid.Parse(env.To)
+		entry := persistence.AuditLogEntry{
+			EventType: "message.published",
+			TenantID:  tid,
+			AgentID:   &fromID,
+			Details: map[string]any{
+				"message_id":  env.ID,
+				"from":        env.From,
+				"to":          env.To,
+				"tag":         env.Tag,
+				"trace_id":    env.TraceID,
+				"receiver_id": toID.String(),
+			},
+		}
+		_, _ = a.auditRepo.Append(ctx, entry)
+		if a.metrics != nil {
+			a.metrics.AuditLogged.Inc()
+		}
+	}
+
 	return nil
 }
 
