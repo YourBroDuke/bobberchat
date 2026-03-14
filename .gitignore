@@ -8,6 +8,14 @@
 *.so
 *.dylib
 
+# Built binaries
+/bobber
+/bobber-tui
+/bobberd
+
+# Sisyphus working state
+.sisyphus/
+
 # Test binary, built with `go test -c`
 *.test
 
