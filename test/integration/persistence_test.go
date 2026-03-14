@@ -27,13 +27,20 @@ func setupDB(t *testing.T) (*persistence.DB, func()) {
 		t.Fatalf("create test db: %v", err)
 	}
 
+	ctx := context.Background()
+
+	// Drop existing schema before re-applying migration (handles pre-populated databases)
+	_, _ = db.Pool().Exec(ctx, `
+		DROP TABLE IF EXISTS audit_log, approval_requests, messages_default, messages, topics, chat_group_members, chat_groups, agents, users CASCADE;
+		DROP TYPE IF EXISTS participant_type, urgency, approval_status, topic_status, group_visibility, agent_status CASCADE;
+	`)
+
 	migrationSQL, err := os.ReadFile("../../migrations/001_initial_schema.sql")
 	if err != nil {
 		db.Close()
 		t.Fatalf("read migration: %v", err)
 	}
 
-	ctx := context.Background()
 	if _, err := db.Pool().Exec(ctx, string(migrationSQL)); err != nil {
 		db.Close()
 		t.Fatalf("apply migration: %v", err)

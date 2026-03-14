@@ -15,7 +15,7 @@ lint:
 	go vet ./...
 
 migrate:
-	@echo "Run migrations using your migration tool against ./migrations"
+	PGPASSWORD=$${PGPASSWORD:-bobberchat} psql -h $${PGHOST:-localhost} -U $${PGUSER:-bobberchat} -d $${PGDB:-bobberchat} -f migrations/001_initial_schema.sql
 
 run-backend:
 	go run ./cmd/bobberd --config configs/backend.yaml
