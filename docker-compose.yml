@@ -1,0 +1,29 @@
+services:
+  nats:
+    image: nats:2.10
+    command: ["-js"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: bobberchat
+      POSTGRES_PASSWORD: bobberchat
+      POSTGRES_DB: bobberchat
+    ports:
+      - "5432:5432"
+
+  bobberd:
+    build: .
+    command: ["/app/bobberd", "--config", "/app/configs/backend.yaml"]
+    depends_on:
+      - nats
+      - postgres
+    environment:
+      BOBBERD_NATS_URL: nats://nats:4222
+      BOBBERD_POSTGRES_DSN: postgres://bobberchat:bobberchat@postgres:5432/bobberchat?sslmode=disable
+      BOBBERD_SERVER_LISTEN_ADDRESS: :8080
+    ports:
+      - "8080:8080"
