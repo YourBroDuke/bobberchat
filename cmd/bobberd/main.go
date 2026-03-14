@@ -23,8 +23,9 @@ import (
 	"github.com/bobberchat/bobberchat/internal/persistence"
 	"github.com/bobberchat/bobberchat/internal/protocol"
 	"github.com/bobberchat/bobberchat/internal/registry"
-	"github.com/gorilla/websocket"
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
+	"github.com/jackc/pgx/v5"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/viper"
@@ -334,10 +335,10 @@ func (a *app) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"agent_id":    agent.AgentID,
-		"api_secret":  secret,
-		"status":      agent.Status,
-		"created_at":  agent.CreatedAt,
+		"agent_id":     agent.AgentID,
+		"api_secret":   secret,
+		"status":       agent.Status,
+		"created_at":   agent.CreatedAt,
 		"display_name": agent.DisplayName,
 	})
 }
@@ -582,8 +583,111 @@ func (a *app) handleMessagesByTraceID(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"messages": msgs})
 }
 
-func (a *app) handleReplayMessage(w http.ResponseWriter, _ *http.Request) {
-	writeError(w, http.StatusNotImplemented, "not implemented")
+func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Reason string `json:"reason"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	originalMessageID := strings.TrimSpace(r.PathValue("id"))
+	originalID, err := uuid.Parse(originalMessageID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid message id")
+		return
+	}
+
+	tenantIDRaw := contextString(r.Context(), ctxTenantID)
+	tenantID, err := uuid.Parse(tenantIDRaw)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid tenant context")
+		return
+	}
+
+	var original persistence.Message
+	var payloadRaw []byte
+	var metadataRaw []byte
+	err = a.db.Pool().QueryRow(r.Context(), `
+		SELECT id, tenant_id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id, topic_id
+		FROM messages
+		WHERE tenant_id = $1 AND id = $2
+	`, tenantID, originalID).Scan(
+		&original.ID,
+		&original.TenantID,
+		&original.FromID,
+		&original.ToID,
+		&original.Tag,
+		&payloadRaw,
+		&metadataRaw,
+		&original.Timestamp,
+		&original.TraceID,
+		&original.TopicID,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "message not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to load message")
+		return
+	}
+
+	original.Payload = map[string]any{}
+	if len(payloadRaw) > 0 {
+		if err := json.Unmarshal(payloadRaw, &original.Payload); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to decode message payload")
+			return
+		}
+	}
+
+	original.Metadata = map[string]any{}
+	if len(metadataRaw) > 0 {
+		if err := json.Unmarshal(metadataRaw, &original.Metadata); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to decode message metadata")
+			return
+		}
+	}
+
+	payload := make(map[string]any, len(original.Payload)+3)
+	for k, v := range original.Payload {
+		payload[k] = v
+	}
+	payload["replayed"] = true
+	payload["original_message_id"] = original.ID.String()
+	payload["replay_reason"] = strings.TrimSpace(req.Reason)
+
+	metadata := make(map[string]any, len(original.Metadata)+1)
+	for k, v := range original.Metadata {
+		metadata[k] = v
+	}
+	metadata["tenant_id"] = tenantIDRaw
+
+	newMessageID := uuid.NewString()
+	newTraceID := uuid.NewString()
+	env := &protocol.Envelope{
+		ID:        newMessageID,
+		From:      original.FromID.String(),
+		To:        original.ToID.String(),
+		Tag:       original.Tag,
+		Payload:   payload,
+		Metadata:  metadata,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		TraceID:   newTraceID,
+	}
+
+	if err := a.broker.PublishMessage(r.Context(), env); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"replayed":            true,
+		"new_message_id":      newMessageID,
+		"original_message_id": original.ID.String(),
+		"trace_id":            newTraceID,
+	})
 }
 
 func (a *app) handlePendingApprovals(w http.ResponseWriter, r *http.Request) {
