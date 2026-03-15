@@ -200,33 +200,52 @@ kubectl apply -f letsencrypt-prod.yaml
 
 ## 8. GitHub Secrets Configuration
 
-Configure the following secrets in your GitHub repository (Settings > Secrets and variables > Actions):
+Configure repository-level secrets in **Settings > Secrets and variables > Actions**:
 
 | Secret Name | Description |
 | --- | --- |
 | `AZURE_CLIENT_ID` | Application ID of the Service Principal |
 | `AZURE_TENANT_ID` | Azure Tenant ID |
 | `AZURE_SUBSCRIPTION_ID` | Azure Subscription ID |
-| `AKS_CLUSTER_NAME` | Name of the AKS cluster |
-| `AKS_RESOURCE_GROUP` | Resource group containing the AKS cluster |
-| `STAGING_POSTGRES_DSN` | `postgres://user:pass@host:5432/db?sslmode=require` |
+
+Configure environment-level secrets in **Settings > Environments > staging**:
+
+| Secret Name | Description |
+| --- | --- |
+| `STAGING_POSTGRES_HOST` | Azure PostgreSQL FQDN (from Terraform output) |
 | `STAGING_POSTGRES_PASSWORD` | Password for staging DB |
+| `STAGING_POSTGRES_DSN` | `postgres://user:pass@host:5432/db?sslmode=require` |
 | `STAGING_JWT_SECRET` | Secure random string for staging JWTs |
-| `PROD_POSTGRES_DSN` | `postgres://user:pass@host:5432/db?sslmode=require` |
-| `PROD_POSTGRES_PASSWORD` | Password for production DB |
-| `PROD_JWT_SECRET` | Secure random string for production JWTs |
+
+Configure environment-level secrets in **Settings > Environments > production**:
+
+| Secret Name | Description |
+| --- | --- |
+| `PRODUCTION_POSTGRES_HOST` | Azure PostgreSQL FQDN (from Terraform output) |
+| `PRODUCTION_POSTGRES_PASSWORD` | Password for production DB |
+| `PRODUCTION_POSTGRES_DSN` | `postgres://user:pass@host:5432/db?sslmode=require` |
+| `PRODUCTION_JWT_SECRET` | Secure random string for production JWTs |
+
+For full CI/CD pipeline details, see [ci-cd.md](ci-cd.md).
 
 ## 9. First Deployment
 
-Trigger the deployment by pushing a new git tag:
+### Staging
+
+Push or merge to `master`. The CI pipeline runs all checks, pushes a Docker image tagged with the commit SHA, and automatically deploys to staging.
+
+```bash
+git push origin master
+```
+
+### Production
+
+Create and push a release tag. The Release pipeline builds the image with a semver tag and automatically deploys to production.
 
 ```bash
 git tag v1.0.0
 git push origin v1.0.0
 ```
-
-The deployment workflow (`.github/workflows/deploy.yml`) handles the Helm upgrade and provides the migration SQL using:
-`--set-file migration.sql=migrations/001_initial_schema.sql`
 
 ## 10. Verification
 
