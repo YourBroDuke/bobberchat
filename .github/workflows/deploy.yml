@@ -51,7 +51,7 @@ jobs:
           helm upgrade --install bobberchat deploy/helm/bobberchat/ \
             -f deploy/helm/values-azure-staging.yaml \
             --set image.repository=ghcr.io/yourbroduke/bobberchat \
-            --set image.tag=${{ github.ref_name }} \
+            --set image.tag=${{ github.event.workflow_run.head_branch || github.ref_name }} \
             --set postgres.external.host="$POSTGRES_HOST" \
             --set postgres.external.password="$POSTGRES_PASSWORD" \
             --set secrets.postgresDsn=${{ secrets.POSTGRES_DSN_STAGING }} \
@@ -93,7 +93,7 @@ jobs:
         run: |
           helm upgrade --install bobberchat deploy/helm/bobberchat/ \
             -f deploy/helm/values-azure-production.yaml \
-            --set image.tag=${{ github.ref_name }} \
+            --set image.tag=${{ github.event.workflow_run.head_branch || github.ref_name }} \
             --set postgres.external.host=${{ secrets.PRODUCTION_POSTGRES_HOST }} \
             --set postgres.external.password=${{ secrets.PRODUCTION_POSTGRES_PASSWORD }} \
             --set secrets.postgresDsn=${{ secrets.PRODUCTION_POSTGRES_DSN }} \

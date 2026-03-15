@@ -146,7 +146,7 @@ func agentCreateCmd(cfg *cliConfig) *cobra.Command {
 			}
 			caps := splitCSV(capabilities)
 			resp, err := doJSON(http.MethodPost, cfg.backendURL()+"/v1/agents", cfg.token(), map[string]any{
-				"display_name":  name,
+				"display_name": name,
 				"capabilities": caps,
 				"version":      version,
 			})
@@ -297,7 +297,7 @@ func sendMessageCmd(cfg *cliConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "send-message",
 		Aliases: []string{"send"},
-		Short: "Send one message over websocket",
+		Short:   "Send one message over websocket",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			if cfg.token() == "" {
 				return errors.New("token required")
