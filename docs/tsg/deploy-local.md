@@ -130,7 +130,7 @@ make test
 Integration tests require a running PostgreSQL instance:
 
 ```bash
-go test -v ./tests/integration/...
+go test -v ./test/integration/...
 ```
 
 ### End-to-End Tests
@@ -142,7 +142,7 @@ docker compose down -v && docker compose up -d --build --wait
 ./scripts/e2e-test.sh
 ```
 
-The E2E script runs 16 tests covering registration, login, agent CRUD, groups, topics, messaging, approvals, and WebSocket connectivity.
+The E2E script runs 31 tests covering registration, login, agent CRUD, groups, topics, messaging, approvals, and WebSocket connectivity.
 
 ## Stopping
 

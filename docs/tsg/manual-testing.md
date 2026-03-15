@@ -41,7 +41,7 @@ LOGIN_RESPONSE=$(curl -s -X POST "$BASE_URL/v1/auth/login" \
 
 echo "$LOGIN_RESPONSE" | jq .
 
-TOKEN=$(echo "$LOGIN_RESPONSE" | jq -r '.token')
+TOKEN=$(echo "$LOGIN_RESPONSE" | jq -r '.access_token')
 echo "Token: $TOKEN"
 ```
 
@@ -56,8 +56,7 @@ AGENT_RESPONSE=$(curl -s -X POST "$BASE_URL/v1/agents" \
   -d "{
     \"display_name\": \"test-agent-1\",
     \"capabilities\": [\"summarize\", \"translate\"],
-    \"version\": \"1.0.0\",
-    \"tenant_id\": \"$TENANT_ID\"
+    \"version\": \"1.0.0\"
   }")
 
 echo "$AGENT_RESPONSE" | jq .
@@ -95,8 +94,7 @@ curl -s -X POST "$BASE_URL/v1/registry/discover" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d "{
-    \"capability\": \"summarize\",
-    \"tenant_id\": \"$TENANT_ID\"
+    \"capability\": \"summarize\"
   }" | jq .
 ```
 
@@ -111,8 +109,7 @@ GROUP_RESPONSE=$(curl -s -X POST "$BASE_URL/v1/groups" \
   -d "{
     \"name\": \"test-group\",
     \"description\": \"A test group for manual testing\",
-    \"visibility\": \"public\",
-    \"tenant_id\": \"$TENANT_ID\"
+    \"visibility\": \"public\"
   }")
 
 echo "$GROUP_RESPONSE" | jq .
@@ -128,7 +125,7 @@ curl -s -X POST "$BASE_URL/v1/groups/$GROUP_ID/join" \
   -H "Content-Type: application/json" \
   -H "X-Agent-ID: $AGENT_ID" \
   -H "X-API-Secret: $API_SECRET" \
-  -d "{\"tenant_id\": \"$TENANT_ID\"}" | jq .
+  -d '{}' | jq .
 ```
 
 Expected: HTTP 200 confirming the agent joined.
@@ -148,8 +145,7 @@ TOPIC_RESPONSE=$(curl -s -X POST "$BASE_URL/v1/groups/$GROUP_ID/topics" \
   -H "X-Agent-ID: $AGENT_ID" \
   -H "X-API-Secret: $API_SECRET" \
   -d "{
-    \"subject\": \"Test topic\",
-    \"tenant_id\": \"$TENANT_ID\"
+    \"subject\": \"Test topic\"
   }")
 
 echo "$TOPIC_RESPONSE" | jq .
@@ -191,7 +187,7 @@ curl -s -X POST "$BASE_URL/v1/approvals/<APPROVAL_ID>/decide" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
-    "decision": "grant",
+    "decision": "granted",
     "reason": "Approved during manual testing"
   }' | jq .
 ```
@@ -251,7 +247,7 @@ curl -s -X POST "$BASE_URL/v1/groups/$GROUP_ID/leave" \
   -H "Content-Type: application/json" \
   -H "X-Agent-ID: $AGENT_ID" \
   -H "X-API-Secret: $API_SECRET" \
-  -d "{\"tenant_id\": \"$TENANT_ID\"}" | jq .
+  -d '{}' | jq .
 ```
 
 ## 18. Delete the Agent
