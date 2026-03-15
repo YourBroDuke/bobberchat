@@ -1,21 +1,39 @@
 CREATE EXTENSION IF NOT EXISTS citext;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-CREATE TYPE agent_status AS ENUM (
-  'REGISTERED', 'CONNECTING', 'ONLINE', 'BUSY', 'IDLE', 'OFFLINE', 'DEREGISTERED', 'DEGRADED'
-);
+DO $$ BEGIN
+  CREATE TYPE agent_status AS ENUM (
+    'REGISTERED', 'CONNECTING', 'ONLINE', 'BUSY', 'IDLE', 'OFFLINE', 'DEREGISTERED', 'DEGRADED'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE TYPE group_visibility AS ENUM ('public', 'private');
+DO $$ BEGIN
+  CREATE TYPE group_visibility AS ENUM ('public', 'private');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE TYPE topic_status AS ENUM ('OPEN', 'IN_PROGRESS', 'RESOLVED', 'ARCHIVED');
+DO $$ BEGIN
+  CREATE TYPE topic_status AS ENUM ('OPEN', 'IN_PROGRESS', 'RESOLVED', 'ARCHIVED');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE TYPE approval_status AS ENUM ('PENDING', 'GRANTED', 'DENIED', 'TIMED_OUT', 'ESCALATED');
+DO $$ BEGIN
+  CREATE TYPE approval_status AS ENUM ('PENDING', 'GRANTED', 'DENIED', 'TIMED_OUT', 'ESCALATED');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE TYPE urgency AS ENUM ('low', 'medium', 'high', 'critical');
+DO $$ BEGIN
+  CREATE TYPE urgency AS ENUM ('low', 'medium', 'high', 'critical');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE TYPE participant_type AS ENUM ('user', 'agent');
+DO $$ BEGIN
+  CREATE TYPE participant_type AS ENUM ('user', 'agent');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID NOT NULL,
   email CITEXT NOT NULL,
@@ -25,7 +43,7 @@ CREATE TABLE users (
   UNIQUE (tenant_id, email)
 );
 
-CREATE TABLE agents (
+CREATE TABLE IF NOT EXISTS agents (
   agent_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID NOT NULL,
   display_name TEXT NOT NULL,
@@ -39,7 +57,7 @@ CREATE TABLE agents (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE chat_groups (
+CREATE TABLE IF NOT EXISTS chat_groups (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID NOT NULL,
   name TEXT NOT NULL,
@@ -50,7 +68,7 @@ CREATE TABLE chat_groups (
   UNIQUE (tenant_id, name)
 );
 
-CREATE TABLE chat_group_members (
+CREATE TABLE IF NOT EXISTS chat_group_members (
   group_id UUID NOT NULL REFERENCES chat_groups(id) ON DELETE CASCADE,
   participant_id UUID NOT NULL,
   participant_kind participant_type NOT NULL,
@@ -58,7 +76,7 @@ CREATE TABLE chat_group_members (
   PRIMARY KEY (group_id, participant_id, participant_kind)
 );
 
-CREATE TABLE topics (
+CREATE TABLE IF NOT EXISTS topics (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id UUID NOT NULL,
   group_id UUID NOT NULL REFERENCES chat_groups(id) ON DELETE CASCADE,
@@ -68,7 +86,7 @@ CREATE TABLE topics (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE messages (
+CREATE TABLE IF NOT EXISTS messages (
   id UUID NOT NULL,
   tenant_id UUID NOT NULL,
   from_id UUID NOT NULL,
@@ -82,7 +100,7 @@ CREATE TABLE messages (
   PRIMARY KEY (tenant_id, "timestamp", id)
 ) PARTITION BY LIST (tenant_id);
 
-CREATE TABLE approval_requests (
+CREATE TABLE IF NOT EXISTS approval_requests (
   approval_id UUID PRIMARY KEY,
   tenant_id UUID NOT NULL,
   agent_id UUID NOT NULL REFERENCES agents(agent_id) ON DELETE CASCADE,
@@ -96,7 +114,7 @@ CREATE TABLE approval_requests (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE audit_log (
+CREATE TABLE IF NOT EXISTS audit_log (
   id BIGSERIAL PRIMARY KEY,
   event_type TEXT NOT NULL,
   actor_id UUID,
@@ -106,21 +124,21 @@ CREATE TABLE audit_log (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_agents_tenant_status ON agents (tenant_id, status);
-CREATE INDEX idx_agents_tenant_owner ON agents (tenant_id, owner_user_id);
-CREATE INDEX idx_agents_capabilities_gin ON agents USING GIN (capabilities jsonb_path_ops);
+CREATE INDEX IF NOT EXISTS idx_agents_tenant_status ON agents (tenant_id, status);
+CREATE INDEX IF NOT EXISTS idx_agents_tenant_owner ON agents (tenant_id, owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_agents_capabilities_gin ON agents USING GIN (capabilities jsonb_path_ops);
 
-CREATE INDEX idx_topics_group_status ON topics (tenant_id, group_id, status, created_at DESC);
-CREATE INDEX idx_topics_parent ON topics (tenant_id, parent_topic_id);
+CREATE INDEX IF NOT EXISTS idx_topics_group_status ON topics (tenant_id, group_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_topics_parent ON topics (tenant_id, parent_topic_id);
 
-CREATE INDEX idx_messages_trace ON messages (tenant_id, trace_id, "timestamp" DESC);
-CREATE INDEX idx_messages_topic_time ON messages (tenant_id, topic_id, "timestamp" DESC);
-CREATE INDEX idx_messages_to_tag_time ON messages (tenant_id, to_id, tag, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_trace ON messages (tenant_id, trace_id, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_topic_time ON messages (tenant_id, topic_id, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_to_tag_time ON messages (tenant_id, to_id, tag, "timestamp" DESC);
 
-CREATE INDEX idx_approvals_pending ON approval_requests (tenant_id, status, urgency, created_at)
+CREATE INDEX IF NOT EXISTS idx_approvals_pending ON approval_requests (tenant_id, status, urgency, created_at)
 WHERE status = 'PENDING';
 
-CREATE INDEX idx_audit_tenant_time ON audit_log (tenant_id, created_at DESC);
-CREATE INDEX idx_audit_event_type ON audit_log (tenant_id, event_type, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_tenant_time ON audit_log (tenant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_event_type ON audit_log (tenant_id, event_type, created_at DESC);
 
-CREATE TABLE messages_default PARTITION OF messages DEFAULT;
+CREATE TABLE IF NOT EXISTS messages_default PARTITION OF messages DEFAULT;

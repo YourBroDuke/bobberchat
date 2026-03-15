@@ -57,6 +57,8 @@ spec:
               value: {{ if .Values.postgres.enabled }}"disable"{{ else }}"require"{{ end }}
           command:
             - psql
+            - -v
+            - ON_ERROR_STOP=1
             - -h
             - {{ if .Values.postgres.enabled }}{{ include "bobberchat.fullname" . }}-postgres{{ else }}{{ .Values.postgres.external.host }}{{ end }}
             - -U
