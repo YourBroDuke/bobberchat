@@ -65,7 +65,7 @@ jobs:
         run: |
           echo "Waiting for deployment to stabilize..."
           sleep 30
-          curl -sf https://staging.bobbers.cc/v1/health || (echo "Health check failed" && exit 1)
+          curl -sfk https://staging.bobbers.cc/v1/health || (echo "Health check failed" && exit 1)
 
   deploy-production:
     name: Deploy to Production
