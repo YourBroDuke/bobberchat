@@ -47,13 +47,16 @@ jobs:
           POSTGRES_DSN="${{ secrets.POSTGRES_DSN_STAGING }}"
           POSTGRES_HOST=$(echo "$POSTGRES_DSN" | sed -n 's/.*@\([^:]*\):.*/\1/p')
           POSTGRES_PASSWORD=$(echo "$POSTGRES_DSN" | sed -n 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/p')
+          IMAGE_TAG="${{ github.event.workflow_run.head_branch || github.ref_name }}"
+          IMAGE_TAG="${IMAGE_TAG#v}"
           
           helm upgrade --install bobberchat deploy/helm/bobberchat/ \
             -f deploy/helm/values-azure-staging.yaml \
             --set image.repository=ghcr.io/yourbroduke/bobberchat \
-            --set image.tag=${{ github.event.workflow_run.head_branch || github.ref_name }} \
+            --set image.tag=$IMAGE_TAG \
             --set postgres.external.host="$POSTGRES_HOST" \
             --set postgres.external.password="$POSTGRES_PASSWORD" \
+            --set secrets.postgresPassword="$POSTGRES_PASSWORD" \
             --set secrets.postgresDsn=${{ secrets.POSTGRES_DSN_STAGING }} \
             --set secrets.jwtSecret=${{ secrets.JWT_SECRET_STAGING }} \
             --set-file migration.sql=migrations/001_initial_schema.sql
@@ -91,11 +94,15 @@ jobs:
 
       - name: Deploy with Helm
         run: |
+          IMAGE_TAG="${{ github.event.workflow_run.head_branch || github.ref_name }}"
+          IMAGE_TAG="${IMAGE_TAG#v}"
+          
           helm upgrade --install bobberchat deploy/helm/bobberchat/ \
             -f deploy/helm/values-azure-production.yaml \
-            --set image.tag=${{ github.event.workflow_run.head_branch || github.ref_name }} \
+            --set image.tag=$IMAGE_TAG \
             --set postgres.external.host=${{ secrets.PRODUCTION_POSTGRES_HOST }} \
             --set postgres.external.password=${{ secrets.PRODUCTION_POSTGRES_PASSWORD }} \
+            --set secrets.postgresPassword=${{ secrets.PRODUCTION_POSTGRES_PASSWORD }} \
             --set secrets.postgresDsn=${{ secrets.PRODUCTION_POSTGRES_DSN }} \
             --set secrets.jwtSecret=${{ secrets.PRODUCTION_JWT_SECRET }} \
             --set-file migration.sql=migrations/001_initial_schema.sql
