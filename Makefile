@@ -1,6 +1,6 @@
 BIN_DIR := bin
 
-.PHONY: build test lint migrate run-backend run-tui clean
+.PHONY: build test test-integration test-api test-e2e lint migrate run-backend run-tui clean
 
 build:
 	mkdir -p $(BIN_DIR)
@@ -10,6 +10,15 @@ build:
 
 test:
 	go test ./...
+
+test-integration:
+	go test -tags=integration -race ./test/integration/ -v
+
+test-api:
+	go test -tags=integration -race ./test/api/ -v -count=1
+
+test-e2e:
+	./scripts/e2e-test.sh
 
 lint:
 	go vet ./...
