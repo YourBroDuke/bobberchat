@@ -19,7 +19,7 @@ go test ./...     # ✅ 11 packages pass (~170+ subtests), 5 packages skipped (n
 
 # Docker-based E2E
 docker compose up -d
-./scripts/e2e-test.sh                    # ✅ 16/16 pass
+./scripts/e2e-test.sh                    # ✅ 31/31 pass
 
 # Integration tests (requires running PostgreSQL via Docker Compose)
 BOBBERCHAT_TEST_DSN="postgres://bobberchat:bobberchat@localhost:5432/bobberchat?sslmode=disable" \
@@ -137,7 +137,7 @@ Key implementation details:
 | `cmd/bobberd/main_test.go` | 8 | Cross-tenant denial, rate limiting, audit trail, disabled limiter |
 | `pkg/sdk/helpers_test.go` | 4 | Message helper functions |
 | `test/integration/persistence_test.go` | 5 | User, Agent, Group, Topic, Approval CRUD (build-tagged `//go:build integration`) |
-| `scripts/e2e-test.sh` | 16 | Full API lifecycle: auth, agents, groups, topics, approvals |
+| `scripts/e2e-test.sh` | 31 | Full API lifecycle: auth, agents, groups, topics, approvals |
 
 ### Infrastructure
 
@@ -148,12 +148,12 @@ Key implementation details:
 | `migrations/001_initial_schema.sql` | Full schema — 8 tables, 6 enum types, 10 indexes, default partition |
 | `configs/backend.yaml` | Default backend configuration |
 | `Makefile` | Build, test, lint, migrate, run targets |
-| `scripts/e2e-test.sh` | 16-step curl-based API e2e test script |
+| `scripts/e2e-test.sh` | 31-test curl-based API e2e test script |
 | `test/integration/persistence_test.go` | 5 integration tests (build-tagged `//go:build integration`) |
-| `.github/workflows/ci.yml` | GitHub Actions CI: lint, build, unit tests, integration tests, E2E, Docker build |
+| `.github/workflows/ci.yml` | GitHub Actions CI: lint, build, unit tests, integration tests, E2E, Docker build, Docker push |
 | `.github/workflows/release.yml` | GitHub Actions release: multi-platform Docker push to GHCR, release binaries |
-| `deploy/k8s/*.yml` | 6 raw Kubernetes manifests for standalone deployment |
-| `deploy/helm/bobberchat/` | Helm chart with 7 templates, configurable values, migration hooks |
+| `deploy/k8s/*.yml` | 7 raw Kubernetes manifests for standalone deployment |
+| `deploy/helm/bobberchat/` | Helm chart with 8 templates, configurable values, migration hooks |
 
 ---
 
@@ -172,7 +172,7 @@ Key implementation details:
 ### ~~Priority 2: TUI Enhancements~~ ✅ COMPLETE
 
 - [x] Live WebSocket message feed in conversation view — already existed
-- [x] Agent status indicators with heartbeat display — already existed (◉/◎/✗ glyphs + heartbeat in context panel)
+- [x] Agent status indicators with heartbeat display — already existed (●/◐/○ glyphs + heartbeat in context panel)
 - [x] Approval workflow interaction (grant/deny from TUI) — already existed (y/n keys + `/approve` command)
 - [x] Topic filtering and search — message filter (`/` key), agent filter (`f` key)
 - [x] Group management from TUI — group listing in left sidebar, `/join`/`/leave`/`/groups` commands, topic board view
@@ -195,10 +195,10 @@ TUI enhancements added (~590 lines):
 - [x] Database migration runner (psql-based via Makefile, K8s Job, and Helm hook)
 
 CI/CD files added:
-- `.github/workflows/ci.yml` — 5-job CI pipeline (lint, build, test, integration, E2E, Docker build)
+- `.github/workflows/ci.yml` — 7-job CI pipeline (lint, build, test, integration, E2E, Docker build, Docker push)
 - `.github/workflows/release.yml` — Release pipeline (multi-platform Docker push to GHCR, cross-compiled binaries)
-- `deploy/k8s/` — 6 raw Kubernetes manifests (namespace, configmap, secrets, nats, postgres, bobberd+migration)
-- `deploy/helm/bobberchat/` — Full Helm chart with 7 templates + helpers + configurable values
+- `deploy/k8s/` — 7 raw Kubernetes manifests (namespace, configmap, secrets, nats, postgres, bobberd+migration, cert-manager-issuers)
+- `deploy/helm/bobberchat/` — Full Helm chart with 8 templates + helpers + configurable values
 
 ---
 
@@ -304,7 +304,7 @@ I'm continuing work on the BobberChat project. Read docs/PROJECT_STATUS.md for f
 
 The project is a "Slack for Agents" — a multi-agent coordination layer built with Go, NATS JetStream, and PostgreSQL.
 
-All planned work is COMPLETE: core implementation, protocol adapters, production hardening, TUI enhancements, and CI/CD & deployment. All code compiles, unit tests pass (~170+ subtests), E2E tests pass (16/16), and integration tests pass (5/5).
+All planned work is COMPLETE: core implementation, protocol adapters, production hardening, TUI enhancements, and CI/CD & deployment. All code compiles, unit tests pass (~170+ subtests), E2E tests pass (31/31), and integration tests pass (5/5).
 
 Follow the existing codebase patterns. Run `go build ./...` and `go test ./...` to verify.
 For E2E: `docker compose up -d && ./scripts/e2e-test.sh`
@@ -317,7 +317,9 @@ For E2E: `docker compose up -d && ./scripts/e2e-test.sh`
 ```
 bobberchat/
 ├── .github/workflows/
-│   ├── ci.yml                            # CI pipeline (lint, build, test, integration, E2E)
+│   ├── ci.yml                            # CI pipeline (lint, build, test, integration, E2E, Docker build, Docker push)
+│   ├── deploy-staging.yml                # Staging deployment pipeline
+│   ├── deploy-production.yml             # Production deployment pipeline
 │   └── release.yml                       # Release pipeline (Docker push, binaries)
 ├── api/openapi/openapi.yaml              # OpenAPI 3.1.0 spec
 ├── cmd/
@@ -333,7 +335,8 @@ bobberchat/
 │   │   ├── secrets.yml
 │   │   ├── nats.yml
 │   │   ├── postgres.yml
-│   │   └── bobberd.yml                   # Backend + migration Job + migrations ConfigMap
+│   │   ├── bobberd.yml                   # Backend + migration Job + migrations ConfigMap
+│   │   └── cert-manager-issuers.yaml     # Let's Encrypt ClusterIssuer definitions
 │   └── helm/bobberchat/                  # Helm chart
 │       ├── Chart.yaml
 │       ├── values.yaml
@@ -346,6 +349,10 @@ bobberchat/
 │           ├── configmap.yaml
 │           ├── migration.yaml
 │           └── ingress.yaml
+├── deploy/terraform/                     # Terraform infrastructure
+│   ├── bootstrap/                        # One-time backend state setup
+│   ├── environments/                     # Staging & production configs
+│   └── modules/                          # Reusable infra modules (network, aks, database, dns)
 ├── docker-compose.yml                    # 4 services with health checks
 ├── Dockerfile                            # Multi-stage build
 ├── docs/
@@ -354,12 +361,14 @@ bobberchat/
 │   ├── tech-design.md                # Technical design
 │   ├── PROJECT_STATUS.md             # ← THIS FILE
 │   └── tsg/
-│       ├── deploy-docker-compose.md  # Docker Compose deployment
-│       ├── deploy-kubernetes.md      # Raw K8s manifests deployment
-│       ├── deploy-helm.md            # Helm chart deployment
-│       ├── deploy-local.md           # Local dev setup
-│       ├── troubleshooting.md        # Common issues & fixes
-│       └── manual-testing.md         # Hands-on curl walkthrough
+│       ├── ci-cd.md                 # CI/CD pipeline documentation
+│       ├── deploy-azure.md          # Azure AKS deployment guide
+│       ├── deploy-docker-compose.md # Docker Compose deployment
+│       ├── deploy-kubernetes.md     # Raw K8s manifests deployment
+│       ├── deploy-helm.md           # Helm chart deployment
+│       ├── deploy-local.md          # Local dev setup
+│       ├── troubleshooting.md       # Common issues & fixes
+│       └── manual-testing.md        # Hands-on curl walkthrough
 ├── internal/
 │   ├── adapter/
 │   │   ├── adapter.go                # Shared Adapter interface (49 lines)
@@ -392,7 +401,9 @@ bobberchat/
 │   ├── config.go
 │   ├── helpers.go
 │   └── types.go
-├── scripts/e2e-test.sh               # 16-step API e2e test
+├── scripts/
+│   ├── e2e-test.sh                  # 31-test API e2e test
+│   └── smoke-test.sh                # Quick deployment smoke test
 ├── test/integration/
 │   └── persistence_test.go           # Build-tagged DB tests
 ├── go.mod
