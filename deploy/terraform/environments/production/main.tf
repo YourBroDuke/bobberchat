@@ -13,9 +13,15 @@ provider "azurerm" {
     virtual_machine {
       delete_os_disk_on_deletion     = true
       graceful_shutdown              = false
-      skip_shutdown_and_force_delete = false
+      skip_shutdown_and_force_delete = true
     }
   }
+}
+
+resource "azurerm_resource_group" "main" {
+  name     = var.resource_group_name
+  location = var.location
+  tags     = local.tags
 }
 
 module "network" {

@@ -11,11 +11,17 @@ provider "azurerm" {
   }
 }
 
+resource "azurerm_resource_group" "main" {
+  name     = var.resource_group_name
+  location = var.location
+  tags     = local.tags
+}
+
 module "network" {
   source = "../../modules/network"
 
-  resource_group_name = var.resource_group_name
-  location            = var.location
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
   vnet_name           = var.vnet_name
   vnet_cidr           = var.vnet_cidr
   tags                = local.tags
@@ -24,8 +30,8 @@ module "network" {
 module "aks" {
   source = "../../modules/aks"
 
-  resource_group_name = var.resource_group_name
-  location            = var.location
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
   cluster_name        = var.cluster_name
   kubernetes_version  = var.kubernetes_version
   node_count          = var.node_count
@@ -41,8 +47,8 @@ module "aks" {
 module "postgres" {
   source = "../../modules/postgres"
 
-  resource_group_name          = var.resource_group_name
-  location                     = var.location
+  resource_group_name          = azurerm_resource_group.main.name
+  location                     = azurerm_resource_group.main.location
   server_name                  = var.postgres_server_name
   administrator_login          = var.postgres_admin_login
   administrator_password       = var.postgres_admin_password
@@ -63,7 +69,7 @@ module "dns" {
 
   create_dns_zone      = var.create_dns_zone
   domain_name          = var.domain_name
-  resource_group_name  = var.resource_group_name
+  resource_group_name  = azurerm_resource_group.main.name
   staging_subdomain    = var.staging_subdomain
   production_subdomain = var.production_subdomain
   ingress_external_ip  = var.ingress_external_ip

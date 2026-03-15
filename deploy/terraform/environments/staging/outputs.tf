@@ -35,16 +35,6 @@ output "dns_zone_id" {
   value       = module.dns.dns_zone_id
 }
 
-output "staging_fqdn" {
-  description = "FQDN for staging subdomain"
-  value       = module.dns.staging_fqdn
-}
-
-output "production_fqdn" {
-  description = "FQDN for production subdomain"
-  value       = module.dns.production_fqdn
-}
-
 output "resource_group_name" {
   description = "The name of the resource group"
   value       = var.resource_group_name
