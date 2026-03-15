@@ -10,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -56,19 +55,15 @@ func (e *testEnv) resetSchema(t *testing.T) {
 	t.Helper()
 
 	ctx := context.Background()
-	_, _ = e.db.Pool().Exec(ctx, `
-		DROP TABLE IF EXISTS audit_log, approval_requests, messages_default, messages, topics, chat_group_members, chat_groups, agents, users CASCADE;
-		DROP TYPE IF EXISTS participant_type, urgency, approval_status, topic_status, group_visibility, agent_status CASCADE;
+
+	// Use TRUNCATE instead of DROP/CREATE to avoid invalidating the running
+	// server's pgx prepared-statement cache (OIDs change when enum types are
+	// recreated, causing "cached plan must not change result type" errors).
+	_, err := e.db.Pool().Exec(ctx, `
+		TRUNCATE TABLE audit_log, approval_requests, messages_default, messages, topics, chat_group_members, chat_groups, agents, users CASCADE;
 	`)
-
-	migrationPath := filepath.Clean("../../migrations/001_initial_schema.sql")
-	migrationSQL, err := os.ReadFile(migrationPath)
 	if err != nil {
-		t.Fatalf("read migration %s: %v", migrationPath, err)
-	}
-
-	if _, err := e.db.Pool().Exec(ctx, string(migrationSQL)); err != nil {
-		t.Fatalf("apply migration: %v", err)
+		t.Fatalf("truncate tables: %v", err)
 	}
 }
 
@@ -101,8 +96,7 @@ func (e *testEnv) cleanup(t *testing.T) {
 
 	ctx := context.Background()
 	_, _ = e.db.Pool().Exec(ctx, `
-		DROP TABLE IF EXISTS audit_log, approval_requests, messages_default, messages, topics, chat_group_members, chat_groups, agents, users CASCADE;
-		DROP TYPE IF EXISTS participant_type, urgency, approval_status, topic_status, group_visibility, agent_status CASCADE;
+		TRUNCATE TABLE audit_log, approval_requests, messages_default, messages, topics, chat_group_members, chat_groups, agents, users CASCADE;
 	`)
 	e.db.Close()
 }

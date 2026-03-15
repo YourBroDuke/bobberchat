@@ -231,15 +231,18 @@ func TestValidateJWTRejectsInvalidTokens(t *testing.T) {
 }
 
 func tamperToken(token string) string {
-	if token == "" {
+	parts := strings.SplitN(token, ".", 3)
+	if len(parts) != 3 || len(parts[2]) < 4 {
 		return token
 	}
-	b := []byte(token)
-	last := len(b) - 1
-	if b[last] == 'a' {
-		b[last] = 'b'
-	} else {
-		b[last] = 'a'
+	sig := []byte(parts[2])
+	for i := 0; i < 4; i++ {
+		if sig[i] == 'A' {
+			sig[i] = 'B'
+		} else {
+			sig[i] = 'A'
+		}
 	}
-	return string(b)
+	parts[2] = string(sig)
+	return strings.Join(parts, ".")
 }
