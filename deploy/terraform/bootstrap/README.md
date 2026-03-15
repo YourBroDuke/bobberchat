@@ -131,7 +131,7 @@ az role assignment list --assignee $(az account show --query user.name -o tsv)
 Once this module is successfully applied:
 
 1. Record the outputs from `terraform output`
-2. Proceed to deploying the network module (`deploy/terraform/network/`)
+2. Proceed to deploying the environment modules (`deploy/terraform/environments/`)
 3. Use the storage account name and container name in the `-backend-config` flags for subsequent module deployments
 
 ## Related Documentation

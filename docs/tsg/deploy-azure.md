@@ -162,7 +162,7 @@ Apply the following ClusterIssuers for Let's Encrypt:
 ```yaml
 # letsencrypt-staging.yaml
 apiVersion: cert-manager.io/v1
-驱动: ClusterIssuer
+kind: ClusterIssuer
 metadata:
   name: letsencrypt-staging
 spec:
