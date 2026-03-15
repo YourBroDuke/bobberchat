@@ -120,10 +120,10 @@ func TestLogin_MissingFields(t *testing.T) {
 	respEmail := env.doRequest(t, http.MethodPost, "/v1/auth/login", map[string]any{
 		"password": "password-123",
 	}, "")
-	assertStatus(t, respEmail, http.StatusBadRequest)
+	assertStatus(t, respEmail, http.StatusUnauthorized)
 
 	respPassword := env.doRequest(t, http.MethodPost, "/v1/auth/login", map[string]any{
 		"email": newEmail("login-missing-password"),
 	}, "")
-	assertStatus(t, respPassword, http.StatusBadRequest)
+	assertStatus(t, respPassword, http.StatusUnauthorized)
 }
