@@ -25,6 +25,7 @@ spec:
         - name: bobberd
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/app/bobberd"]
           args: ["--config", "/app/configs/backend.yaml"]
           ports:
             - name: http
