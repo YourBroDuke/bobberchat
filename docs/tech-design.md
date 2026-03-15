@@ -26,7 +26,7 @@ Confirmed technology stack (Design Spec §2.5, PRD §9.1):
 
 | Layer | Technology |
 |---|---|
-| Language/runtime | Go 1.22+ |
+| Language/runtime | Go 1.25+ |
 | Message fabric | NATS JetStream |
 | Persistence | PostgreSQL 15+ |
 | Terminal UI | Bubble Tea |
@@ -547,19 +547,19 @@ reconnect:
 
 | Dependency | Version | Purpose |
 |---|---|---|
-| `github.com/nats-io/nats.go` | `v1.38.0` | NATS/JetStream client |
-| `github.com/jackc/pgx/v5` | `v5.7.2` | PostgreSQL driver/pool |
-| `github.com/charmbracelet/bubbletea` | `v1.2.4` | TUI framework |
-| `github.com/charmbracelet/lipgloss` | `v1.0.0` | TUI styling |
-| `github.com/charmbracelet/bubbles` | `v0.20.0` | TUI components |
-| `github.com/golang-jwt/jwt/v5` | `v5.2.1` | JWT parsing/signing |
+| `github.com/nats-io/nats.go` | `v1.49.0` | NATS/JetStream client |
+| `github.com/jackc/pgx/v5` | `v5.8.0` | PostgreSQL driver/pool |
+| `github.com/charmbracelet/bubbletea` | `v1.3.10` | TUI framework |
+| `github.com/charmbracelet/lipgloss` | `v1.1.0` | TUI styling |
+| `github.com/charmbracelet/bubbles` | `v1.0.0` | TUI components |
+| `github.com/golang-jwt/jwt/v5` | `v5.3.1` | JWT parsing/signing |
 | `github.com/google/uuid` | `v1.6.0` | UUID generation/parsing |
-| `github.com/rs/zerolog` | `v1.33.0` | Structured logging |
-| `go.opentelemetry.io/otel` | `v1.34.0` | Tracing/metrics API |
+| `github.com/rs/zerolog` | `v1.34.0` | Structured logging |
 | `github.com/gorilla/websocket` | `v1.5.3` | WebSocket server/client |
-| `github.com/pressly/goose/v3` | `v3.24.1` | DB migrations |
-| `github.com/spf13/viper` | `v1.19.0` | Config loading |
-| `github.com/spf13/cobra` | `v1.8.1` | CLI framework |
+| `github.com/prometheus/client_golang` | `v1.23.2` | Prometheus metrics |
+| `golang.org/x/crypto` | `v0.49.0` | Argon2id, bcrypt |
+| `github.com/spf13/viper` | `v1.21.0` | Config loading |
+| `github.com/spf13/cobra` | `v1.10.2` | CLI framework |
 
 ## 9. Build, Test & Run
 
@@ -569,8 +569,8 @@ reconnect:
 |---|---|
 | `build` | Build `bobberd`, `bobber`, `bobber-tui` binaries. |
 | `test` | Run unit tests and integration tests (`go test ./...`). |
-| `lint` | Run static analysis (`go vet`, `golangci-lint`). |
-| `migrate` | Apply PostgreSQL migrations via goose. |
+| `lint` | Run static analysis (`go vet`). |
+| `migrate` | Apply PostgreSQL migrations via psql. |
 | `run-backend` | Run backend service locally with default config. |
 | `run-tui` | Run TUI client against configured backend. |
 

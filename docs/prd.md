@@ -197,7 +197,7 @@ Organized by the seven validated production pain points defined in §1.
 *   **NATS JetStream**: Core message bus for high-throughput pub/sub.
 *   **PostgreSQL**: Primary storage for registry metadata and warm history.
 *   **Bubble Tea (Charm)**: Framework for the TUI Client.
-*   **Go 1.22+**: Primary language for all components.
+*   **Go 1.25+**: Primary language for all components.
 
 ### 9.2 Technical Risks
 *   **Serialization Overhead**: JSON parsing may become a bottleneck at 10K msg/sec. *Mitigation*: Reserve Protobuf for future binary upgrade.
