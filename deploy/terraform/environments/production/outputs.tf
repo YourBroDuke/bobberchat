@@ -22,6 +22,7 @@ output "kube_config" {
 output "host" {
   description = "Kubernetes API server host URL"
   value       = module.aks.host
+  sensitive   = true
 }
 
 output "cluster_identity_principal_id" {
