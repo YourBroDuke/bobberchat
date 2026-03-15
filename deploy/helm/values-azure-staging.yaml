@@ -5,7 +5,7 @@
 # Key overrides:
 # - Disables in-cluster PostgreSQL (uses Azure Database for PostgreSQL)
 # - Enables nginx Ingress with cert-manager for TLS
-# - Uses staging Let's Encrypt issuer (letsencrypt-staging) to avoid rate limits
+# - Uses production Let's Encrypt issuer (letsencrypt-prod) for trusted TLS certificates
 # - Configures Azure-specific secrets and host names
 #
 # NOTE: Several values use PLACEHOLDER tokens that must be overridden at deploy time:
@@ -47,7 +47,7 @@ ingress:
   enabled: true
   className: "nginx"
   annotations:
-    cert-manager.io/cluster-issuer: "letsencrypt-staging"  # Staging issuer (avoids rate limits)
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
   hosts:
     - host: staging.bobbers.cc
       paths:

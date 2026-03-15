@@ -35,6 +35,9 @@ spec:
       initContainers:
         - name: wait-for-postgres
           image: "{{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}"
+          env:
+            - name: PGSSLMODE
+              value: {{ if .Values.postgres.enabled }}"disable"{{ else }}"require"{{ end }}
           command: ['sh', '-c', 'until pg_isready -h {{ if .Values.postgres.enabled }}{{ include "bobberchat.fullname" . }}-postgres{{ else }}{{ .Values.postgres.external.host }}{{ end }} -U bobberchat; do sleep 2; done']
       containers:
         - name: migrate
@@ -50,6 +53,8 @@ spec:
                   name: {{ include "bobberchat.fullname" . }}-secrets
                   key: postgres-password
                   {{ end }}
+            - name: PGSSLMODE
+              value: {{ if .Values.postgres.enabled }}"disable"{{ else }}"require"{{ end }}
           command:
             - psql
             - -h
