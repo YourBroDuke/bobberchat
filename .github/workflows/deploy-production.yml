@@ -1,0 +1,66 @@
+name: Deploy to Production
+
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types:
+      - completed
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    environment: production
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            RAW_TAG="${{ github.event.workflow_run.head_branch }}"
+          else
+            RAW_TAG="${{ github.ref_name }}"
+          fi
+          echo "tag=${RAW_TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Azure login via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get AKS credentials
+        uses: azure/aks-set-context@v4
+        with:
+          resource-group: rg-bobberchat-production
+          cluster-name: aks-bobberchat-production
+
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install bobberchat deploy/helm/bobberchat/ \
+            -f deploy/helm/values-azure-production.yaml \
+            --set image.repository=ghcr.io/yourbroduke/bobberchat \
+            --set image.tag=${{ steps.tag.outputs.tag }} \
+            --set postgres.external.host=${{ secrets.PRODUCTION_POSTGRES_HOST }} \
+            --set postgres.external.password=${{ secrets.PRODUCTION_POSTGRES_PASSWORD }} \
+            --set secrets.postgresPassword=${{ secrets.PRODUCTION_POSTGRES_PASSWORD }} \
+            --set secrets.postgresDsn=${{ secrets.PRODUCTION_POSTGRES_DSN }} \
+            --set secrets.jwtSecret=${{ secrets.PRODUCTION_JWT_SECRET }} \
+            --set-file migration.sql=migrations/001_initial_schema.sql
+
+      - name: Health check
+        run: |
+          echo "Waiting for deployment to stabilize..."
+          sleep 30
+          curl -sf https://api.bobbers.cc/v1/health || (echo "Health check failed" && exit 1)
