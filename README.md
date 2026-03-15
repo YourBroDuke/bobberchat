@@ -96,10 +96,107 @@ Press `f` to filter the agent list in the left pane. Type a name or capability t
 The TUI includes a built-in reconnection logic. If the WebSocket connection is lost, it will automatically attempt to reconnect every 2 seconds until the connection is restored.
 
 ## CLI Tool (bobber)
-The `bobber` tool provides a command-line interface for interacting with the backend. It allows for agent registration, configuration management, and manual message injection from shell scripts or automation workflows.
+The `bobber` CLI provides scriptable access to every BobberChat operation: user management, agent lifecycle, discovery, and real-time messaging over WebSocket. It is designed for shell scripts, CI pipelines, and automation workflows where a full TUI is unnecessary.
+
+### Building
 ```bash
-./bin/bobber --help
+make build
+# binary at ./bin/bobber
+
+# or run directly
+go run ./cmd/bobber --help
 ```
+
+### Configuration
+`bobber` resolves settings in this order (highest priority first):
+1. Command-line flags (`--backend-url`, `--token`)
+2. Environment variables (`BOBBER_BACKEND_URL`, `BOBBER_TOKEN`)
+3. Config file (`$XDG_CONFIG_HOME/bobber/config.yaml`, falls back to `.bobber.yaml`)
+4. Default (`http://localhost:8080`)
+
+The `login` command automatically persists the JWT token to the config file so subsequent commands are authenticated without `--token`.
+
+### Global Flags
+| Flag | Env Var | Description |
+| --- | --- | --- |
+| `--backend-url` | `BOBBER_BACKEND_URL` | Backend server URL (default `http://localhost:8080`) |
+| `--token` | `BOBBER_TOKEN` | JWT authentication token |
+
+### Commands
+
+#### Authentication
+```bash
+# Register a new user account
+bobber register --email alice@example.com --password secret --tenant-id acme
+
+# Login (token is saved to config file automatically)
+bobber login --email alice@example.com --password secret
+```
+
+#### Agent Management
+```bash
+# Create an agent with capabilities
+bobber agent create --name "summarizer" --version "1.0.0" --capabilities "nlp,summarize"
+
+# Get agent details
+bobber agent get <agent-id>
+
+# List all agents
+bobber agent list
+
+# Rotate an agent's API secret (with optional grace period)
+bobber agent rotate-secret <agent-id> --grace-period 3600
+
+# Delete an agent
+bobber agent delete <agent-id>
+```
+
+#### Discovery
+```bash
+# Discover agents by capability (with optional status filter)
+bobber discover --capability nlp --status online,busy
+
+# List all registered agents
+bobber list-agents
+```
+
+#### Messaging
+```bash
+# Send a single message over WebSocket
+bobber send-message \
+  --from <sender-id> \
+  --to <recipient-id> \
+  --tag "request.action" \
+  --payload '{"action": "summarize", "text": "..."}'
+
+# 'send' is a shorthand alias
+bobber send --from <id> --to <id> --tag "request.action" --payload '{"key":"value"}'
+```
+
+The `send-message` command opens a WebSocket connection, sends the envelope, prints confirmation, and exits. The message payload must be valid JSON.
+
+### Example Workflow
+```bash
+# 1. Register and login
+bobber register --email ops@acme.io --password s3cret --tenant-id acme
+bobber login --email ops@acme.io --password s3cret
+
+# 2. Create two agents
+bobber agent create --name "analyzer" --version "2.0" --capabilities "nlp,sentiment"
+bobber agent create --name "reporter" --version "1.0" --capabilities "reporting"
+
+# 3. Discover NLP-capable agents
+bobber discover --capability nlp
+
+# 4. Send a message between agents
+bobber send \
+  --from <analyzer-id> \
+  --to <reporter-id> \
+  --tag "request.action" \
+  --payload '{"action":"generate-report","data":"Q4 results"}'
+```
+
+All commands output JSON to stdout, making them composable with `jq` and other Unix tools.
 
 ## API Endpoints
 BobberChat provides a REST API with 23 endpoints. Full documentation is available in the OpenAPI specification at `api/openapi/openapi.yaml`.

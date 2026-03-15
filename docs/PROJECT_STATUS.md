@@ -1,6 +1,6 @@
 # BobberChat Project Status & Continuation Guide
 
-> Last updated: 2026-03-14
+> Last updated: 2026-03-15
 > Branch: `master`
 > Repo: `https://github.com/YourBroDuke/bobberchat.git`
 
@@ -15,7 +15,7 @@ All core modules, protocol adapters, production hardening, TUI enhancements, CI/
 ```bash
 go build ./...    # ✅ Clean
 go vet ./...      # ✅ Clean
-go test ./...     # ✅ 11 packages pass (~170+ subtests), 5 packages skipped (no test files)
+go test ./...     # ✅ 12 packages pass (~245+ subtests), 4 packages skipped (no test files)
 
 # Docker-based E2E
 docker compose up -d
@@ -106,7 +106,7 @@ Key implementation details:
 | Binary | Source | Lines | Description |
 |--------|--------|-------|-------------|
 | `bobberd` | `cmd/bobberd/main.go` | ~1100 | Backend server — 23 REST endpoints + WebSocket + message replay + adapter ingest + production hardening |
-| `bobber` | `cmd/bobber/main.go` | ~448 | CLI tool — agent management, messaging |
+| `bobber` | `cmd/bobber/main.go` | ~448 | CLI tool — agent management, messaging. 75 unit tests in `main_test.go` |
 | `bobber-tui` | `cmd/bobber-tui/main.go` | ~1520 | TUI client — Bubble Tea terminal UI with groups, topics, filtering |
 
 ### SDK
@@ -118,7 +118,7 @@ Key implementation details:
 | `pkg/sdk/client.go` | WebSocket client with auto-reconnect |
 | `pkg/sdk/config.go` | Configuration loader |
 
-### Tests (11 packages, ~170+ subtests)
+### Tests (12 packages, ~245+ subtests)
 
 | Test File | Subtests | What's Tested |
 |-----------|----------|---------------|
@@ -136,6 +136,7 @@ Key implementation details:
 | `internal/ratelimit/ratelimit_test.go` | 10 | Token bucket limiting, burst, refill, scoping, concurrent, cleanup |
 | `cmd/bobberd/main_test.go` | 8 | Cross-tenant denial, rate limiting, audit trail, disabled limiter |
 | `pkg/sdk/helpers_test.go` | 4 | Message helper functions |
+| `cmd/bobber/main_test.go` | 75 | CLI unit tests: pure functions, doJSON HTTP client, register/login commands, agent subcommands, discover/list-agents, WebSocket send-message, config/flag precedence, edge cases |
 | `test/integration/persistence_test.go` | 5 | User, Agent, Group, Topic, Approval CRUD (build-tagged `//go:build integration`) |
 | `scripts/e2e-test.sh` | 31 | Full API lifecycle: auth, agents, groups, topics, approvals |
 
@@ -304,7 +305,7 @@ I'm continuing work on the BobberChat project. Read docs/PROJECT_STATUS.md for f
 
 The project is a "Slack for Agents" — a multi-agent coordination layer built with Go, NATS JetStream, and PostgreSQL.
 
-All planned work is COMPLETE: core implementation, protocol adapters, production hardening, TUI enhancements, and CI/CD & deployment. All code compiles, unit tests pass (~170+ subtests), E2E tests pass (31/31), and integration tests pass (5/5).
+All planned work is COMPLETE: core implementation, protocol adapters, production hardening, TUI enhancements, CI/CD & deployment, and CLI test coverage. All code compiles, unit tests pass (~245+ subtests across 12 packages), E2E tests pass (31/31), and integration tests pass (5/5).
 
 Follow the existing codebase patterns. Run `go build ./...` and `go test ./...` to verify.
 For E2E: `docker compose up -d && ./scripts/e2e-test.sh`
@@ -326,6 +327,7 @@ bobberchat/
 │   ├── bobberd/main.go                   # Backend server (~1100 lines)
 │   ├── bobberd/main_test.go              # publishAndAudit tests (8 tests)
 │   ├── bobber/main.go                    # CLI tool (448 lines)
+│   ├── bobber/main_test.go               # CLI tests (1,227 lines, 75 tests)
 │   └── bobber-tui/main.go                # TUI client
 ├── configs/backend.yaml                  # Default config
 ├── deploy/
