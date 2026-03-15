@@ -25,28 +25,27 @@ jobs:
     runs-on: ubuntu-latest
     environment: staging
     if: |
-      github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' ||
-      github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging'
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Azure login
+      - name: Azure login via OIDC
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Configure kubectl
-        run: |
-          mkdir -p $HOME/.kube
-          echo "${{ secrets.KUBECONFIG_STAGING }}" > $HOME/.kube/config
-          chmod 600 $HOME/.kube/config
+      - name: Get AKS credentials
+        uses: azure/aks-set-context@v4
+        with:
+          resource-group: rg-bobberchat-staging
+          cluster-name: aks-bobberchat-staging
 
       - name: Deploy with Helm
         run: |
-          POSTGRES_DSN="${{ secrets.POSTGRES_DSN_STAGING }}"
-          POSTGRES_HOST=$(echo "$POSTGRES_DSN" | sed -n 's/.*@\([^:]*\):.*/\1/p')
-          POSTGRES_PASSWORD=$(echo "$POSTGRES_DSN" | sed -n 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/p')
           IMAGE_TAG="${{ github.event.workflow_run.head_branch || github.ref_name }}"
           IMAGE_TAG="${IMAGE_TAG#v}"
           
@@ -54,11 +53,11 @@ jobs:
             -f deploy/helm/values-azure-staging.yaml \
             --set image.repository=ghcr.io/yourbroduke/bobberchat \
             --set image.tag=$IMAGE_TAG \
-            --set postgres.external.host="$POSTGRES_HOST" \
-            --set postgres.external.password="$POSTGRES_PASSWORD" \
-            --set secrets.postgresPassword="$POSTGRES_PASSWORD" \
-            --set secrets.postgresDsn=${{ secrets.POSTGRES_DSN_STAGING }} \
-            --set secrets.jwtSecret=${{ secrets.JWT_SECRET_STAGING }} \
+            --set postgres.external.host=${{ secrets.STAGING_POSTGRES_HOST }} \
+            --set postgres.external.password=${{ secrets.STAGING_POSTGRES_PASSWORD }} \
+            --set secrets.postgresPassword=${{ secrets.STAGING_POSTGRES_PASSWORD }} \
+            --set secrets.postgresDsn=${{ secrets.STAGING_POSTGRES_DSN }} \
+            --set secrets.jwtSecret=${{ secrets.STAGING_JWT_SECRET }} \
             --set-file migration.sql=migrations/001_initial_schema.sql
 
       - name: Health check
@@ -73,8 +72,10 @@ jobs:
     environment: production
     needs: [deploy-staging]
     if: |
-      github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production' ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && needs.deploy-staging.result == 'success')
+      always() && (
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production') ||
+        (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && needs.deploy-staging.result == 'success')
+      )
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -99,6 +100,7 @@ jobs:
           
           helm upgrade --install bobberchat deploy/helm/bobberchat/ \
             -f deploy/helm/values-azure-production.yaml \
+            --set image.repository=ghcr.io/yourbroduke/bobberchat \
             --set image.tag=$IMAGE_TAG \
             --set postgres.external.host=${{ secrets.PRODUCTION_POSTGRES_HOST }} \
             --set postgres.external.password=${{ secrets.PRODUCTION_POSTGRES_PASSWORD }} \

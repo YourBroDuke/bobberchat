@@ -2,6 +2,7 @@
 variable "resource_group_name" {
   description = "The name of the Azure resource group"
   type        = string
+  default     = "rg-bobberchat-production"
 }
 
 variable "location" {
@@ -14,18 +15,32 @@ variable "location" {
 variable "vnet_name" {
   description = "The name of the virtual network"
   type        = string
+  default     = "vnet-bobberchat-production"
 }
 
 variable "vnet_cidr" {
   description = "The CIDR block for the virtual network"
   type        = string
-  default     = "10.0.0.0/16"
+  default     = "10.2.0.0/16"
+}
+
+variable "aks_subnet_cidr" {
+  description = "The CIDR block for the AKS subnet"
+  type        = string
+  default     = "10.2.1.0/24"
+}
+
+variable "postgres_subnet_cidr" {
+  description = "The CIDR block for the PostgreSQL subnet"
+  type        = string
+  default     = "10.2.2.0/24"
 }
 
 # AKS variables
 variable "cluster_name" {
   description = "The name of the AKS cluster"
   type        = string
+  default     = "aks-bobberchat-production"
 }
 
 variable "kubernetes_version" {
@@ -61,19 +76,20 @@ variable "sku_tier" {
 variable "service_cidr" {
   description = "CIDR block for Kubernetes services"
   type        = string
-  default     = "10.1.0.0/16"
+  default     = "10.3.0.0/16"
 }
 
 variable "dns_service_ip" {
   description = "IP address for DNS service"
   type        = string
-  default     = "10.1.0.10"
+  default     = "10.3.0.10"
 }
 
 # PostgreSQL variables
 variable "postgres_server_name" {
   description = "The name of the PostgreSQL server"
   type        = string
+  default     = "postgres-bobberchat-production"
 }
 
 variable "postgres_admin_login" {

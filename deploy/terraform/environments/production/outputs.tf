@@ -61,23 +61,13 @@ output "postgres_database_name" {
 }
 
 output "dns_zone_name" {
-  description = "Name of the created DNS zone"
+  description = "Name of the created DNS zone (empty if create_dns_zone=false)"
   value       = module.dns.dns_zone_name
 }
 
 output "name_servers" {
-  description = "Name servers for the DNS zone"
+  description = "Name servers for the DNS zone (empty if create_dns_zone=false)"
   value       = module.dns.name_servers
-}
-
-output "staging_fqdn" {
-  description = "FQDN of the staging subdomain"
-  value       = module.dns.staging_fqdn
-}
-
-output "production_fqdn" {
-  description = "FQDN of the production subdomain"
-  value       = module.dns.production_fqdn
 }
 
 output "resource_group_name" {
