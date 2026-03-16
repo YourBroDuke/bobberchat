@@ -35,7 +35,7 @@ services:
       PGPASSWORD: bobberchat
     volumes:
       - ./migrations:/migrations:ro
-    entrypoint: ["sh", "-c", "psql -h postgres -U bobberchat -d bobberchat -f /migrations/001_initial_schema.sql"]
+    entrypoint: ["sh", "-c", "for f in /migrations/*.sql; do psql -h postgres -U bobberchat -d bobberchat -f \"$$f\"; done"]
     restart: "no"
 
   bobberd:

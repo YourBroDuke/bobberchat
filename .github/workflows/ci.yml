@@ -100,7 +100,10 @@ jobs:
           go-version-file: backend/go.mod
 
       - name: Run migrations
-        run: PGPASSWORD=bobberchat psql -h localhost -U bobberchat -d bobberchat -f migrations/001_initial_schema.sql
+        run: |
+          for f in migrations/*.sql; do
+            PGPASSWORD=bobberchat psql -h localhost -U bobberchat -d bobberchat -f "$f"
+          done
 
       - name: Run integration tests
         env:

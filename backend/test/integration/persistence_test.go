@@ -6,6 +6,8 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -31,26 +33,35 @@ func setupDB(t *testing.T) (*persistence.DB, func()) {
 
 	// Drop existing schema before re-applying migration (handles pre-populated databases)
 	_, _ = db.Pool().Exec(ctx, `
-		DROP TABLE IF EXISTS audit_log, approval_requests, messages_default, messages, topics, chat_group_members, chat_groups, agents, users CASCADE;
-		DROP TYPE IF EXISTS participant_type, urgency, approval_status, topic_status, group_visibility, agent_status CASCADE;
+		DROP TABLE IF EXISTS blacklist_entries, connection_requests, audit_log, approval_requests, messages_default, messages, topics, chat_group_members, chat_groups, agents, users CASCADE;
+		DROP TYPE IF EXISTS connection_request_status, participant_type, urgency, approval_status, topic_status, group_visibility, agent_status CASCADE;
 	`)
 
-	migrationSQL, err := os.ReadFile("../../migrations/001_initial_schema.sql")
+	migrationFiles, err := filepath.Glob("../../migrations/*.sql")
 	if err != nil {
 		db.Close()
-		t.Fatalf("read migration: %v", err)
+		t.Fatalf("find migrations: %v", err)
 	}
+	sort.Strings(migrationFiles)
 
-	if _, err := db.Pool().Exec(ctx, string(migrationSQL)); err != nil {
-		db.Close()
-		t.Fatalf("apply migration: %v", err)
+	for _, f := range migrationFiles {
+		migrationSQL, err := os.ReadFile(f)
+		if err != nil {
+			db.Close()
+			t.Fatalf("read migration %s: %v", f, err)
+		}
+
+		if _, err := db.Pool().Exec(ctx, string(migrationSQL)); err != nil {
+			db.Close()
+			t.Fatalf("apply migration %s: %v", f, err)
+		}
 	}
 
 	cleanup := func() {
 		cleanupCtx := context.Background()
 		_, _ = db.Pool().Exec(cleanupCtx, `
-			DROP TABLE IF EXISTS audit_log, approval_requests, messages_default, messages, topics, chat_group_members, chat_groups, agents, users CASCADE;
-			DROP TYPE IF EXISTS participant_type, urgency, approval_status, topic_status, group_visibility, agent_status CASCADE;
+			DROP TABLE IF EXISTS blacklist_entries, connection_requests, audit_log, approval_requests, messages_default, messages, topics, chat_group_members, chat_groups, agents, users CASCADE;
+			DROP TYPE IF EXISTS connection_request_status, participant_type, urgency, approval_status, topic_status, group_visibility, agent_status CASCADE;
 		`)
 		db.Close()
 	}
