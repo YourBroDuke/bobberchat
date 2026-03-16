@@ -150,3 +150,29 @@ type AuditLogEntry struct {
 	Details   map[string]any `json:"details,omitempty"`
 	CreatedAt time.Time      `json:"created_at"`
 }
+
+type ConnectionRequestStatus string
+
+const (
+	ConnectionRequestStatusPending  ConnectionRequestStatus = "PENDING"
+	ConnectionRequestStatusAccepted ConnectionRequestStatus = "ACCEPTED"
+	ConnectionRequestStatusRejected ConnectionRequestStatus = "REJECTED"
+)
+
+type ConnectionRequest struct {
+	ID         uuid.UUID               `json:"id"`
+	TenantID   uuid.UUID               `json:"tenant_id"`
+	FromUserID uuid.UUID               `json:"from_user_id"`
+	ToUserID   uuid.UUID               `json:"to_user_id"`
+	Status     ConnectionRequestStatus `json:"status"`
+	CreatedAt  time.Time               `json:"created_at"`
+	UpdatedAt  time.Time               `json:"updated_at"`
+}
+
+type BlacklistEntry struct {
+	ID            uuid.UUID `json:"id"`
+	TenantID      uuid.UUID `json:"tenant_id"`
+	UserID        uuid.UUID `json:"user_id"`
+	BlockedUserID uuid.UUID `json:"blocked_user_id"`
+	CreatedAt     time.Time `json:"created_at"`
+}

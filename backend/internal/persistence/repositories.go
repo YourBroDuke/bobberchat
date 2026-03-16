@@ -25,6 +25,7 @@ type AgentRepository interface {
 	UpdateStatus(ctx context.Context, tenantID, agentID uuid.UUID, status AgentStatus) error
 	Delete(ctx context.Context, tenantID, agentID uuid.UUID) error
 	ListByTenant(ctx context.Context, tenantID uuid.UUID) ([]Agent, error)
+	ListByOwner(ctx context.Context, tenantID, ownerUserID uuid.UUID) ([]Agent, error)
 	DiscoverByCapability(ctx context.Context, tenantID uuid.UUID, capability string, statuses []AgentStatus, limit int) ([]Agent, error)
 }
 
@@ -57,6 +58,21 @@ type MessageRepository interface {
 	GetByTraceID(ctx context.Context, tenantID, traceID uuid.UUID) ([]Message, error)
 	GetByTopic(ctx context.Context, tenantID, topicID uuid.UUID) ([]Message, error)
 	GetByID(ctx context.Context, tenantID, messageID uuid.UUID, timestamp time.Time) (*Message, error)
+	GetByPeer(ctx context.Context, tenantID, userID, peerID uuid.UUID, limit int, sinceTS *time.Time, sinceID *uuid.UUID) ([]Message, error)
+}
+
+type ConnectionRequestRepository interface {
+	Create(ctx context.Context, req ConnectionRequest) (*ConnectionRequest, error)
+	GetPendingForUser(ctx context.Context, tenantID, userID uuid.UUID) ([]ConnectionRequest, error)
+	UpdateStatus(ctx context.Context, tenantID, requestID uuid.UUID, status ConnectionRequestStatus) error
+	GetByFromAndTo(ctx context.Context, tenantID, fromUserID, toUserID uuid.UUID) (*ConnectionRequest, error)
+}
+
+type BlacklistRepository interface {
+	Create(ctx context.Context, entry BlacklistEntry) (*BlacklistEntry, error)
+	Delete(ctx context.Context, tenantID, userID, blockedUserID uuid.UUID) error
+	IsBlocked(ctx context.Context, tenantID, userID, blockedUserID uuid.UUID) (bool, error)
+	ListByUser(ctx context.Context, tenantID, userID uuid.UUID) ([]BlacklistEntry, error)
 }
 
 type ApprovalRepository interface {
@@ -71,24 +87,28 @@ type AuditLogRepository interface {
 }
 
 type PostgresRepositories struct {
-	Agents    AgentRepository
-	Users     UserRepository
-	Groups    ChatGroupRepository
-	Topics    TopicRepository
-	Messages  MessageRepository
-	Approvals ApprovalRepository
-	AuditLogs AuditLogRepository
+	Agents             AgentRepository
+	Users              UserRepository
+	Groups             ChatGroupRepository
+	Topics             TopicRepository
+	Messages           MessageRepository
+	Approvals          ApprovalRepository
+	AuditLogs          AuditLogRepository
+	ConnectionRequests ConnectionRequestRepository
+	Blacklist          BlacklistRepository
 }
 
 func NewPostgresRepositories(db *DB) *PostgresRepositories {
 	return &PostgresRepositories{
-		Agents:    &pgAgentRepository{db: db},
-		Users:     &pgUserRepository{db: db},
-		Groups:    &pgChatGroupRepository{db: db},
-		Topics:    &pgTopicRepository{db: db},
-		Messages:  &pgMessageRepository{db: db},
-		Approvals: &pgApprovalRepository{db: db},
-		AuditLogs: &pgAuditLogRepository{db: db},
+		Agents:             &pgAgentRepository{db: db},
+		Users:              &pgUserRepository{db: db},
+		Groups:             &pgChatGroupRepository{db: db},
+		Topics:             &pgTopicRepository{db: db},
+		Messages:           &pgMessageRepository{db: db},
+		Approvals:          &pgApprovalRepository{db: db},
+		AuditLogs:          &pgAuditLogRepository{db: db},
+		ConnectionRequests: &pgConnectionRequestRepository{db: db},
+		Blacklist:          &pgBlacklistRepository{db: db},
 	}
 }
 
@@ -188,6 +208,35 @@ func (r *pgAgentRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID
 
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate agents: %w", err)
+	}
+
+	return results, nil
+}
+
+func (r *pgAgentRepository) ListByOwner(ctx context.Context, tenantID, ownerUserID uuid.UUID) ([]Agent, error) {
+	rows, err := r.db.Pool().Query(ctx, `
+		SELECT agent_id, tenant_id, display_name, owner_user_id, capabilities, version,
+			status, api_secret_hash, connected_at, last_heartbeat, created_at
+		FROM agents
+		WHERE tenant_id = $1 AND owner_user_id = $2
+		ORDER BY created_at DESC
+	`, tenantID, ownerUserID)
+	if err != nil {
+		return nil, fmt.Errorf("list agents by owner: %w", err)
+	}
+	defer rows.Close()
+
+	results := make([]Agent, 0)
+	for rows.Next() {
+		a, err := scanAgent(rows)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, *a)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate agents by owner: %w", err)
 	}
 
 	return results, nil
@@ -698,6 +747,40 @@ func (r *pgMessageRepository) GetByID(ctx context.Context, tenantID, messageID u
 	return scanMessage(row)
 }
 
+func (r *pgMessageRepository) GetByPeer(ctx context.Context, tenantID, userID, peerID uuid.UUID, limit int, sinceTS *time.Time, sinceID *uuid.UUID) ([]Message, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+
+	rows, err := r.db.Pool().Query(ctx, `
+		SELECT id, tenant_id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id, topic_id
+		FROM messages
+		WHERE tenant_id = $1
+			AND ((from_id = $2 AND to_id = $3) OR (from_id = $3 AND to_id = $2))
+			AND ($4::timestamptz IS NULL OR "timestamp" > $4)
+			AND ($5::uuid IS NULL OR id > $5)
+		ORDER BY "timestamp" DESC
+		LIMIT $6
+	`, tenantID, peerID, userID, sinceTS, sinceID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("get messages by peer: %w", err)
+	}
+	defer rows.Close()
+
+	messages := make([]Message, 0)
+	for rows.Next() {
+		m, err := scanMessage(rows)
+		if err != nil {
+			return nil, err
+		}
+		messages = append(messages, *m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate messages by peer: %w", err)
+	}
+	return messages, nil
+}
+
 type pgApprovalRepository struct{ db *DB }
 
 func (r *pgApprovalRepository) Create(ctx context.Context, approval ApprovalRequest) (*ApprovalRequest, error) {
@@ -822,6 +905,161 @@ func (r *pgAuditLogRepository) QueryByTenant(ctx context.Context, tenantID uuid.
 		return nil, fmt.Errorf("iterate audit log entries: %w", err)
 	}
 
+	return entries, nil
+}
+
+type pgConnectionRequestRepository struct{ db *DB }
+
+func (r *pgConnectionRequestRepository) Create(ctx context.Context, req ConnectionRequest) (*ConnectionRequest, error) {
+	if req.ID == uuid.Nil {
+		req.ID = uuid.New()
+	}
+	now := time.Now().UTC()
+	if req.CreatedAt.IsZero() {
+		req.CreatedAt = now
+	}
+	if req.UpdatedAt.IsZero() {
+		req.UpdatedAt = now
+	}
+	if req.Status == "" {
+		req.Status = ConnectionRequestStatusPending
+	}
+
+	row := r.db.Pool().QueryRow(ctx, `
+		INSERT INTO connection_requests (id, tenant_id, from_user_id, to_user_id, status, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7)
+		RETURNING id, tenant_id, from_user_id, to_user_id, status, created_at, updated_at
+	`, req.ID, req.TenantID, req.FromUserID, req.ToUserID, string(req.Status), req.CreatedAt, req.UpdatedAt)
+
+	created, err := scanConnectionRequest(row)
+	if err != nil {
+		return nil, err
+	}
+	return created, nil
+}
+
+func (r *pgConnectionRequestRepository) GetPendingForUser(ctx context.Context, tenantID, userID uuid.UUID) ([]ConnectionRequest, error) {
+	rows, err := r.db.Pool().Query(ctx, `
+		SELECT id, tenant_id, from_user_id, to_user_id, status, created_at, updated_at
+		FROM connection_requests
+		WHERE tenant_id = $1 AND to_user_id = $2 AND status = 'PENDING'
+		ORDER BY created_at DESC
+	`, tenantID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get pending connection requests: %w", err)
+	}
+	defer rows.Close()
+
+	requests := make([]ConnectionRequest, 0)
+	for rows.Next() {
+		req, err := scanConnectionRequest(rows)
+		if err != nil {
+			return nil, err
+		}
+		requests = append(requests, *req)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate pending connection requests: %w", err)
+	}
+	return requests, nil
+}
+
+func (r *pgConnectionRequestRepository) UpdateStatus(ctx context.Context, tenantID, requestID uuid.UUID, status ConnectionRequestStatus) error {
+	res, err := r.db.Pool().Exec(ctx, `
+		UPDATE connection_requests
+		SET status = $1, updated_at = NOW()
+		WHERE tenant_id = $2 AND id = $3
+	`, string(status), tenantID, requestID)
+	if err != nil {
+		return fmt.Errorf("update connection request status: %w", err)
+	}
+	if res.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *pgConnectionRequestRepository) GetByFromAndTo(ctx context.Context, tenantID, fromUserID, toUserID uuid.UUID) (*ConnectionRequest, error) {
+	row := r.db.Pool().QueryRow(ctx, `
+		SELECT id, tenant_id, from_user_id, to_user_id, status, created_at, updated_at
+		FROM connection_requests
+		WHERE tenant_id = $1 AND from_user_id = $2 AND to_user_id = $3
+	`, tenantID, fromUserID, toUserID)
+	return scanConnectionRequest(row)
+}
+
+type pgBlacklistRepository struct{ db *DB }
+
+func (r *pgBlacklistRepository) Create(ctx context.Context, entry BlacklistEntry) (*BlacklistEntry, error) {
+	if entry.ID == uuid.Nil {
+		entry.ID = uuid.New()
+	}
+	if entry.CreatedAt.IsZero() {
+		entry.CreatedAt = time.Now().UTC()
+	}
+
+	row := r.db.Pool().QueryRow(ctx, `
+		INSERT INTO blacklist_entries (id, tenant_id, user_id, blocked_user_id, created_at)
+		VALUES ($1,$2,$3,$4,$5)
+		RETURNING id, tenant_id, user_id, blocked_user_id, created_at
+	`, entry.ID, entry.TenantID, entry.UserID, entry.BlockedUserID, entry.CreatedAt)
+
+	created, err := scanBlacklistEntry(row)
+	if err != nil {
+		return nil, err
+	}
+	return created, nil
+}
+
+func (r *pgBlacklistRepository) Delete(ctx context.Context, tenantID, userID, blockedUserID uuid.UUID) error {
+	_, err := r.db.Pool().Exec(ctx, `
+		DELETE FROM blacklist_entries
+		WHERE tenant_id = $1 AND user_id = $2 AND blocked_user_id = $3
+	`, tenantID, userID, blockedUserID)
+	if err != nil {
+		return fmt.Errorf("delete blacklist entry: %w", err)
+	}
+	return nil
+}
+
+func (r *pgBlacklistRepository) IsBlocked(ctx context.Context, tenantID, userID, blockedUserID uuid.UUID) (bool, error) {
+	var exists bool
+	err := r.db.Pool().QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1
+			FROM blacklist_entries
+			WHERE tenant_id = $1 AND user_id = $2 AND blocked_user_id = $3
+		)
+	`, tenantID, userID, blockedUserID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("check blacklist entry: %w", err)
+	}
+	return exists, nil
+}
+
+func (r *pgBlacklistRepository) ListByUser(ctx context.Context, tenantID, userID uuid.UUID) ([]BlacklistEntry, error) {
+	rows, err := r.db.Pool().Query(ctx, `
+		SELECT id, tenant_id, user_id, blocked_user_id, created_at
+		FROM blacklist_entries
+		WHERE tenant_id = $1 AND user_id = $2
+		ORDER BY created_at DESC
+	`, tenantID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list blacklist entries: %w", err)
+	}
+	defer rows.Close()
+
+	entries := make([]BlacklistEntry, 0)
+	for rows.Next() {
+		entry, err := scanBlacklistEntry(rows)
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, *entry)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate blacklist entries: %w", err)
+	}
 	return entries, nil
 }
 
@@ -958,6 +1196,46 @@ func scanAuditLogEntry(scanner rowScanner) (*AuditLogEntry, error) {
 		if err := json.Unmarshal(detailsRaw, &out.Details); err != nil {
 			return nil, fmt.Errorf("unmarshal audit log details: %w", err)
 		}
+	}
+	return &out, nil
+}
+
+func scanConnectionRequest(scanner rowScanner) (*ConnectionRequest, error) {
+	out := ConnectionRequest{}
+	var status string
+	err := scanner.Scan(
+		&out.ID,
+		&out.TenantID,
+		&out.FromUserID,
+		&out.ToUserID,
+		&status,
+		&out.CreatedAt,
+		&out.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("scan connection request: %w", err)
+	}
+	out.Status = ConnectionRequestStatus(status)
+	return &out, nil
+}
+
+func scanBlacklistEntry(scanner rowScanner) (*BlacklistEntry, error) {
+	out := BlacklistEntry{}
+	err := scanner.Scan(
+		&out.ID,
+		&out.TenantID,
+		&out.UserID,
+		&out.BlockedUserID,
+		&out.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("scan blacklist entry: %w", err)
 	}
 	return &out, nil
 }
