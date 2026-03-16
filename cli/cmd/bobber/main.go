@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -189,8 +190,12 @@ func agentUseCmd(cfg *cliConfig) *cobra.Command {
 		Short: "Use an agent as current identity",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			// TODO: Implement when backend API endpoint is available.
-			return errors.New("not implemented: agent use requires backend API endpoint")
+			cfg.v.Set("agent_id", args[0])
+			if err := saveConfig(cfg.v); err != nil {
+				return err
+			}
+			prettyPrint(map[string]any{"agent_id": args[0], "active": true})
+			return nil
 		},
 	}
 }
@@ -265,8 +270,15 @@ func whoamiCmd(cfg *cliConfig) *cobra.Command {
 		Use:   "whoami",
 		Short: "Show current authenticated identity",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			// TODO: Implement when backend API endpoint is available.
-			return errors.New("not implemented: whoami requires backend API endpoint")
+			if cfg.token() == "" {
+				return errors.New("token required")
+			}
+			resp, err := doJSON(http.MethodGet, cfg.backendURL()+"/v1/auth/me", cfg.token(), nil)
+			if err != nil {
+				return err
+			}
+			prettyPrint(resp)
+			return nil
 		},
 	}
 }
@@ -322,8 +334,17 @@ func connectCmd(cfg *cliConfig) *cobra.Command {
 		Short: "Request a connection with target",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			// TODO: Implement when backend API endpoint is available.
-			return errors.New("not implemented: connect requires backend API endpoint")
+			if cfg.token() == "" {
+				return errors.New("token required")
+			}
+			resp, err := doJSON(http.MethodPost, cfg.backendURL()+"/v1/connections/request", cfg.token(), map[string]any{
+				"target_id": args[0],
+			})
+			if err != nil {
+				return err
+			}
+			prettyPrint(resp)
+			return nil
 		},
 	}
 }
@@ -333,8 +354,15 @@ func inboxCmd(cfg *cliConfig) *cobra.Command {
 		Use:   "inbox",
 		Short: "Show pending connects and unread chats",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			// TODO: Implement when backend API endpoint is available.
-			return errors.New("not implemented: inbox requires backend API endpoint")
+			if cfg.token() == "" {
+				return errors.New("token required")
+			}
+			resp, err := doJSON(http.MethodGet, cfg.backendURL()+"/v1/connections/inbox", cfg.token(), nil)
+			if err != nil {
+				return err
+			}
+			prettyPrint(resp)
+			return nil
 		},
 	}
 }
@@ -345,8 +373,15 @@ func acceptCmd(cfg *cliConfig) *cobra.Command {
 		Short: "Accept incoming request from target",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			// TODO: Implement when backend API endpoint is available.
-			return errors.New("not implemented: accept requires backend API endpoint")
+			if cfg.token() == "" {
+				return errors.New("token required")
+			}
+			resp, err := doJSON(http.MethodPost, cfg.backendURL()+"/v1/connections/"+args[0]+"/accept", cfg.token(), map[string]any{})
+			if err != nil {
+				return err
+			}
+			prettyPrint(resp)
+			return nil
 		},
 	}
 }
@@ -357,8 +392,15 @@ func rejectCmd(cfg *cliConfig) *cobra.Command {
 		Short: "Reject incoming request from target",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			// TODO: Implement when backend API endpoint is available.
-			return errors.New("not implemented: reject requires backend API endpoint")
+			if cfg.token() == "" {
+				return errors.New("token required")
+			}
+			resp, err := doJSON(http.MethodPost, cfg.backendURL()+"/v1/connections/"+args[0]+"/reject", cfg.token(), map[string]any{})
+			if err != nil {
+				return err
+			}
+			prettyPrint(resp)
+			return nil
 		},
 	}
 }
@@ -369,8 +411,17 @@ func blacklistCmd(cfg *cliConfig) *cobra.Command {
 		Short: "Blacklist target",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			// TODO: Implement when backend API endpoint is available.
-			return errors.New("not implemented: blacklist requires backend API endpoint")
+			if cfg.token() == "" {
+				return errors.New("token required")
+			}
+			resp, err := doJSON(http.MethodPost, cfg.backendURL()+"/v1/blacklist", cfg.token(), map[string]any{
+				"target_id": args[0],
+			})
+			if err != nil {
+				return err
+			}
+			prettyPrint(resp)
+			return nil
 		},
 	}
 }
@@ -453,9 +504,25 @@ func pollCmd(cfg *cliConfig) *cobra.Command {
 		Short: "Poll messages from target",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			_, _, _, _ = args, limit, sinceTS, sinceID
-			// TODO: Implement when backend API endpoint is available.
-			return errors.New("not implemented: poll requires backend API endpoint")
+			if cfg.token() == "" {
+				return errors.New("token required")
+			}
+			endpoint := cfg.backendURL() + "/v1/messages/poll?peer_id=" + args[0]
+			if limit > 0 {
+				endpoint += "&limit=" + strconv.Itoa(limit)
+			}
+			if sinceTS != "" {
+				endpoint += "&since_ts=" + sinceTS
+			}
+			if sinceID != "" {
+				endpoint += "&since_id=" + sinceID
+			}
+			resp, err := doJSON(http.MethodGet, endpoint, cfg.token(), nil)
+			if err != nil {
+				return err
+			}
+			prettyPrint(resp)
+			return nil
 		},
 	}
 	cmd.Flags().IntVar(&limit, "limit", 0, "maximum message count")
@@ -526,8 +593,18 @@ func groupInviteCmd(cfg *cliConfig) *cobra.Command {
 		Short: "Invite user to group",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(_ *cobra.Command, args []string) error {
-			// TODO: Implement when backend API endpoint is available.
-			return errors.New("not implemented: group invite requires backend API endpoint")
+			if cfg.token() == "" {
+				return errors.New("token required")
+			}
+			resp, err := doJSON(http.MethodPost, cfg.backendURL()+"/v1/groups/"+args[0]+"/join", cfg.token(), map[string]any{
+				"participant_id":   args[1],
+				"participant_kind": "user",
+			})
+			if err != nil {
+				return err
+			}
+			prettyPrint(resp)
+			return nil
 		},
 	}
 }
@@ -593,6 +670,10 @@ func (c *cliConfig) backendURL() string {
 
 func (c *cliConfig) token() string {
 	return strings.TrimSpace(c.v.GetString("token"))
+}
+
+func (c *cliConfig) agentID() string {
+	return strings.TrimSpace(c.v.GetString("agent_id"))
 }
 
 func splitCSV(s string) []string {

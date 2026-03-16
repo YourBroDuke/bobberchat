@@ -713,14 +713,20 @@ func TestAgentSubcommands(t *testing.T) {
 		}
 	})
 
-	t.Run("agent use: not implemented", func(t *testing.T) {
-		cmd := agentCmd(testConfig("http://localhost:8080", "tok"))
+	t.Run("agent use: saves agent_id", func(t *testing.T) {
+		tmp := t.TempDir()
+		cfg := testConfig("http://localhost:8080", "tok")
+		cfg.v.SetConfigFile(filepath.Join(tmp, "config.yaml"))
+
+		cmd := agentCmd(cfg)
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
 		cmd.SetArgs([]string{"use", "a1"})
-		err := cmd.Execute()
-		if err == nil || !strings.Contains(err.Error(), "not implemented") {
-			t.Fatalf("unexpected err: %v", err)
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("execute failed: %v", err)
+		}
+		if got := cfg.agentID(); got != "a1" {
+			t.Fatalf("expected saved agent_id, got %q", got)
 		}
 	})
 }
@@ -757,13 +763,32 @@ func TestLoginCommand(t *testing.T) {
 }
 
 func TestWhoamiCommand(t *testing.T) {
-	cmd := whoamiCmd(testConfig("http://localhost:8080", "tok"))
-	cmd.SetOut(io.Discard)
-	cmd.SetErr(io.Discard)
-	err := cmd.Execute()
-	if err == nil || !strings.Contains(err.Error(), "not implemented") {
-		t.Fatalf("unexpected err: %v", err)
-	}
+	t.Run("Success: GET /v1/auth/me", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet || r.URL.Path != "/v1/auth/me" {
+				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "u1"})
+		}))
+		defer srv.Close()
+
+		cmd := whoamiCmd(testConfig(srv.URL, "tok"))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("execute failed: %v", err)
+		}
+	})
+
+	t.Run("No token", func(t *testing.T) {
+		cmd := whoamiCmd(testConfig("http://localhost:8080", ""))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "token required") {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	})
 }
 
 func TestLogoutCommand(t *testing.T) {
@@ -858,32 +883,257 @@ func TestLsCommand(t *testing.T) {
 	})
 }
 
-func TestStubCommands(t *testing.T) {
-	tests := []struct {
-		name string
-		cmd  *cobra.Command
-		args []string
-	}{
-		{name: "connect", cmd: connectCmd(testConfig("http://localhost:8080", "tok")), args: []string{"user-id"}},
-		{name: "inbox", cmd: inboxCmd(testConfig("http://localhost:8080", "tok"))},
-		{name: "accept", cmd: acceptCmd(testConfig("http://localhost:8080", "tok")), args: []string{"user-id"}},
-		{name: "reject", cmd: rejectCmd(testConfig("http://localhost:8080", "tok")), args: []string{"user-id"}},
-		{name: "blacklist", cmd: blacklistCmd(testConfig("http://localhost:8080", "tok")), args: []string{"user-id"}},
-		{name: "poll", cmd: pollCmd(testConfig("http://localhost:8080", "tok")), args: []string{"user-id"}},
-		{name: "group invite", cmd: groupCmd(testConfig("http://localhost:8080", "tok")), args: []string{"invite", "group-id", "user-id"}},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			tc.cmd.SetOut(io.Discard)
-			tc.cmd.SetErr(io.Discard)
-			tc.cmd.SetArgs(tc.args)
-			err := tc.cmd.Execute()
-			if err == nil || !strings.Contains(err.Error(), "not implemented") {
-				t.Fatalf("unexpected err: %v", err)
+func TestConnectCommand(t *testing.T) {
+	t.Run("Success: POST /v1/connections/request", func(t *testing.T) {
+		var got map[string]any
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost || r.URL.Path != "/v1/connections/request" {
+				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 			}
-		})
-	}
+			b, _ := io.ReadAll(r.Body)
+			got = mustJSONMap(t, string(b))
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+		}))
+		defer srv.Close()
+
+		cmd := connectCmd(testConfig(srv.URL, "tok"))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"user-id"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("execute failed: %v", err)
+		}
+
+		if got["target_id"] != "user-id" {
+			t.Fatalf("unexpected payload: %v", got)
+		}
+	})
+
+	t.Run("No token", func(t *testing.T) {
+		cmd := connectCmd(testConfig("http://localhost:8080", ""))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"user-id"})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "token required") {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	})
+}
+
+func TestInboxCommand(t *testing.T) {
+	t.Run("Success: GET /v1/connections/inbox", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet || r.URL.Path != "/v1/connections/inbox" {
+				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"items": []any{}})
+		}))
+		defer srv.Close()
+
+		cmd := inboxCmd(testConfig(srv.URL, "tok"))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("execute failed: %v", err)
+		}
+	})
+
+	t.Run("No token", func(t *testing.T) {
+		cmd := inboxCmd(testConfig("http://localhost:8080", ""))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "token required") {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	})
+}
+
+func TestAcceptCommand(t *testing.T) {
+	t.Run("Success: POST /v1/connections/{id}/accept", func(t *testing.T) {
+		var got map[string]any
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost || r.URL.Path != "/v1/connections/user-id/accept" {
+				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+			}
+			b, _ := io.ReadAll(r.Body)
+			got = mustJSONMap(t, string(b))
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+		}))
+		defer srv.Close()
+
+		cmd := acceptCmd(testConfig(srv.URL, "tok"))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"user-id"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("execute failed: %v", err)
+		}
+
+		if len(got) != 0 {
+			t.Fatalf("unexpected payload: %v", got)
+		}
+	})
+
+	t.Run("No token", func(t *testing.T) {
+		cmd := acceptCmd(testConfig("http://localhost:8080", ""))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"user-id"})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "token required") {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	})
+}
+
+func TestRejectCommand(t *testing.T) {
+	t.Run("Success: POST /v1/connections/{id}/reject", func(t *testing.T) {
+		var got map[string]any
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost || r.URL.Path != "/v1/connections/user-id/reject" {
+				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+			}
+			b, _ := io.ReadAll(r.Body)
+			got = mustJSONMap(t, string(b))
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+		}))
+		defer srv.Close()
+
+		cmd := rejectCmd(testConfig(srv.URL, "tok"))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"user-id"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("execute failed: %v", err)
+		}
+
+		if len(got) != 0 {
+			t.Fatalf("unexpected payload: %v", got)
+		}
+	})
+
+	t.Run("No token", func(t *testing.T) {
+		cmd := rejectCmd(testConfig("http://localhost:8080", ""))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"user-id"})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "token required") {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	})
+}
+
+func TestBlacklistCommand(t *testing.T) {
+	t.Run("Success: POST /v1/blacklist", func(t *testing.T) {
+		var got map[string]any
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost || r.URL.Path != "/v1/blacklist" {
+				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+			}
+			b, _ := io.ReadAll(r.Body)
+			got = mustJSONMap(t, string(b))
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+		}))
+		defer srv.Close()
+
+		cmd := blacklistCmd(testConfig(srv.URL, "tok"))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"user-id"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("execute failed: %v", err)
+		}
+
+		if got["target_id"] != "user-id" {
+			t.Fatalf("unexpected payload: %v", got)
+		}
+	})
+
+	t.Run("No token", func(t *testing.T) {
+		cmd := blacklistCmd(testConfig("http://localhost:8080", ""))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"user-id"})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "token required") {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	})
+}
+
+func TestPollCommand(t *testing.T) {
+	t.Run("Success: GET /v1/messages/poll?peer_id={id}", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet || r.URL.Path != "/v1/messages/poll" {
+				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+			}
+			if got := r.URL.Query().Get("peer_id"); got != "user-id" {
+				t.Fatalf("unexpected peer_id query: %q", got)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"messages": []any{}})
+		}))
+		defer srv.Close()
+
+		cmd := pollCmd(testConfig(srv.URL, "tok"))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"user-id"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("execute failed: %v", err)
+		}
+	})
+
+	t.Run("No token", func(t *testing.T) {
+		cmd := pollCmd(testConfig("http://localhost:8080", ""))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"user-id"})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "token required") {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	})
+}
+
+func TestGroupInviteCommand(t *testing.T) {
+	t.Run("Success: POST /v1/groups/{id}/join", func(t *testing.T) {
+		var got map[string]any
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost || r.URL.Path != "/v1/groups/group-id/join" {
+				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+			}
+			b, _ := io.ReadAll(r.Body)
+			got = mustJSONMap(t, string(b))
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+		}))
+		defer srv.Close()
+
+		cmd := groupCmd(testConfig(srv.URL, "tok"))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"invite", "group-id", "user-id"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("execute failed: %v", err)
+		}
+
+		if got["participant_id"] != "user-id" || got["participant_kind"] != "user" {
+			t.Fatalf("unexpected payload: %v", got)
+		}
+	})
+
+	t.Run("No token", func(t *testing.T) {
+		cmd := groupCmd(testConfig("http://localhost:8080", ""))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"invite", "group-id", "user-id"})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "token required") {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	})
 }
 
 func TestInfoCommand(t *testing.T) {
