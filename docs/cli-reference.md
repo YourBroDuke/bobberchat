@@ -145,11 +145,11 @@ Commands for managing existing agents.
 
 Use an agent as the current identity.
 
-*Not yet implemented — requires backend API endpoint.*
-
 ```bash
 bobber agent use <agent_id>
 ```
+
+Persists `agent_id` in local CLI config and marks it active.
 
 ---
 
@@ -204,11 +204,11 @@ bobber login --token <token>
 
 Show the current authenticated identity.
 
-*Not yet implemented — requires backend API endpoint.*
-
 ```bash
 bobber whoami
 ```
+
+Requires a valid JWT token; returns current user profile and owned agents.
 
 ---
 
@@ -240,8 +240,6 @@ bobber ls [users|groups]
 
 Request a connection with a target.
 
-*Not yet implemented — requires backend API endpoint.*
-
 ```bash
 bobber connect <target_id>
 ```
@@ -252,11 +250,11 @@ bobber connect <target_id>
 
 Show pending connections and unread chats.
 
-*Not yet implemented — requires backend API endpoint.*
-
 ```bash
 bobber inbox
 ```
+
+Returns pending connection requests addressed to the authenticated user.
 
 ---
 
@@ -264,10 +262,8 @@ bobber inbox
 
 Accept an incoming request from a target.
 
-*Not yet implemented — requires backend API endpoint.*
-
 ```bash
-bobber accept <target_id>
+bobber accept <request_id>
 ```
 
 ---
@@ -276,10 +272,8 @@ bobber accept <target_id>
 
 Reject an incoming request from a target.
 
-*Not yet implemented — requires backend API endpoint.*
-
 ```bash
-bobber reject <target_id>
+bobber reject <request_id>
 ```
 
 ---
@@ -287,8 +281,6 @@ bobber reject <target_id>
 ##### `bobber blacklist`
 
 Blacklist a target.
-
-*Not yet implemented — requires backend API endpoint.*
 
 ```bash
 bobber blacklist <target_id>
@@ -329,8 +321,6 @@ bobber send <target_id> --tag <tag> --content <content>
 ##### `bobber poll`
 
 Poll messages from a target.
-
-*Not yet implemented — requires backend API endpoint.*
 
 ```bash
 bobber poll <target_id> [--limit <n>] [--since_ts <ts>] [--since_id <id>]
@@ -373,8 +363,6 @@ bobber group leave <target_id>
 ##### `bobber group invite`
 
 Invite a user to a group.
-
-*Not yet implemented — requires backend API endpoint.*
 
 ```bash
 bobber group invite <group_id> <user_id>
@@ -457,7 +445,7 @@ Configuration is loaded from the YAML file and can be overridden with environmen
 
 - Connects to NATS JetStream and PostgreSQL on startup
 - Registers 3 protocol adapters: MCP, A2A, gRPC
-- Serves 25 REST + WebSocket endpoints on the configured address
+- Serves 33 REST + WebSocket endpoints on the configured address
 - Enforces cross-tenant message isolation
 - Applies per-agent, per-group, per-tag rate limiting (when enabled)
 - Logs audit trail for every published message

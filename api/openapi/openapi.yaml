@@ -13,6 +13,10 @@ servers:
 tags:
   - name: Auth
     description: Authentication and registration for users
+  - name: Connections
+    description: User-to-user connection requests
+  - name: Blacklist
+    description: User blacklist management
   - name: Agents
     description: Agent lifecycle management
   - name: Registry
@@ -203,6 +207,39 @@ paths:
                     type: boolean
         '400':
           $ref: '#/components/responses/BadRequest'
+
+  /v1/auth/me:
+    get:
+      tags:
+        - Auth
+      summary: Get current authenticated user profile
+      operationId: whoAmI
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Authenticated identity
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id:
+                    type: string
+                    format: uuid
+                  tenant_id:
+                    type: string
+                    format: uuid
+                  email:
+                    type: string
+                  role:
+                    type: string
+                  agents:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Agent'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   /v1/agents:
     post:
@@ -642,6 +679,237 @@ paths:
                     items:
                       $ref: '#/components/schemas/Message'
 
+  /v1/messages/poll:
+    get:
+      tags:
+        - Messages
+      summary: Poll direct messages for a peer
+      operationId: pollMessages
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: peer_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 50
+        - name: since_ts
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date-time
+        - name: since_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Messages retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Message'
+
+  /v1/connections/request:
+    post:
+      tags:
+        - Connections
+      summary: Create a connection request
+      operationId: createConnectionRequest
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - target_id
+              properties:
+                target_id:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Connection request created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  request:
+                    $ref: '#/components/schemas/ConnectionRequest'
+
+  /v1/connections/inbox:
+    get:
+      tags:
+        - Connections
+      summary: List pending incoming connection requests
+      operationId: listConnectionInbox
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Pending connection requests
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  requests:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ConnectionRequest'
+
+  /v1/connections/{id}/accept:
+    post:
+      tags:
+        - Connections
+      summary: Accept a connection request
+      operationId: acceptConnectionRequest
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Connection request accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  request_id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [ACCEPTED]
+
+  /v1/connections/{id}/reject:
+    post:
+      tags:
+        - Connections
+      summary: Reject a connection request
+      operationId: rejectConnectionRequest
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Connection request rejected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  request_id:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [REJECTED]
+
+  /v1/blacklist:
+    post:
+      tags:
+        - Blacklist
+      summary: Add a user to blacklist
+      operationId: createBlacklistEntry
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - target_id
+              properties:
+                target_id:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Blacklist entry created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entry:
+                    $ref: '#/components/schemas/BlacklistEntry'
+
+  /v1/blacklist/{id}:
+    delete:
+      tags:
+        - Blacklist
+      summary: Remove a user from blacklist
+      operationId: deleteBlacklistEntry
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Blacklist entry removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  removed:
+                    type: boolean
+                  target_id:
+                    type: string
+                    format: uuid
+
   /v1/messages/{id}/replay:
     post:
       tags:
@@ -1022,6 +1290,64 @@ components:
           nullable: true
         timeout_ms:
           type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    ConnectionRequest:
+      type: object
+      required:
+        - id
+        - tenant_id
+        - from_user_id
+        - to_user_id
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        from_user_id:
+          type: string
+          format: uuid
+        to_user_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING, ACCEPTED, REJECTED]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    BlacklistEntry:
+      type: object
+      required:
+        - id
+        - tenant_id
+        - user_id
+        - blocked_user_id
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenant_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        blocked_user_id:
+          type: string
+          format: uuid
         created_at:
           type: string
           format: date-time

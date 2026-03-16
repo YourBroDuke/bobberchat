@@ -141,7 +141,7 @@ bobber account logout
 
 #### Agent Operations
 ```bash
-# Use an agent as current identity (not yet implemented)
+# Use an agent as current identity
 bobber agent use <agent-id>
 
 # Rotate an agent's API secret
@@ -156,7 +156,7 @@ bobber agent delete <agent-id>
 # Save an existing token
 bobber login --token <TOKEN>
 
-# Show current identity (not yet implemented)
+# Show current identity
 bobber whoami
 
 # Logout
@@ -171,6 +171,18 @@ bobber info <target-id>
 
 # Send a message
 bobber send <target-id> --tag "request.action" --content "hello world"
+
+# Poll direct messages with a peer
+bobber poll <target-id> --limit 50
+
+# Connection request lifecycle
+bobber connect <target-id>
+bobber inbox
+bobber accept <request-id>
+bobber reject <request-id>
+
+# Blacklist a user
+bobber blacklist <target-id>
 ```
 
 #### Group Management
@@ -181,7 +193,7 @@ bobber group create --name "my-team"
 # Leave a group
 bobber group leave <group-id>
 
-# Invite user to group (not yet implemented)
+# Invite user to group
 bobber group invite <group-id> <user-id>
 ```
 
@@ -204,7 +216,7 @@ bobber send <target-id> --tag "request.action" --content "Hello from analyzer"
 All commands output JSON to stdout, making them composable with `jq` and other Unix tools.
 
 ## API Endpoints
-BobberChat provides a REST API with 25 endpoints. Full documentation is available in the OpenAPI specification at `api/openapi/openapi.yaml`.
+BobberChat provides a REST API with 33 endpoints. Full documentation is available in the OpenAPI specification at `api/openapi/openapi.yaml`.
 
 | Category | Method | Path |
 | --- | --- | --- |
@@ -212,6 +224,7 @@ BobberChat provides a REST API with 25 endpoints. Full documentation is availabl
 | Auth | POST | /v1/auth/login |
 | Auth | POST | /v1/auth/verify-email |
 | Auth | POST | /v1/auth/resend-verification |
+| Auth | GET | /v1/auth/me |
 | Agents | POST | /v1/agents |
 | Agents | GET | /v1/agents/{id} |
 | Agents | DELETE | /v1/agents/{id} |
@@ -225,7 +238,14 @@ BobberChat provides a REST API with 25 endpoints. Full documentation is availabl
 | Topics | GET | /v1/groups/{id}/topics |
 | Topics | POST | /v1/groups/{id}/topics |
 | Messages | GET | /v1/messages |
+| Messages | GET | /v1/messages/poll |
 | Messages | POST | /v1/messages/{id}/replay |
+| Connections | POST | /v1/connections/request |
+| Connections | GET | /v1/connections/inbox |
+| Connections | POST | /v1/connections/{id}/accept |
+| Connections | POST | /v1/connections/{id}/reject |
+| Blacklist | POST | /v1/blacklist |
+| Blacklist | DELETE | /v1/blacklist/{id} |
 | Approvals | GET | /v1/approvals/pending |
 | Approvals | POST | /v1/approvals/{id}/decide |
 | Adapters | POST | /v1/adapter/{name}/ingest |

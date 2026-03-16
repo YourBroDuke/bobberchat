@@ -37,7 +37,7 @@ BOBBERCHAT_TEST_DSN="postgres://bobberchat:bobberchat@localhost:5432/bobberchat?
 | `docs/design-spec.md` | 1,693 | Authoritative design spec — 13 sections + glossary + 4 appendices |
 | `docs/prd.md` | 212 | Product requirements document |
 | `docs/tech-design.md` | 721 | Technical design document |
-| `api/openapi/openapi.yaml` | 1,098 | OpenAPI 3.1.0 spec — 20 endpoint paths |
+| `api/openapi/openapi.yaml` | ~1,300 | OpenAPI 3.1.0 spec — 28 endpoint paths |
 | `README.md` | ~280 | Comprehensive project README with TUI user guide |
 | `docs/cli-reference.md` | ~595 | Complete CLI reference for bobber, bobberd, bobber-tui, and Makefile |
 | `docs/tsg/deploy-docker-compose.md` | ~120 | Docker Compose deployment guide |
@@ -52,7 +52,7 @@ BOBBERCHAT_TEST_DSN="postgres://bobberchat:bobberchat@localhost:5432/bobberchat?
 | Package | File | Lines | Description |
 |---------|------|-------|-------------|
 | `backend/internal/protocol` | `envelope.go`, `tags.go`, `version.go` | ~350 | Wire envelope, 8-family tag taxonomy, version negotiation |
-| `backend/internal/persistence` | `postgres.go`, `models.go`, `repositories.go` | ~951 | 7 repository interfaces with PostgreSQL implementations + user email verification token persistence |
+| `backend/internal/persistence` | `postgres.go`, `models.go`, `repositories.go` | ~1,250 | 9 repository interfaces with PostgreSQL implementations, including connection requests and blacklist persistence |
 | `backend/internal/auth` | `auth.go` | ~527 | Argon2id hashing, JWT (HS256, 1hr TTL), bcrypt for passwords, email verification and resend flows |
 | `backend/internal/email` | `email.go`, `azurecs/azurecs.go`, `console/console.go` | ~214 | Provider-agnostic email sender interface with console and Azure Communication Services (ACS) sender implementations. ACS sender uses HMAC-SHA256 signed REST API calls (`/emails:send`) with connection-string auth |
 | `backend/internal/registry` | `registry.go` | ~161 | Agent discovery, capability-based lookup, status management |
@@ -107,8 +107,8 @@ Key implementation details:
 
 | Binary | Source | Lines | Description |
 |--------|--------|-------|-------------|
-| `bobberd` | `backend/cmd/bobberd/main.go` | ~1150 | Backend server — 25 REST endpoints + WebSocket + message replay + adapter ingest + production hardening |
-| `bobber` | `cli/cmd/bobber/main.go` | ~634 | CLI tool — refactored command structure with account, agent, session, group management. Tests in `main_test.go` |
+| `bobberd` | `backend/cmd/bobberd/main.go` | ~1,250 | Backend server — 33 REST endpoints + WebSocket + message replay + adapter ingest + production hardening |
+| `bobber` | `cli/cmd/bobber/main.go` | ~700 | CLI tool — account, agent, session, connection, messaging, and group management commands. Tests in `main_test.go` |
 | `bobber-tui` | `tui/cmd/bobber-tui/main.go` | ~1520 | TUI client — Bubble Tea terminal UI with groups, topics, filtering |
 
 ### SDK
@@ -150,6 +150,7 @@ Key implementation details:
 | `docker-compose.yml` | 4 services: `nats`, `postgres`, `init-db` (migration), `bobberd` with health checks |
 | `migrations/001_initial_schema.sql` | Full schema — 8 tables, 6 enum types, 10 indexes, default partition |
 | `migrations/002_email_verification.sql` | Adds `users.email_verified`, verification token columns, and partial token index |
+| `migrations/003_connections_blacklist.sql` | Adds `connection_requests` and `blacklist_entries` tables, enum, and indexes |
 | `configs/backend.yaml` | Default backend configuration |
 | `Makefile` | Build, test, lint, migrate, run targets |
 | `scripts/e2e-test.sh` | 31-test curl-based API e2e test script |
@@ -287,15 +288,17 @@ Backend config: `configs/backend.yaml`
 
 Subject pattern: `bobberchat.{tenant_id}.msg.{to_id}`
 
-### REST API Endpoints (25 total)
+### REST API Endpoints (33 total)
 
 ```
-Auth:       POST /v1/auth/register, /v1/auth/login, /v1/auth/verify-email, /v1/auth/resend-verification
+Auth:       POST /v1/auth/register, /v1/auth/login, /v1/auth/verify-email, /v1/auth/resend-verification, GET /v1/auth/me
 Agents:     POST /v1/agents, GET/DELETE /v1/agents/:id, POST /v1/agents/:id/rotate-secret
 Registry:   GET /v1/registry/agents, POST /v1/registry/discover
 Groups:     POST/GET /v1/groups, POST /v1/groups/:id/join, /v1/groups/:id/leave
 Topics:     POST/GET /v1/groups/:id/topics
-Messages:   GET /v1/messages, POST /v1/messages/:id/replay
+Messages:   GET /v1/messages, GET /v1/messages/poll, POST /v1/messages/:id/replay
+Connections: POST /v1/connections/request, GET /v1/connections/inbox, POST /v1/connections/:id/accept, POST /v1/connections/:id/reject
+Blacklist:  POST /v1/blacklist, DELETE /v1/blacklist/:id
 Approvals:  GET /v1/approvals/pending, POST /v1/approvals/:id/decide
 Adapters:   POST /v1/adapter/{name}/ingest, GET /v1/adapter
 WebSocket:  GET /v1/ws/connect
@@ -453,6 +456,7 @@ bobberchat/
 │       └── manual-testing.md        # Hands-on curl walkthrough
 ├── migrations/001_initial_schema.sql  # Full DB schema
 ├── migrations/002_email_verification.sql # User email verification columns/index
+├── migrations/003_connections_blacklist.sql # Connection request and blacklist persistence
 ├── scripts/
 │   ├── e2e-test.sh                  # 31-test API e2e test
 │   └── smoke-test.sh                # Quick deployment smoke test
