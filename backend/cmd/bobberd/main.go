@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -260,6 +261,7 @@ func (a *app) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/auth/login", a.handleLogin)
 	mux.HandleFunc("POST /v1/auth/verify-email", a.handleVerifyEmail)
 	mux.HandleFunc("POST /v1/auth/resend-verification", a.handleResendVerification)
+	mux.HandleFunc("GET /v1/auth/me", a.requireJWT(a.handleWhoAmI))
 
 	mux.HandleFunc("POST /v1/agents", a.requireJWT(a.handleCreateAgent))
 	mux.HandleFunc("GET /v1/agents/{id}", a.requireJWT(a.handleGetAgent))
@@ -277,7 +279,15 @@ func (a *app) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/groups/{id}/topics", a.requireAuth(true, true, a.handleCreateTopic))
 
 	mux.HandleFunc("GET /v1/messages", a.requireJWT(a.handleMessagesByTraceID))
+	mux.HandleFunc("GET /v1/messages/poll", a.requireJWT(a.handlePollMessages))
 	mux.HandleFunc("POST /v1/messages/{id}/replay", a.requireJWT(a.handleReplayMessage))
+
+	mux.HandleFunc("POST /v1/connections/request", a.requireJWT(a.handleConnectionRequest))
+	mux.HandleFunc("GET /v1/connections/inbox", a.requireJWT(a.handleConnectionInbox))
+	mux.HandleFunc("POST /v1/connections/{id}/accept", a.requireJWT(a.handleConnectionAccept))
+	mux.HandleFunc("POST /v1/connections/{id}/reject", a.requireJWT(a.handleConnectionReject))
+	mux.HandleFunc("POST /v1/blacklist", a.requireJWT(a.handleBlacklist))
+	mux.HandleFunc("DELETE /v1/blacklist/{id}", a.requireJWT(a.handleUnblacklist))
 
 	mux.HandleFunc("GET /v1/approvals/pending", a.requireJWT(a.handlePendingApprovals))
 	mux.HandleFunc("POST /v1/approvals/{id}/decide", a.requireJWT(a.handleDecideApproval))
@@ -427,6 +437,39 @@ func (a *app) handleResendVerification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"sent": true})
+}
+
+func (a *app) handleWhoAmI(w http.ResponseWriter, r *http.Request) {
+	tenantID, err := uuid.Parse(contextString(r.Context(), ctxTenantID))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid tenant context")
+		return
+	}
+	userID, err := uuid.Parse(contextString(r.Context(), ctxUserID))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid user context")
+		return
+	}
+
+	repos := persistence.NewPostgresRepositories(a.db)
+	user, err := repos.Users.GetByID(r.Context(), tenantID, userID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	agents, err := repos.Agents.ListByOwner(r.Context(), tenantID, userID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"user_id":   user.ID,
+		"tenant_id": user.TenantID,
+		"email":     user.Email,
+		"role":      user.Role,
+		"agents":    agents,
+	})
 }
 
 func (a *app) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
@@ -695,6 +738,231 @@ func (a *app) handleMessagesByTraceID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"messages": msgs})
+}
+
+func (a *app) handlePollMessages(w http.ResponseWriter, r *http.Request) {
+	peerRaw := strings.TrimSpace(r.URL.Query().Get("peer_id"))
+	if peerRaw == "" {
+		writeError(w, http.StatusBadRequest, "peer_id is required")
+		return
+	}
+	peerID, err := uuid.Parse(peerRaw)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid peer_id")
+		return
+	}
+
+	tenantID, err := uuid.Parse(contextString(r.Context(), ctxTenantID))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid tenant context")
+		return
+	}
+	userID, err := uuid.Parse(contextString(r.Context(), ctxUserID))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid user context")
+		return
+	}
+
+	limit := 50
+	if limitRaw := strings.TrimSpace(r.URL.Query().Get("limit")); limitRaw != "" {
+		parsed, err := strconv.Atoi(limitRaw)
+		if err != nil || parsed <= 0 {
+			writeError(w, http.StatusBadRequest, "invalid limit")
+			return
+		}
+		limit = parsed
+	}
+
+	var sinceTS *time.Time
+	if sinceTSRaw := strings.TrimSpace(r.URL.Query().Get("since_ts")); sinceTSRaw != "" {
+		parsed, err := time.Parse(time.RFC3339, sinceTSRaw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid since_ts")
+			return
+		}
+		sinceTS = &parsed
+	}
+
+	var sinceID *uuid.UUID
+	if sinceIDRaw := strings.TrimSpace(r.URL.Query().Get("since_id")); sinceIDRaw != "" {
+		parsed, err := uuid.Parse(sinceIDRaw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid since_id")
+			return
+		}
+		sinceID = &parsed
+	}
+
+	msgs, err := persistence.NewPostgresRepositories(a.db).Messages.GetByPeer(r.Context(), tenantID, userID, peerID, limit, sinceTS, sinceID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"messages": msgs})
+}
+
+func (a *app) handleConnectionRequest(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		TargetID string `json:"target_id"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	tenantID, err := uuid.Parse(contextString(r.Context(), ctxTenantID))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid tenant context")
+		return
+	}
+	userID, err := uuid.Parse(contextString(r.Context(), ctxUserID))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid user context")
+		return
+	}
+	targetID, err := uuid.Parse(strings.TrimSpace(req.TargetID))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid target_id")
+		return
+	}
+
+	created, err := persistence.NewPostgresRepositories(a.db).ConnectionRequests.Create(r.Context(), persistence.ConnectionRequest{
+		TenantID:   tenantID,
+		FromUserID: userID,
+		ToUserID:   targetID,
+		Status:     persistence.ConnectionRequestStatusPending,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, map[string]any{"request": created})
+}
+
+func (a *app) handleConnectionInbox(w http.ResponseWriter, r *http.Request) {
+	tenantID, err := uuid.Parse(contextString(r.Context(), ctxTenantID))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid tenant context")
+		return
+	}
+	userID, err := uuid.Parse(contextString(r.Context(), ctxUserID))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid user context")
+		return
+	}
+
+	requests, err := persistence.NewPostgresRepositories(a.db).ConnectionRequests.GetPendingForUser(r.Context(), tenantID, userID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"requests": requests})
+}
+
+func (a *app) handleConnectionAccept(w http.ResponseWriter, r *http.Request) {
+	requestID, err := uuid.Parse(strings.TrimSpace(r.PathValue("id")))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	tenantID, err := uuid.Parse(contextString(r.Context(), ctxTenantID))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid tenant context")
+		return
+	}
+
+	if err := persistence.NewPostgresRepositories(a.db).ConnectionRequests.UpdateStatus(r.Context(), tenantID, requestID, persistence.ConnectionRequestStatusAccepted); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"request_id": requestID, "status": persistence.ConnectionRequestStatusAccepted})
+}
+
+func (a *app) handleConnectionReject(w http.ResponseWriter, r *http.Request) {
+	requestID, err := uuid.Parse(strings.TrimSpace(r.PathValue("id")))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	tenantID, err := uuid.Parse(contextString(r.Context(), ctxTenantID))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid tenant context")
+		return
+	}
+
+	if err := persistence.NewPostgresRepositories(a.db).ConnectionRequests.UpdateStatus(r.Context(), tenantID, requestID, persistence.ConnectionRequestStatusRejected); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"request_id": requestID, "status": persistence.ConnectionRequestStatusRejected})
+}
+
+func (a *app) handleBlacklist(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		TargetID string `json:"target_id"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	tenantID, err := uuid.Parse(contextString(r.Context(), ctxTenantID))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid tenant context")
+		return
+	}
+	userID, err := uuid.Parse(contextString(r.Context(), ctxUserID))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid user context")
+		return
+	}
+	targetID, err := uuid.Parse(strings.TrimSpace(req.TargetID))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid target_id")
+		return
+	}
+
+	entry, err := persistence.NewPostgresRepositories(a.db).Blacklist.Create(r.Context(), persistence.BlacklistEntry{
+		TenantID:      tenantID,
+		UserID:        userID,
+		BlockedUserID: targetID,
+	})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, map[string]any{"entry": entry})
+}
+
+func (a *app) handleUnblacklist(w http.ResponseWriter, r *http.Request) {
+	tenantID, err := uuid.Parse(contextString(r.Context(), ctxTenantID))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid tenant context")
+		return
+	}
+	userID, err := uuid.Parse(contextString(r.Context(), ctxUserID))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid user context")
+		return
+	}
+	targetID, err := uuid.Parse(strings.TrimSpace(r.PathValue("id")))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	if err := persistence.NewPostgresRepositories(a.db).Blacklist.Delete(r.Context(), tenantID, userID, targetID); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"removed": true, "target_id": targetID})
 }
 
 func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
