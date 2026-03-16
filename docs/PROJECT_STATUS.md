@@ -30,7 +30,7 @@ BOBBERCHAT_TEST_DSN="postgres://bobberchat:bobberchat@localhost:5432/bobberchat?
 
 ## What's Done
 
-### Documentation (3 docs + OpenAPI spec + README + TSG)
+### Documentation (3 docs + CLI reference + OpenAPI spec + README + TSG)
 
 | File | Lines | Description |
 |------|-------|-------------|
@@ -38,7 +38,8 @@ BOBBERCHAT_TEST_DSN="postgres://bobberchat:bobberchat@localhost:5432/bobberchat?
 | `docs/prd.md` | 212 | Product requirements document |
 | `docs/tech-design.md` | 721 | Technical design document |
 | `api/openapi/openapi.yaml` | 1,098 | OpenAPI 3.1.0 spec — 20 endpoint paths |
-| `README.md` | ~180 | Comprehensive project README with TUI user guide |
+| `README.md` | ~280 | Comprehensive project README with TUI user guide |
+| `docs/cli-reference.md` | ~400 | Complete CLI reference for bobber, bobberd, bobber-tui, and Makefile |
 | `docs/tsg/deploy-docker-compose.md` | ~120 | Docker Compose deployment guide |
 | `docs/tsg/deploy-kubernetes.md` | ~130 | Raw Kubernetes manifests deployment guide |
 | `docs/tsg/deploy-helm.md` | ~170 | Helm chart deployment guide |
@@ -436,6 +437,7 @@ bobberchat/
 ├── docker-compose.yml                    # 4 services with health checks
 ├── Dockerfile                            # Multi-stage build (workspace-aware)
 ├── docs/
+│   ├── cli-reference.md              # Complete CLI reference (bobber, bobberd, bobber-tui, Makefile)
 │   ├── design-spec.md                # Authoritative spec (1,693 lines)
 │   ├── prd.md                        # Product requirements
 │   ├── tech-design.md                # Technical design

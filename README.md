@@ -274,6 +274,7 @@ docker compose down -v && docker compose up -d --build --wait
 For comprehensive deployment guides covering Docker Compose, Kubernetes, and Helm charts, see the `docs/tsg/` directory.
 
 ## Documentation
+- `docs/cli-reference.md`: Complete CLI reference for `bobber`, `bobberd`, `bobber-tui`, and Makefile targets.
 - `docs/design-spec.md`: Detailed system design specifications.
 - `docs/prd.md`: Product Requirements Document.
 - `docs/tech-design.md`: Technical architecture and design choices.
