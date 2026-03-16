@@ -5,13 +5,16 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/bobberchat/bobberchat/backend/internal/email"
 	"github.com/bobberchat/bobberchat/backend/internal/persistence"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -22,9 +25,11 @@ import (
 const jwtDefaultTTL = time.Hour
 
 type Service struct {
-	db        *persistence.DB
-	jwtSecret []byte
-	hashCost  int
+	db              *persistence.DB
+	jwtSecret       []byte
+	hashCost        int
+	emailSender     email.Sender
+	verificationTTL time.Duration
 }
 
 type JWTClaims struct {
@@ -54,16 +59,22 @@ func init() {
 	rotatedSecrets.entries = make(map[string][]oldSecretEntry)
 }
 
-func NewService(db *persistence.DB, jwtSecret string) *Service {
+func NewService(db *persistence.DB, jwtSecret string, emailSender email.Sender, verificationTTL time.Duration) *Service {
+	if verificationTTL == 0 {
+		verificationTTL = 24 * time.Hour
+	}
+
 	return &Service{
-		db:        db,
-		jwtSecret: []byte(jwtSecret),
-		hashCost:  bcrypt.DefaultCost,
+		db:              db,
+		jwtSecret:       []byte(jwtSecret),
+		hashCost:        bcrypt.DefaultCost,
+		emailSender:     emailSender,
+		verificationTTL: verificationTTL,
 	}
 }
 
-func (s *Service) RegisterUser(ctx context.Context, tenantID, email, password string) (*persistence.User, error) {
-	if s == nil || s.db == nil || strings.TrimSpace(tenantID) == "" || strings.TrimSpace(email) == "" || password == "" {
+func (s *Service) RegisterUser(ctx context.Context, tenantID, emailAddr, password string) (*persistence.User, error) {
+	if s == nil || s.db == nil || strings.TrimSpace(tenantID) == "" || strings.TrimSpace(emailAddr) == "" || password == "" {
 		return nil, persistence.ErrInvalidInput
 	}
 
@@ -80,13 +91,37 @@ func (s *Service) RegisterUser(ctx context.Context, tenantID, email, password st
 
 	created, err := repos.Users.Create(ctx, persistence.User{
 		TenantID:     tid,
-		Email:        strings.ToLower(strings.TrimSpace(email)),
+		Email:        strings.ToLower(strings.TrimSpace(emailAddr)),
 		PasswordHash: string(hash),
 		Role:         "member",
 	})
 	if err != nil {
 		return nil, err
 	}
+
+	token, err := generateVerificationToken()
+	if err != nil {
+		return nil, fmt.Errorf("generate verification token: %w", err)
+	}
+
+	expiresAt := time.Now().UTC().Add(s.verificationTTL)
+	if err := repos.Users.SetVerificationToken(ctx, created.ID, token, expiresAt); err != nil {
+		return nil, err
+	}
+
+	if s.emailSender != nil {
+		verifyURL := "https://app.bobberchat.io/verify?token=" + token
+		err := s.emailSender.SendEmail(ctx, email.Message{
+			To:      created.Email,
+			Subject: "Verify your BobberChat email",
+			Text:    "Verify your email by visiting: " + verifyURL,
+			HTML:    "<p>Verify your email by visiting: <a href=\"" + verifyURL + "\">" + verifyURL + "</a></p>",
+		})
+		if err != nil {
+			log.Printf("send verification email failed: user_id=%s err=%v", created.ID.String(), err)
+		}
+	}
+
 	return created, nil
 }
 
@@ -102,6 +137,9 @@ func (s *Service) LoginUser(ctx context.Context, email, password string) (access
 
 	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)); err != nil {
 		return "", nil, errors.New("invalid credentials")
+	}
+	if !u.EmailVerified {
+		return "", nil, errors.New("email not verified")
 	}
 
 	now := time.Now().UTC()
@@ -123,6 +161,60 @@ func (s *Service) LoginUser(ctx context.Context, email, password string) (access
 	}
 
 	return signed, u, nil
+}
+
+func (s *Service) VerifyEmail(ctx context.Context, token string) (*persistence.User, error) {
+	if s == nil || s.db == nil || strings.TrimSpace(token) == "" {
+		return nil, persistence.ErrInvalidInput
+	}
+
+	repos := persistence.NewPostgresRepositories(s.db)
+	return repos.Users.VerifyEmail(ctx, strings.TrimSpace(token))
+}
+
+func (s *Service) ResendVerification(ctx context.Context, tenantID, emailAddr string) error {
+	if s == nil || s.db == nil || strings.TrimSpace(tenantID) == "" || strings.TrimSpace(emailAddr) == "" {
+		return persistence.ErrInvalidInput
+	}
+
+	tid, err := uuid.Parse(tenantID)
+	if err != nil {
+		return fmt.Errorf("parse tenant id: %w", err)
+	}
+
+	repos := persistence.NewPostgresRepositories(s.db)
+	u, err := repos.Users.GetByEmail(ctx, tid, emailAddr)
+	if err != nil {
+		return err
+	}
+	if u.EmailVerified {
+		return errors.New("email already verified")
+	}
+
+	token, err := generateVerificationToken()
+	if err != nil {
+		return fmt.Errorf("generate verification token: %w", err)
+	}
+
+	expiresAt := time.Now().UTC().Add(s.verificationTTL)
+	if err := repos.Users.SetVerificationToken(ctx, u.ID, token, expiresAt); err != nil {
+		return err
+	}
+
+	if s.emailSender != nil {
+		verifyURL := "https://app.bobberchat.io/verify?token=" + token
+		err := s.emailSender.SendEmail(ctx, email.Message{
+			To:      u.Email,
+			Subject: "Verify your BobberChat email",
+			Text:    "Verify your email by visiting: " + verifyURL,
+			HTML:    "<p>Verify your email by visiting: <a href=\"" + verifyURL + "\">" + verifyURL + "</a></p>",
+		})
+		if err != nil {
+			log.Printf("resend verification email failed: user_id=%s err=%v", u.ID.String(), err)
+		}
+	}
+
+	return nil
 }
 
 func (s *Service) ValidateJWT(tokenStr string) (*JWTClaims, error) {
@@ -245,7 +337,8 @@ func (s *Service) getUserByEmailAnyTenant(ctx context.Context, email string) (*p
 	}
 
 	row := s.db.Pool().QueryRow(ctx, `
-		SELECT id, tenant_id, email, password_hash, role, created_at
+		SELECT id, tenant_id, email, password_hash, role, created_at,
+			email_verified, verification_token, verification_token_expires_at
 		FROM users
 		WHERE email = $1
 		ORDER BY created_at DESC
@@ -253,10 +346,28 @@ func (s *Service) getUserByEmailAnyTenant(ctx context.Context, email string) (*p
 	`, strings.ToLower(strings.TrimSpace(email)))
 
 	u := persistence.User{}
-	if err := row.Scan(&u.ID, &u.TenantID, &u.Email, &u.PasswordHash, &u.Role, &u.CreatedAt); err != nil {
+	if err := row.Scan(
+		&u.ID,
+		&u.TenantID,
+		&u.Email,
+		&u.PasswordHash,
+		&u.Role,
+		&u.CreatedAt,
+		&u.EmailVerified,
+		&u.VerificationToken,
+		&u.VerificationTokenExpiresAt,
+	); err != nil {
 		return nil, err
 	}
 	return &u, nil
+}
+
+func generateVerificationToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }
 
 func (s *Service) getAgentByID(ctx context.Context, agentID string) (*persistence.Agent, error) {

@@ -24,6 +24,9 @@ import (
 	"github.com/bobberchat/bobberchat/backend/internal/auth"
 	"github.com/bobberchat/bobberchat/backend/internal/broker"
 	"github.com/bobberchat/bobberchat/backend/internal/conversation"
+	"github.com/bobberchat/bobberchat/backend/internal/email"
+	"github.com/bobberchat/bobberchat/backend/internal/email/azurecs"
+	"github.com/bobberchat/bobberchat/backend/internal/email/console"
 	"github.com/bobberchat/bobberchat/backend/internal/observability"
 	"github.com/bobberchat/bobberchat/backend/internal/persistence"
 	"github.com/bobberchat/bobberchat/backend/internal/protocol"
@@ -52,6 +55,14 @@ type config struct {
 	Auth struct {
 		JWTSecret string `mapstructure:"jwt_secret"`
 	} `mapstructure:"auth"`
+	Email struct {
+		Provider    string `mapstructure:"provider"`
+		FromAddress string `mapstructure:"from_address"`
+		Azure       struct {
+			ConnectionString string `mapstructure:"connection_string"`
+		} `mapstructure:"azure"`
+		VerificationTokenTTLHours int `mapstructure:"verification_token_ttl_hours"`
+	} `mapstructure:"email"`
 	Logging struct {
 		Level  string `mapstructure:"level"`
 		Format string `mapstructure:"format"`
@@ -130,6 +141,18 @@ func main() {
 
 	repos := persistence.NewPostgresRepositories(db)
 
+	var emailSender email.Sender
+	switch cfg.Email.Provider {
+	case "azure":
+		emailSender = azurecs.New(cfg.Email.Azure.ConnectionString, cfg.Email.FromAddress)
+	default:
+		emailSender = console.New()
+	}
+	verificationTTL := time.Duration(cfg.Email.VerificationTokenTTLHours) * time.Hour
+	if verificationTTL == 0 {
+		verificationTTL = 24 * time.Hour
+	}
+
 	rlCfg := cfg.RateLimits
 	if rlCfg.BurstFactor == 0 && rlCfg.PerAgentMPS == 0 {
 		rlCfg = ratelimit.DefaultConfig()
@@ -137,7 +160,7 @@ func main() {
 
 	a := &app{
 		db:          db,
-		authSvc:     auth.NewService(db, cfg.Auth.JWTSecret),
+		authSvc:     auth.NewService(db, cfg.Auth.JWTSecret, emailSender, verificationTTL),
 		registrySvc: registry.NewService(db),
 		convSvc:     conversation.NewService(db),
 		approvalSvc: approval.NewService(db, brok),
@@ -235,6 +258,8 @@ func loadConfig(path string) (*config, error) {
 func (a *app) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/auth/register", a.handleRegister)
 	mux.HandleFunc("POST /v1/auth/login", a.handleLogin)
+	mux.HandleFunc("POST /v1/auth/verify-email", a.handleVerifyEmail)
+	mux.HandleFunc("POST /v1/auth/resend-verification", a.handleResendVerification)
 
 	mux.HandleFunc("POST /v1/agents", a.requireJWT(a.handleCreateAgent))
 	mux.HandleFunc("GET /v1/agents/{id}", a.requireJWT(a.handleGetAgent))
@@ -366,6 +391,42 @@ func (a *app) handleLogin(w http.ResponseWriter, r *http.Request) {
 			"created_at": user.CreatedAt,
 		},
 	})
+}
+
+func (a *app) handleVerifyEmail(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Token string `json:"token"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	user, err := a.authSvc.VerifyEmail(r.Context(), req.Token)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"verified": true,
+		"user_id":  user.ID,
+		"email":    user.Email,
+	})
+}
+
+func (a *app) handleResendVerification(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Email    string `json:"email"`
+		TenantID string `json:"tenant_id"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := a.authSvc.ResendVerification(r.Context(), req.TenantID, req.Email); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"sent": true})
 }
 
 func (a *app) handleCreateAgent(w http.ResponseWriter, r *http.Request) {

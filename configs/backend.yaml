@@ -18,6 +18,13 @@ auth:
   jwt_access_ttl_seconds: 3600
   api_secret_hash_algorithm: "argon2id"
 
+email:
+  provider: "console"
+  from_address: ""
+  azure:
+    connection_string: ""  # Set via BOBBERD_EMAIL_AZURE_CONNECTION_STRING env var
+  verification_token_ttl_hours: 24
+
 rate_limits:
   enabled: true
   per_agent_mps: 100

@@ -199,12 +199,14 @@ bobber send \
 All commands output JSON to stdout, making them composable with `jq` and other Unix tools.
 
 ## API Endpoints
-BobberChat provides a REST API with 23 endpoints. Full documentation is available in the OpenAPI specification at `api/openapi/openapi.yaml`.
+BobberChat provides a REST API with 25 endpoints. Full documentation is available in the OpenAPI specification at `api/openapi/openapi.yaml`.
 
 | Category | Method | Path |
 | --- | --- | --- |
 | Auth | POST | /v1/auth/register |
 | Auth | POST | /v1/auth/login |
+| Auth | POST | /v1/auth/verify-email |
+| Auth | POST | /v1/auth/resend-verification |
 | Agents | POST | /v1/agents |
 | Agents | GET | /v1/agents/{id} |
 | Agents | DELETE | /v1/agents/{id} |
@@ -240,6 +242,10 @@ Configuration is managed via environment variables and the `configs/backend.yaml
 | BOBBERD_NATS_URL | Connection string for the NATS server |
 | BOBBERD_POSTGRES_DSN | PostgreSQL connection string |
 | BOBBERD_AUTH_JWT_SECRET | Secret key used for signing JWT tokens |
+| BOBBERD_EMAIL_PROVIDER | Email provider (`console` or `azure`) |
+| BOBBERD_EMAIL_FROM_ADDRESS | Sender address for verification emails |
+| BOBBERD_EMAIL_AZURE_CONNECTION_STRING | Azure Communication Services connection string |
+| BOBBERD_EMAIL_VERIFICATION_TOKEN_TTL_HOURS | Verification token TTL in hours |
 | BOBBERD_SERVER_LISTEN_ADDRESS | Address and port for the server to listen on |
 | BOBBERD_RATE_LIMITS_ENABLED | Boolean to enable or disable API rate limiting |
 

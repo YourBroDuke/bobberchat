@@ -37,7 +37,7 @@ BOBBERCHAT_TEST_DSN="postgres://bobberchat:bobberchat@localhost:5432/bobberchat?
 | `docs/design-spec.md` | 1,693 | Authoritative design spec — 13 sections + glossary + 4 appendices |
 | `docs/prd.md` | 212 | Product requirements document |
 | `docs/tech-design.md` | 721 | Technical design document |
-| `api/openapi/openapi.yaml` | 1,035 | OpenAPI 3.1.0 spec — 18 endpoint paths |
+| `api/openapi/openapi.yaml` | 1,098 | OpenAPI 3.1.0 spec — 20 endpoint paths |
 | `README.md` | ~180 | Comprehensive project README with TUI user guide |
 | `docs/tsg/deploy-docker-compose.md` | ~120 | Docker Compose deployment guide |
 | `docs/tsg/deploy-kubernetes.md` | ~130 | Raw Kubernetes manifests deployment guide |
@@ -51,8 +51,9 @@ BOBBERCHAT_TEST_DSN="postgres://bobberchat:bobberchat@localhost:5432/bobberchat?
 | Package | File | Lines | Description |
 |---------|------|-------|-------------|
 | `backend/internal/protocol` | `envelope.go`, `tags.go`, `version.go` | ~350 | Wire envelope, 8-family tag taxonomy, version negotiation |
-| `backend/internal/persistence` | `postgres.go`, `models.go`, `repositories.go` | ~842 | 7 repository interfaces with PostgreSQL implementations |
-| `backend/internal/auth` | `auth.go` | ~415 | Argon2id hashing, JWT (HS256, 1hr TTL), bcrypt for passwords |
+| `backend/internal/persistence` | `postgres.go`, `models.go`, `repositories.go` | ~951 | 7 repository interfaces with PostgreSQL implementations + user email verification token persistence |
+| `backend/internal/auth` | `auth.go` | ~527 | Argon2id hashing, JWT (HS256, 1hr TTL), bcrypt for passwords, email verification and resend flows |
+| `backend/internal/email` | `email.go`, `azurecs/azurecs.go`, `console/console.go` | ~214 | Provider-agnostic email sender interface with console and Azure Communication Services (ACS) sender implementations. ACS sender uses HMAC-SHA256 signed REST API calls (`/emails:send`) with connection-string auth |
 | `backend/internal/registry` | `registry.go` | ~161 | Agent discovery, capability-based lookup, status management |
 | `backend/internal/broker` | `broker.go` | ~232 | NATS JetStream message routing, 3 streams, subject mapping |
 | `backend/internal/approval` | `approval.go` | ~123 | Human-in-the-loop approval workflows with escalation |
@@ -105,7 +106,7 @@ Key implementation details:
 
 | Binary | Source | Lines | Description |
 |--------|--------|-------|-------------|
-| `bobberd` | `backend/cmd/bobberd/main.go` | ~1100 | Backend server — 23 REST endpoints + WebSocket + message replay + adapter ingest + production hardening |
+| `bobberd` | `backend/cmd/bobberd/main.go` | ~1150 | Backend server — 25 REST endpoints + WebSocket + message replay + adapter ingest + production hardening |
 | `bobber` | `cli/cmd/bobber/main.go` | ~448 | CLI tool — agent management, messaging. 75 unit tests in `main_test.go` |
 | `bobber-tui` | `tui/cmd/bobber-tui/main.go` | ~1520 | TUI client — Bubble Tea terminal UI with groups, topics, filtering |
 
@@ -147,6 +148,7 @@ Key implementation details:
 | `Dockerfile` | Multi-stage build (`golang:latest` → `alpine:3.19`), workspace-aware, copies migrations |
 | `docker-compose.yml` | 4 services: `nats`, `postgres`, `init-db` (migration), `bobberd` with health checks |
 | `migrations/001_initial_schema.sql` | Full schema — 8 tables, 6 enum types, 10 indexes, default partition |
+| `migrations/002_email_verification.sql` | Adds `users.email_verified`, verification token columns, and partial token index |
 | `configs/backend.yaml` | Default backend configuration |
 | `Makefile` | Build, test, lint, migrate, run targets |
 | `scripts/e2e-test.sh` | 31-test curl-based API e2e test script |
@@ -195,6 +197,23 @@ CI/CD files added:
 - `.github/workflows/release.yml` — Release pipeline (multi-platform Docker push to GHCR, cross-compiled binaries)
 - `deploy/k8s/` — 7 raw Kubernetes manifests (namespace, configmap, secrets, nats, postgres, bobberd+migration, cert-manager-issuers)
 - `deploy/helm/bobberchat/` — Full Helm chart with 8 templates + helpers + configurable values
+
+### Priority 4: Email Verification & Azure Communication Services ✅ COMPLETE
+
+- [x] `email.Sender` interface for provider-agnostic email sending (`backend/internal/email/email.go`)
+- [x] Console/dev sender for local development (`backend/internal/email/console/console.go`)
+- [x] Azure Communication Services sender with HMAC-SHA256 REST API auth (`backend/internal/email/azurecs/azurecs.go`)
+- [x] Database migration for `email_verified`, `verification_token`, `verification_token_expires_at` columns (`migrations/002_email_verification.sql`)
+- [x] Registration flow generates verification token and sends email
+- [x] Login blocks unverified users (`"email not verified"`)
+- [x] `POST /v1/auth/verify-email` — verifies token and marks user as verified
+- [x] `POST /v1/auth/resend-verification` — generates new token and re-sends email
+- [x] Azure resources provisioned (staging + production ACS instances with email-enabled managed domains)
+- [x] End-to-end tested: register → email sent via ACS → verify token → login succeeds
+
+Azure resources:
+- **Staging**: `acs-bobberchat-staging` in `rg-bobberchat-staging` with managed domain
+- **Production**: `acs-bobberchat-production` in `rg-bobberchat-production` with managed domain
 
 ---
 
@@ -267,10 +286,10 @@ Backend config: `configs/backend.yaml`
 
 Subject pattern: `bobberchat.{tenant_id}.msg.{to_id}`
 
-### REST API Endpoints (23 total)
+### REST API Endpoints (25 total)
 
 ```
-Auth:       POST /v1/auth/register, /v1/auth/login
+Auth:       POST /v1/auth/register, /v1/auth/login, /v1/auth/verify-email, /v1/auth/resend-verification
 Agents:     POST /v1/agents, GET/DELETE /v1/agents/:id, POST /v1/agents/:id/rotate-secret
 Registry:   GET /v1/registry/agents, POST /v1/registry/discover
 Groups:     POST/GET /v1/groups, POST /v1/groups/:id/join, /v1/groups/:id/leave
@@ -338,7 +357,7 @@ bobberchat/
 │   ├── go.sum
 │   ├── cmd/
 │   │   └── bobberd/
-│   │       ├── main.go                   # Backend server (~1100 lines)
+│   │       ├── main.go                   # Backend server (~1150 lines)
 │   │       └── main_test.go              # publishAndAudit tests (8 tests)
 │   ├── internal/
 │   │   ├── adapter/
@@ -350,7 +369,11 @@ bobberchat/
 │   │   │   ├── grpc/grpc.go             # gRPC adapter (401 lines)
 │   │   │   └── grpc/grpc_test.go        # gRPC tests (~22 tests)
 │   │   ├── approval/approval.go          # Approval workflows
-│   │   ├── auth/auth.go                  # Auth (Argon2id + JWT)
+│   │   ├── auth/auth.go                  # Auth (Argon2id + JWT + email verification)
+│   │   ├── email/
+│   │   │   ├── email.go                  # Email sender interface
+│   │   │   ├── azurecs/azurecs.go        # Azure Communication Services sender (HMAC-SHA256 REST API)
+│   │   │   └── console/console.go        # Console sender for local/dev
 │   │   ├── broker/broker.go              # NATS JetStream routing
 │   │   ├── conversation/conversation.go  # Groups, topics, history
 │   │   ├── observability/observability.go# Metrics, logging (~110 lines)
@@ -427,6 +450,7 @@ bobberchat/
 │       ├── troubleshooting.md       # Common issues & fixes
 │       └── manual-testing.md        # Hands-on curl walkthrough
 ├── migrations/001_initial_schema.sql  # Full DB schema
+├── migrations/002_email_verification.sql # User email verification columns/index
 ├── scripts/
 │   ├── e2e-test.sh                  # 31-test API e2e test
 │   └── smoke-test.sh                # Quick deployment smoke test

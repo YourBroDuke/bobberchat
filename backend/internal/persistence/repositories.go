@@ -32,6 +32,9 @@ type UserRepository interface {
 	Create(ctx context.Context, user User) (*User, error)
 	GetByEmail(ctx context.Context, tenantID uuid.UUID, email string) (*User, error)
 	GetByID(ctx context.Context, tenantID, userID uuid.UUID) (*User, error)
+	SetVerificationToken(ctx context.Context, userID uuid.UUID, token string, expiresAt time.Time) error
+	VerifyEmail(ctx context.Context, token string) (*User, error)
+	GetByVerificationToken(ctx context.Context, token string) (*User, error)
 }
 
 type ChatGroupRepository interface {
@@ -246,13 +249,27 @@ func (r *pgUserRepository) Create(ctx context.Context, user User) (*User, error)
 	}
 
 	row := r.db.Pool().QueryRow(ctx, `
-		INSERT INTO users (id, tenant_id, email, password_hash, role, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, tenant_id, email, password_hash, role, created_at
-	`, user.ID, user.TenantID, strings.ToLower(strings.TrimSpace(user.Email)), user.PasswordHash, user.Role, user.CreatedAt)
+		INSERT INTO users (
+			id, tenant_id, email, password_hash, role, created_at,
+			email_verified, verification_token, verification_token_expires_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		RETURNING id, tenant_id, email, password_hash, role, created_at,
+			email_verified, verification_token, verification_token_expires_at
+	`, user.ID, user.TenantID, strings.ToLower(strings.TrimSpace(user.Email)), user.PasswordHash, user.Role, user.CreatedAt, user.EmailVerified, user.VerificationToken, user.VerificationTokenExpiresAt)
 
 	created := User{}
-	err := row.Scan(&created.ID, &created.TenantID, &created.Email, &created.PasswordHash, &created.Role, &created.CreatedAt)
+	err := row.Scan(
+		&created.ID,
+		&created.TenantID,
+		&created.Email,
+		&created.PasswordHash,
+		&created.Role,
+		&created.CreatedAt,
+		&created.EmailVerified,
+		&created.VerificationToken,
+		&created.VerificationTokenExpiresAt,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("create user: %w", err)
 	}
@@ -261,13 +278,24 @@ func (r *pgUserRepository) Create(ctx context.Context, user User) (*User, error)
 
 func (r *pgUserRepository) GetByEmail(ctx context.Context, tenantID uuid.UUID, email string) (*User, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, tenant_id, email, password_hash, role, created_at
+		SELECT id, tenant_id, email, password_hash, role, created_at,
+			email_verified, verification_token, verification_token_expires_at
 		FROM users
 		WHERE tenant_id = $1 AND email = $2
 	`, tenantID, strings.ToLower(strings.TrimSpace(email)))
 
 	u := User{}
-	err := row.Scan(&u.ID, &u.TenantID, &u.Email, &u.PasswordHash, &u.Role, &u.CreatedAt)
+	err := row.Scan(
+		&u.ID,
+		&u.TenantID,
+		&u.Email,
+		&u.PasswordHash,
+		&u.Role,
+		&u.CreatedAt,
+		&u.EmailVerified,
+		&u.VerificationToken,
+		&u.VerificationTokenExpiresAt,
+	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -279,19 +307,112 @@ func (r *pgUserRepository) GetByEmail(ctx context.Context, tenantID uuid.UUID, e
 
 func (r *pgUserRepository) GetByID(ctx context.Context, tenantID, userID uuid.UUID) (*User, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, tenant_id, email, password_hash, role, created_at
+		SELECT id, tenant_id, email, password_hash, role, created_at,
+			email_verified, verification_token, verification_token_expires_at
 		FROM users
 		WHERE tenant_id = $1 AND id = $2
 	`, tenantID, userID)
 
 	u := User{}
-	err := row.Scan(&u.ID, &u.TenantID, &u.Email, &u.PasswordHash, &u.Role, &u.CreatedAt)
+	err := row.Scan(
+		&u.ID,
+		&u.TenantID,
+		&u.Email,
+		&u.PasswordHash,
+		&u.Role,
+		&u.CreatedAt,
+		&u.EmailVerified,
+		&u.VerificationToken,
+		&u.VerificationTokenExpiresAt,
+	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
 		return nil, fmt.Errorf("get user by id: %w", err)
 	}
+	return &u, nil
+}
+
+func (r *pgUserRepository) SetVerificationToken(ctx context.Context, userID uuid.UUID, token string, expiresAt time.Time) error {
+	res, err := r.db.Pool().Exec(ctx, `
+		UPDATE users
+		SET verification_token = $2, verification_token_expires_at = $3
+		WHERE id = $1
+	`, userID, token, expiresAt)
+	if err != nil {
+		return fmt.Errorf("set verification token: %w", err)
+	}
+	if res.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *pgUserRepository) VerifyEmail(ctx context.Context, token string) (*User, error) {
+	row := r.db.Pool().QueryRow(ctx, `
+		UPDATE users
+		SET email_verified = TRUE,
+			verification_token = NULL,
+			verification_token_expires_at = NULL
+		WHERE verification_token = $1
+			AND verification_token IS NOT NULL
+			AND verification_token_expires_at > NOW()
+		RETURNING id, tenant_id, email, password_hash, role, created_at,
+			email_verified, verification_token, verification_token_expires_at
+	`, token)
+
+	u := User{}
+	err := row.Scan(
+		&u.ID,
+		&u.TenantID,
+		&u.Email,
+		&u.PasswordHash,
+		&u.Role,
+		&u.CreatedAt,
+		&u.EmailVerified,
+		&u.VerificationToken,
+		&u.VerificationTokenExpiresAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("verify email: %w", err)
+	}
+
+	return &u, nil
+}
+
+func (r *pgUserRepository) GetByVerificationToken(ctx context.Context, token string) (*User, error) {
+	row := r.db.Pool().QueryRow(ctx, `
+		SELECT id, tenant_id, email, password_hash, role, created_at,
+			email_verified, verification_token, verification_token_expires_at
+		FROM users
+		WHERE verification_token = $1
+			AND verification_token IS NOT NULL
+			AND verification_token_expires_at > NOW()
+	`, token)
+
+	u := User{}
+	err := row.Scan(
+		&u.ID,
+		&u.TenantID,
+		&u.Email,
+		&u.PasswordHash,
+		&u.Role,
+		&u.CreatedAt,
+		&u.EmailVerified,
+		&u.VerificationToken,
+		&u.VerificationTokenExpiresAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("get user by verification token: %w", err)
+	}
+
 	return &u, nil
 }
 

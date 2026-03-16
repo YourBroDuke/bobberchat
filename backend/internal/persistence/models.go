@@ -62,12 +62,15 @@ const (
 )
 
 type User struct {
-	ID           uuid.UUID `json:"id"`
-	TenantID     uuid.UUID `json:"tenant_id"`
-	Email        string    `json:"email"`
-	PasswordHash string    `json:"-"`
-	Role         string    `json:"role"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID                         uuid.UUID  `json:"id"`
+	TenantID                   uuid.UUID  `json:"tenant_id"`
+	Email                      string     `json:"email"`
+	PasswordHash               string     `json:"-"`
+	Role                       string     `json:"role"`
+	CreatedAt                  time.Time  `json:"created_at"`
+	EmailVerified              bool       `json:"email_verified"`
+	VerificationToken          *string    `json:"-"`
+	VerificationTokenExpiresAt *time.Time `json:"-"`
 }
 
 type Agent struct {
