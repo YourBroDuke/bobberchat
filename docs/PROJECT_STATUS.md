@@ -1,6 +1,6 @@
 # BobberChat Project Status & Continuation Guide
 
-> Last updated: 2026-03-15
+> Last updated: 2026-03-16
 > Branch: `master`
 > Repo: `https://github.com/YourBroDuke/bobberchat.git`
 
@@ -13,9 +13,9 @@ All core modules, protocol adapters, production hardening, TUI enhancements, CI/
 ### Build & Test Verification
 
 ```bash
-go build ./...    # ✅ Clean
-go vet ./...      # ✅ Clean
-go test ./...     # ✅ 12 packages pass (~245+ subtests), 4 packages skipped (no test files)
+go build ./backend/... ./cli/... ./tui/...    # ✅ Clean (Go workspace)
+go vet ./backend/... ./cli/... ./tui/...      # ✅ Clean
+go test ./backend/... ./cli/... ./tui/...     # ✅ 15 packages pass (~245+ subtests)
 
 # Docker-based E2E
 docker compose up -d
@@ -23,7 +23,7 @@ docker compose up -d
 
 # Integration tests (requires running PostgreSQL via Docker Compose)
 BOBBERCHAT_TEST_DSN="postgres://bobberchat:bobberchat@localhost:5432/bobberchat?sslmode=disable" \
-  go test -tags=integration ./test/integration/ -v    # ✅ 5/5 pass
+  go test -tags=integration ./backend/test/integration/ -v    # ✅ 5/5 pass
 ```
 
 ---
@@ -50,23 +50,23 @@ BOBBERCHAT_TEST_DSN="postgres://bobberchat:bobberchat@localhost:5432/bobberchat?
 
 | Package | File | Lines | Description |
 |---------|------|-------|-------------|
-| `internal/protocol` | `envelope.go`, `tags.go`, `version.go` | ~350 | Wire envelope, 8-family tag taxonomy, version negotiation |
-| `internal/persistence` | `postgres.go`, `models.go`, `repositories.go` | ~842 | 7 repository interfaces with PostgreSQL implementations |
-| `internal/auth` | `auth.go` | ~415 | Argon2id hashing, JWT (HS256, 1hr TTL), bcrypt for passwords |
-| `internal/registry` | `registry.go` | ~161 | Agent discovery, capability-based lookup, status management |
-| `internal/broker` | `broker.go` | ~232 | NATS JetStream message routing, 3 streams, subject mapping |
-| `internal/approval` | `approval.go` | ~123 | Human-in-the-loop approval workflows with escalation |
-| `internal/conversation` | `conversation.go` | ~202 | Chat groups, topics, membership, message history |
-| `internal/observability` | `observability.go` | ~110 | Prometheus metrics (incl. rate limit, audit, active WS conn gauges), structured logging |
+| `backend/internal/protocol` | `envelope.go`, `tags.go`, `version.go` | ~350 | Wire envelope, 8-family tag taxonomy, version negotiation |
+| `backend/internal/persistence` | `postgres.go`, `models.go`, `repositories.go` | ~842 | 7 repository interfaces with PostgreSQL implementations |
+| `backend/internal/auth` | `auth.go` | ~415 | Argon2id hashing, JWT (HS256, 1hr TTL), bcrypt for passwords |
+| `backend/internal/registry` | `registry.go` | ~161 | Agent discovery, capability-based lookup, status management |
+| `backend/internal/broker` | `broker.go` | ~232 | NATS JetStream message routing, 3 streams, subject mapping |
+| `backend/internal/approval` | `approval.go` | ~123 | Human-in-the-loop approval workflows with escalation |
+| `backend/internal/conversation` | `conversation.go` | ~202 | Chat groups, topics, membership, message history |
+| `backend/internal/observability` | `observability.go` | ~110 | Prometheus metrics (incl. rate limit, audit, active WS conn gauges), structured logging |
 
 ### Protocol Adapters (3 packages — Design Spec §8)
 
 | Package | Files | Lines | Description |
 |---------|-------|-------|-------------|
-| `internal/adapter` | `adapter.go` | ~49 | Shared `Adapter` interface, `TransportMeta`, metadata helpers |
-| `internal/adapter/mcp` | `mcp.go`, `mcp_test.go` | ~673 | MCP JSON-RPC bridge: `tool/call` → `request.action`, `tool/result` → `response.*`, notifications → `context-provide`. 13 tests |
-| `internal/adapter/a2a` | `a2a.go`, `a2a_test.go` | ~994 | A2A protocol bridge: `message/send` → `request.*` (intent inference), `agent/card` → `context-provide`, `task/*` → lifecycle mapping. 20 tests |
-| `internal/adapter/grpc` | `grpc.go`, `grpc_test.go` | ~901 | gRPC JSON bridge: unary calls, responses, stream frames with percentage extraction. 22 tests |
+| `backend/internal/adapter` | `adapter.go` | ~49 | Shared `Adapter` interface, `TransportMeta`, metadata helpers |
+| `backend/internal/adapter/mcp` | `mcp.go`, `mcp_test.go` | ~673 | MCP JSON-RPC bridge: `tool/call` → `request.action`, `tool/result` → `response.*`, notifications → `context-provide`. 13 tests |
+| `backend/internal/adapter/a2a` | `a2a.go`, `a2a_test.go` | ~994 | A2A protocol bridge: `message/send` → `request.*` (intent inference), `agent/card` → `context-provide`, `task/*` → lifecycle mapping. 20 tests |
+| `backend/internal/adapter/grpc` | `grpc.go`, `grpc_test.go` | ~901 | gRPC JSON bridge: unary calls, responses, stream frames with percentage extraction. 22 tests |
 
 All adapters implement the shared `Adapter` interface:
 ```go
@@ -87,11 +87,11 @@ Server endpoints for adapters:
 
 | Package / File | Lines | Description |
 |----------------|-------|-------------|
-| `internal/ratelimit/ratelimit.go` | ~160 | Token bucket rate limiter with per-agent, per-group, per-tag dimensions. Configurable rates, burst factor, auto-cleanup |
-| `internal/ratelimit/ratelimit_test.go` | ~230 | 10 tests: basic limit, burst, refill, agent/group/tag scoping, concurrent, cleanup, disabled |
-| `cmd/bobberd/main.go` (additions) | ~140 | `publishAndAudit` method: cross-tenant isolation (§11.3), rate limiting (§11.2.3), audit trail (§11.4). Enhanced graceful shutdown with `activeConns` drain-wait |
-| `cmd/bobberd/main_test.go` | ~230 | 8 tests: cross-tenant denial, rate limiting (agent/group/tag), audit details, disabled limiter, no-audit-repo, empty caller tenant |
-| `internal/observability/observability.go` (additions) | ~20 | `RateLimited` counter vec, `AuditLogged` counter, `ActiveWSConns` gauge |
+| `backend/internal/ratelimit/ratelimit.go` | ~160 | Token bucket rate limiter with per-agent, per-group, per-tag dimensions. Configurable rates, burst factor, auto-cleanup |
+| `backend/internal/ratelimit/ratelimit_test.go` | ~230 | 10 tests: basic limit, burst, refill, agent/group/tag scoping, concurrent, cleanup, disabled |
+| `backend/cmd/bobberd/main.go` (additions) | ~140 | `publishAndAudit` method: cross-tenant isolation (§11.3), rate limiting (§11.2.3), audit trail (§11.4). Enhanced graceful shutdown with `activeConns` drain-wait |
+| `backend/cmd/bobberd/main_test.go` | ~230 | 8 tests: cross-tenant denial, rate limiting (agent/group/tag), audit details, disabled limiter, no-audit-repo, empty caller tenant |
+| `backend/internal/observability/observability.go` (additions) | ~20 | `RateLimited` counter vec, `AuditLogged` counter, `ActiveWSConns` gauge |
 | `configs/backend.yaml` (additions) | ~10 | `rate_limits` config section with per-agent/group/tag rates and burst factor |
 
 Key implementation details:
@@ -101,68 +101,63 @@ Key implementation details:
 - **Graceful shutdown**: `activeConns sync.WaitGroup` tracks live WebSocket connections; shutdown drains with timeout
 - **All 3 publish call sites** (`handleReplayMessage`, `handleAdapterIngest`, `handleWebSocket`) route through `publishAndAudit`
 
-### Binaries (3 commands)
+### Binaries (3 commands — Go Workspace)
 
 | Binary | Source | Lines | Description |
 |--------|--------|-------|-------------|
-| `bobberd` | `cmd/bobberd/main.go` | ~1100 | Backend server — 23 REST endpoints + WebSocket + message replay + adapter ingest + production hardening |
-| `bobber` | `cmd/bobber/main.go` | ~448 | CLI tool — agent management, messaging. 75 unit tests in `main_test.go` |
-| `bobber-tui` | `cmd/bobber-tui/main.go` | ~1520 | TUI client — Bubble Tea terminal UI with groups, topics, filtering |
+| `bobberd` | `backend/cmd/bobberd/main.go` | ~1100 | Backend server — 23 REST endpoints + WebSocket + message replay + adapter ingest + production hardening |
+| `bobber` | `cli/cmd/bobber/main.go` | ~448 | CLI tool — agent management, messaging. 75 unit tests in `main_test.go` |
+| `bobber-tui` | `tui/cmd/bobber-tui/main.go` | ~1520 | TUI client — Bubble Tea terminal UI with groups, topics, filtering |
 
 ### SDK
 
 | File | Description |
 |------|-------------|
-| `pkg/sdk/types.go` | SDK type definitions |
-| `pkg/sdk/helpers.go` | Message construction helpers |
-| `pkg/sdk/client.go` | WebSocket client with auto-reconnect |
-| `pkg/sdk/config.go` | Configuration loader |
+| `backend/pkg/sdk/types.go` | SDK type definitions |
+| `backend/pkg/sdk/helpers.go` | Message construction helpers |
+| `backend/pkg/sdk/client.go` | WebSocket client with auto-reconnect |
+| `backend/pkg/sdk/config.go` | Configuration loader |
 
-### Tests (12 packages, ~245+ subtests)
+### Tests (15 packages, ~245+ subtests)
 
 | Test File | Subtests | What's Tested |
 |-----------|----------|---------------|
-| `internal/protocol/envelope_test.go` | 13 | Envelope marshaling, validation, ID generation |
-| `internal/protocol/tags_test.go` | 28 | Tag parsing, validation, family classification |
-| `internal/protocol/version_test.go` | 21 | Version negotiation, compatibility checks |
-| `internal/auth/auth_test.go` | 10 | Argon2id hash/verify, JWT sign/validate, bcrypt |
-| `internal/broker/broker_test.go` | 8 | Subject construction, routing logic |
-| `internal/registry/registry_test.go` | — | Input validation |
-| `internal/conversation/conversation_test.go` | — | Input validation |
-| `internal/approval/approval_test.go` | — | Approval validation |
-| `internal/adapter/mcp/mcp_test.go` | 13 | MCP ingest/emit, validation, error cases |
-| `internal/adapter/a2a/a2a_test.go` | 20 | A2A ingest/emit, intent inference, error cases |
-| `internal/adapter/grpc/grpc_test.go` | 22 | gRPC ingest/emit, stream frames, error cases |
-| `internal/ratelimit/ratelimit_test.go` | 10 | Token bucket limiting, burst, refill, scoping, concurrent, cleanup |
-| `cmd/bobberd/main_test.go` | 8 | Cross-tenant denial, rate limiting, audit trail, disabled limiter |
-| `pkg/sdk/helpers_test.go` | 4 | Message helper functions |
-| `cmd/bobber/main_test.go` | 75 | CLI unit tests: pure functions, doJSON HTTP client, register/login commands, agent subcommands, discover/list-agents, WebSocket send-message, config/flag precedence, edge cases |
-| `test/integration/persistence_test.go` | 5 | User, Agent, Group, Topic, Approval CRUD (build-tagged `//go:build integration`) |
+| `backend/internal/protocol/envelope_test.go` | 13 | Envelope marshaling, validation, ID generation |
+| `backend/internal/protocol/tags_test.go` | 28 | Tag parsing, validation, family classification |
+| `backend/internal/protocol/version_test.go` | 21 | Version negotiation, compatibility checks |
+| `backend/internal/auth/auth_test.go` | 10 | Argon2id hash/verify, JWT sign/validate, bcrypt |
+| `backend/internal/broker/broker_test.go` | 8 | Subject construction, routing logic |
+| `backend/internal/registry/registry_test.go` | — | Input validation |
+| `backend/internal/conversation/conversation_test.go` | — | Input validation |
+| `backend/internal/approval/approval_test.go` | — | Approval validation |
+| `backend/internal/adapter/mcp/mcp_test.go` | 13 | MCP ingest/emit, validation, error cases |
+| `backend/internal/adapter/a2a/a2a_test.go` | 20 | A2A ingest/emit, intent inference, error cases |
+| `backend/internal/adapter/grpc/grpc_test.go` | 22 | gRPC ingest/emit, stream frames, error cases |
+| `backend/internal/ratelimit/ratelimit_test.go` | 10 | Token bucket limiting, burst, refill, scoping, concurrent, cleanup |
+| `backend/cmd/bobberd/main_test.go` | 8 | Cross-tenant denial, rate limiting, audit trail, disabled limiter |
+| `backend/pkg/sdk/helpers_test.go` | 4 | Message helper functions |
+| `cli/cmd/bobber/main_test.go` | 75 | CLI unit tests: pure functions, doJSON HTTP client, register/login commands, agent subcommands, discover/list-agents, WebSocket send-message, config/flag precedence, edge cases |
+| `backend/test/integration/persistence_test.go` | 5 | User, Agent, Group, Topic, Approval CRUD (build-tagged `//go:build integration`) |
 | `scripts/e2e-test.sh` | 31 | Full API lifecycle: auth, agents, groups, topics, approvals |
 
 ### Infrastructure
 
 | File | Description |
 |------|-------------|
-| `Dockerfile` | Multi-stage build (`golang:latest` → `alpine:3.19`), copies migrations |
+| `Dockerfile` | Multi-stage build (`golang:latest` → `alpine:3.19`), workspace-aware, copies migrations |
 | `docker-compose.yml` | 4 services: `nats`, `postgres`, `init-db` (migration), `bobberd` with health checks |
 | `migrations/001_initial_schema.sql` | Full schema — 8 tables, 6 enum types, 10 indexes, default partition |
 | `configs/backend.yaml` | Default backend configuration |
 | `Makefile` | Build, test, lint, migrate, run targets |
 | `scripts/e2e-test.sh` | 31-test curl-based API e2e test script |
-| `test/integration/persistence_test.go` | 5 integration tests (build-tagged `//go:build integration`) |
-| `.github/workflows/ci.yml` | GitHub Actions CI: lint, build, unit tests, integration tests, E2E, Docker build, Docker push |
-| `.github/workflows/release.yml` | GitHub Actions release: multi-platform Docker push to GHCR, release binaries |
-| `deploy/k8s/*.yml` | 7 raw Kubernetes manifests for standalone deployment |
-| `deploy/helm/bobberchat/` | Helm chart with 8 templates, configurable values, migration hooks |
-
+| `backend/test/integration/persistence_test.go` | 5 integration tests (build-tagged `//go:build integration`) |
 ---
 
 ## What's Left To Do
 
 ### ~~Priority 1: Production Hardening~~ ✅ COMPLETE
 
-- [x] Rate limiting middleware (design spec §11.2) — Token bucket per-agent/group/tag in `internal/ratelimit/`
+- [x] Rate limiting middleware (design spec §11.2) — Token bucket per-agent/group/tag in `backend/internal/ratelimit/`
 - [x] Cross-tenant isolation enforcement (design spec §11.3) — `publishAndAudit` blocks cross-tenant routing
 - [x] Audit trail logging to `audit_log` table (design spec §11.4) — via `AuditLogRepository.Append`
 - [x] Graceful shutdown with drain (design spec §12.5) — `activeConns` WaitGroup with timeout
@@ -205,7 +200,7 @@ CI/CD files added:
 
 ## Bugs Fixed During E2E Testing
 
-1. **Persistence models missing JSON tags**: All structs in `internal/persistence/models.go` had no `json` struct tags, causing API responses to use Go's default capitalized field names (e.g., `ID` instead of `id`). Added proper `json` tags with `json:"-"` for sensitive fields (`PasswordHash`, `APISecretHash`).
+1. **Persistence models missing JSON tags**: All structs in `backend/internal/persistence/models.go` had no `json` struct tags, causing API responses to use Go's default capitalized field names (e.g., `ID` instead of `id`). Added proper `json` tags with `json:"-"` for sensitive fields (`PasswordHash`, `APISecretHash`).
 
 2. **NATS Docker healthcheck**: NATS 2.10 image doesn't include `wget` binary. Changed healthcheck from `wget -qO- http://localhost:8222/healthz` to `CMD /nats-server --help` and added `-m 8222` flag to enable monitoring endpoint.
 
@@ -218,21 +213,33 @@ CI/CD files added:
 ### Module & Dependencies
 
 ```
-Module: github.com/bobberchat/bobberchat
-Go version: 1.25.0 (go.mod)
+Go Workspace (go.work) with 3 independent modules:
 
-Key dependencies:
-  nats.go v1.49.0         — NATS JetStream messaging
-  pgx/v5 v5.8.0           — PostgreSQL driver
-  bubbletea v1.3.10       — TUI framework
-  jwt/v5 v5.3.1           — JWT tokens
-  uuid v1.6.0             — UUID generation
-  gorilla/websocket v1.5.3 — WebSocket server
-  prometheus v1.23.2      — Metrics
-  cobra v1.10.2           — CLI framework
-  viper v1.21.0           — Configuration
-  zerolog v1.34.0         — Structured logging
-  crypto v0.49.0          — Argon2id, bcrypt
+  backend/go.mod — github.com/bobberchat/bobberchat/backend
+    nats.go v1.49.0         — NATS JetStream messaging
+    pgx/v5 v5.8.0           — PostgreSQL driver
+    jwt/v5 v5.3.1           — JWT tokens
+    uuid v1.6.0             — UUID generation
+    gorilla/websocket v1.5.3 — WebSocket server
+    prometheus v1.23.2      — Metrics
+    cobra v1.10.2           — CLI framework (unused, can remove)
+    viper v1.21.0           — Configuration
+    zerolog v1.34.0         — Structured logging
+    crypto v0.49.0          — Argon2id, bcrypt
+
+  cli/go.mod — github.com/bobberchat/bobberchat/cli
+    cobra v1.10.2           — CLI framework
+    viper v1.21.0           — Configuration
+    uuid v1.6.0             — UUID generation
+    gorilla/websocket v1.5.3 — WebSocket client
+
+  tui/go.mod — github.com/bobberchat/bobberchat/tui
+    bubbletea v1.3.10       — TUI framework
+    lipgloss v1.1.0         — TUI styling
+    bubbles v1.0.0          — TUI components
+    gorilla/websocket v1.5.3 — WebSocket client
+
+Go version: 1.25.0 (go.mod)
 ```
 
 ### Configuration
@@ -305,9 +312,11 @@ I'm continuing work on the BobberChat project. Read docs/PROJECT_STATUS.md for f
 
 The project is a "Slack for Agents" — a multi-agent coordination layer built with Go, NATS JetStream, and PostgreSQL.
 
-All planned work is COMPLETE: core implementation, protocol adapters, production hardening, TUI enhancements, CI/CD & deployment, and CLI test coverage. All code compiles, unit tests pass (~245+ subtests across 12 packages), E2E tests pass (31/31), and integration tests pass (5/5).
+The codebase uses a Go workspace (go.work) with 3 independent modules: backend/, cli/, tui/. Each has its own go.mod.
 
-Follow the existing codebase patterns. Run `go build ./...` and `go test ./...` to verify.
+All planned work is COMPLETE: core implementation, protocol adapters, production hardening, TUI enhancements, CI/CD & deployment, and CLI test coverage. All code compiles, unit tests pass (~245+ subtests across 15 packages), E2E tests pass (31/31), and integration tests pass (5/5).
+
+Follow the existing codebase patterns. Run `go build ./backend/... ./cli/... ./tui/...` and `go test ./backend/... ./cli/... ./tui/...` to verify.
 For E2E: `docker compose up -d && ./scripts/e2e-test.sh`
 ```
 
@@ -317,18 +326,64 @@ For E2E: `docker compose up -d && ./scripts/e2e-test.sh`
 
 ```
 bobberchat/
+├── go.work                                   # Go workspace (backend, cli, tui)
 ├── .github/workflows/
 │   ├── ci.yml                            # CI pipeline (lint, build, test, integration, E2E, Docker build, Docker push)
 │   ├── deploy-staging.yml                # Staging deployment pipeline
 │   ├── deploy-production.yml             # Production deployment pipeline
 │   └── release.yml                       # Release pipeline (Docker push, binaries)
 ├── api/openapi/openapi.yaml              # OpenAPI 3.1.0 spec
-├── cmd/
-│   ├── bobberd/main.go                   # Backend server (~1100 lines)
-│   ├── bobberd/main_test.go              # publishAndAudit tests (8 tests)
-│   ├── bobber/main.go                    # CLI tool (448 lines)
-│   ├── bobber/main_test.go               # CLI tests (1,227 lines, 75 tests)
-│   └── bobber-tui/main.go                # TUI client
+├── backend/
+│   ├── go.mod                            # Backend module: github.com/bobberchat/bobberchat/backend
+│   ├── go.sum
+│   ├── cmd/
+│   │   └── bobberd/
+│   │       ├── main.go                   # Backend server (~1100 lines)
+│   │       └── main_test.go              # publishAndAudit tests (8 tests)
+│   ├── internal/
+│   │   ├── adapter/
+│   │   │   ├── adapter.go                # Shared Adapter interface (49 lines)
+│   │   │   ├── mcp/mcp.go               # MCP adapter (311 lines)
+│   │   │   ├── mcp/mcp_test.go          # MCP tests (362 lines, 13 tests)
+│   │   │   ├── a2a/a2a.go               # A2A adapter (494 lines)
+│   │   │   ├── a2a/a2a_test.go          # A2A tests (~20 tests)
+│   │   │   ├── grpc/grpc.go             # gRPC adapter (401 lines)
+│   │   │   └── grpc/grpc_test.go        # gRPC tests (~22 tests)
+│   │   ├── approval/approval.go          # Approval workflows
+│   │   ├── auth/auth.go                  # Auth (Argon2id + JWT)
+│   │   ├── broker/broker.go              # NATS JetStream routing
+│   │   ├── conversation/conversation.go  # Groups, topics, history
+│   │   ├── observability/observability.go# Metrics, logging (~110 lines)
+│   │   ├── persistence/                  # PostgreSQL repositories
+│   │   │   ├── models.go                 # Models with JSON struct tags
+│   │   │   ├── postgres.go
+│   │   │   └── repositories.go
+│   │   ├── protocol/                     # Wire protocol
+│   │   │   ├── envelope.go
+│   │   │   ├── tags.go
+│   │   │   └── version.go
+│   │   ├── ratelimit/
+│   │   │   ├── ratelimit.go              # Token bucket rate limiter (~160 lines)
+│   │   │   └── ratelimit_test.go         # 10 rate limiter tests
+│   │   └── registry/registry.go          # Agent discovery
+│   ├── pkg/sdk/                          # Go SDK
+│   │   ├── client.go
+│   │   ├── config.go
+│   │   ├── helpers.go
+│   │   └── types.go
+│   └── test/integration/
+│       └── persistence_test.go           # Build-tagged DB tests
+├── cli/
+│   ├── go.mod                            # CLI module: github.com/bobberchat/bobberchat/cli
+│   ├── go.sum
+│   └── cmd/bobber/
+│       ├── main.go                       # CLI tool (448 lines)
+│       └── main_test.go                  # CLI tests (1,227 lines, 75 tests)
+├── tui/
+│   ├── go.mod                            # TUI module: github.com/bobberchat/bobberchat/tui
+│   ├── go.sum
+│   └── cmd/bobber-tui/
+│       └── main.go                       # TUI client
 ├── configs/backend.yaml                  # Default config
 ├── deploy/
 │   ├── k8s/                              # Raw Kubernetes manifests
@@ -356,7 +411,7 @@ bobberchat/
 │   ├── environments/                     # Staging & production configs
 │   └── modules/                          # Reusable infra modules (network, aks, database, dns)
 ├── docker-compose.yml                    # 4 services with health checks
-├── Dockerfile                            # Multi-stage build
+├── Dockerfile                            # Multi-stage build (workspace-aware)
 ├── docs/
 │   ├── design-spec.md                # Authoritative spec (1,693 lines)
 │   ├── prd.md                        # Product requirements
@@ -371,45 +426,10 @@ bobberchat/
 │       ├── deploy-local.md          # Local dev setup
 │       ├── troubleshooting.md       # Common issues & fixes
 │       └── manual-testing.md        # Hands-on curl walkthrough
-├── internal/
-│   ├── adapter/
-│   │   ├── adapter.go                # Shared Adapter interface (49 lines)
-│   │   ├── mcp/mcp.go               # MCP adapter (311 lines)
-│   │   ├── mcp/mcp_test.go          # MCP tests (362 lines, 13 tests)
-│   │   ├── a2a/a2a.go               # A2A adapter (494 lines)
-│   │   ├── a2a/a2a_test.go          # A2A tests (~20 tests)
-│   │   ├── grpc/grpc.go             # gRPC adapter (401 lines)
-│   │   └── grpc/grpc_test.go        # gRPC tests (~22 tests)
-│   ├── approval/approval.go          # Approval workflows
-│   ├── auth/auth.go                  # Auth (Argon2id + JWT)
-│   ├── broker/broker.go              # NATS JetStream routing
-│   ├── conversation/conversation.go  # Groups, topics, history
-│   ├── observability/observability.go# Metrics, logging (~110 lines)
-│   ├── persistence/                  # PostgreSQL repositories
-│   │   ├── models.go                 # Models with JSON struct tags
-│   │   ├── postgres.go
-│   │   └── repositories.go
-│   ├── protocol/                     # Wire protocol
-│   │   ├── envelope.go
-│   │   ├── tags.go
-│   │   └── version.go
-│   ├── ratelimit/
-│   │   ├── ratelimit.go              # Token bucket rate limiter (~160 lines)
-│   │   └── ratelimit_test.go         # 10 rate limiter tests
-│   └── registry/registry.go          # Agent discovery
 ├── migrations/001_initial_schema.sql  # Full DB schema
-├── pkg/sdk/                          # Go SDK
-│   ├── client.go
-│   ├── config.go
-│   ├── helpers.go
-│   └── types.go
 ├── scripts/
 │   ├── e2e-test.sh                  # 31-test API e2e test
 │   └── smoke-test.sh                # Quick deployment smoke test
-├── test/integration/
-│   └── persistence_test.go           # Build-tagged DB tests
-├── go.mod
-├── go.sum
 ├── Makefile
 └── README.md
 ```

@@ -9,9 +9,7 @@
 *.dylib
 
 # Built binaries
-/bobber
-/bobber-tui
-/bobberd
+/bin/
 
 # Sisyphus working state
 .sisyphus/
@@ -28,8 +26,7 @@ profile.cov
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
-# Go workspace file
-go.work
+# Go workspace generated sum file
 go.work.sum
 
 # env file

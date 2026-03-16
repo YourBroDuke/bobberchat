@@ -24,10 +24,10 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: backend/go.mod
 
       - name: Go vet
-        run: go vet ./...
+        run: go vet ./backend/... ./cli/... ./tui/...
 
       - name: Check formatting
         run: |
@@ -47,10 +47,10 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: backend/go.mod
 
       - name: Build all binaries
-        run: go build ./...
+        run: go build ./backend/... ./cli/... ./tui/...
 
   test:
     name: Unit Tests
@@ -61,10 +61,10 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: backend/go.mod
 
       - name: Run tests
-        run: go test -race -coverprofile=coverage.out ./...
+        run: go test -race -coverprofile=coverage.out ./backend/... ./cli/... ./tui/...
 
       - name: Upload coverage
         if: always()
@@ -97,7 +97,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: backend/go.mod
 
       - name: Run migrations
         run: PGPASSWORD=bobberchat psql -h localhost -U bobberchat -d bobberchat -f migrations/001_initial_schema.sql
@@ -105,7 +105,7 @@ jobs:
       - name: Run integration tests
         env:
           BOBBERCHAT_TEST_DSN: postgres://bobberchat:bobberchat@localhost:5432/bobberchat?sslmode=disable
-        run: go test -tags=integration -race ./test/integration/ -v
+        run: go test -tags=integration -race ./backend/test/integration/ -v
 
   e2e:
     name: E2E Tests
@@ -130,7 +130,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: backend/go.mod
 
       - name: Run E2E tests
         run: ./scripts/e2e-test.sh
@@ -139,7 +139,7 @@ jobs:
         env:
           BOBBERCHAT_TEST_URL: http://localhost:8080
           BOBBERCHAT_TEST_DSN: postgres://bobberchat:bobberchat@localhost:5432/bobberchat?sslmode=disable
-        run: go test -tags=integration -race ./test/api/ -v -count=1
+        run: go test -tags=integration -race ./backend/test/api/ -v -count=1
 
       - name: Dump logs on failure
         if: failure()

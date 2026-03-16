@@ -47,7 +47,7 @@ PGHOST=localhost PGUSER=bobberchat PGPASSWORD=bobberchat PGDB=bobberchat make mi
 make run-backend
 ```
 
-This executes `go run ./cmd/bobberd --config configs/backend.yaml`. The default config connects to `nats://localhost:4222` and `postgres://bobberchat:bobberchat@localhost:5432/bobberchat?sslmode=disable`.
+This executes `go run ./backend/cmd/bobberd --config configs/backend.yaml`. The default config connects to `nats://localhost:4222` and `postgres://bobberchat:bobberchat@localhost:5432/bobberchat?sslmode=disable`.
 
 Verify:
 
@@ -67,7 +67,7 @@ make run-tui
 Or with explicit flags:
 
 ```bash
-go run ./cmd/bobber-tui \
+go run ./tui/cmd/bobber-tui \
   --backend-url http://localhost:8080 \
   --token <YOUR_JWT_TOKEN>
 ```
@@ -102,19 +102,19 @@ The default configuration file is `configs/backend.yaml`. Key settings for local
 Override any setting via environment variables with the `BOBBERD_` prefix:
 
 ```bash
-BOBBERD_AUTH_JWT_SECRET=my-dev-secret go run ./cmd/bobberd --config configs/backend.yaml
+BOBBERD_AUTH_JWT_SECRET=my-dev-secret go run ./backend/cmd/bobberd --config configs/backend.yaml
 ```
 
 ## Makefile Targets
 
 | Target | Command | Description |
 | --- | --- | --- |
-| make build | `go build -o bin/ ./cmd/...` | Compile all binaries |
-| make test | `go test ./...` | Run unit tests |
-| make lint | `go vet ./...` | Run static analysis |
+| make build | `go build -o bin/ ./backend/cmd/bobberd ./cli/cmd/bobber ./tui/cmd/bobber-tui` | Compile all binaries |
+| make test | `go test ./backend/... ./cli/... ./tui/...` | Run unit tests |
+| make lint | `go vet ./backend/... ./cli/... ./tui/...` | Run static analysis |
 | make migrate | `psql -f migrations/001_initial_schema.sql` | Apply database schema |
-| make run-backend | `go run ./cmd/bobberd` | Start backend server |
-| make run-tui | `go run ./cmd/bobber-tui` | Start TUI client |
+| make run-backend | `go run ./backend/cmd/bobberd` | Start backend server |
+| make run-tui | `go run ./tui/cmd/bobber-tui` | Start TUI client |
 | make clean | `rm -rf bin/` | Remove build artifacts |
 
 ## Running Tests
@@ -130,7 +130,7 @@ make test
 Integration tests require a running PostgreSQL instance:
 
 ```bash
-go test -v ./test/integration/...
+go test -v ./backend/test/integration/...
 ```
 
 ### End-to-End Tests

@@ -42,65 +42,76 @@ Design alignment notes:
 
 ## 2. Repository & Module Structure
 
+The project uses a **Go workspace** (`go.work`) with three independent modules — one for each component. This ensures each binary only depends on the libraries it actually needs.
+
 Canonical repository layout:
 
 ```text
 bobberchat/
-├── cmd/
-│   ├── bobberd/          # Backend Service binary
+├── go.work                # Go workspace definition (use ./backend, ./cli, ./tui)
+├── backend/
+│   ├── go.mod             # github.com/bobberchat/bobberchat/backend
+│   ├── go.sum
+│   ├── cmd/bobberd/       # Backend Service binary
 │   │   └── main.go
-│   ├── bobber/           # CLI tool binary
-│   │   └── main.go
-│   └── bobber-tui/       # TUI Client binary
+│   ├── internal/
+│   │   ├── broker/        # NATS JetStream message routing
+│   │   ├── registry/      # Agent registry & discovery
+│   │   ├── auth/          # API secret & JWT authentication
+│   │   ├── protocol/      # Wire envelope, tag taxonomy, validation
+│   │   ├── conversation/  # Chat groups, topics, private chats
+│   │   ├── approval/      # Approval workflow engine
+│   │   ├── persistence/   # PostgreSQL + storage tier management
+│   │   ├── adapter/       # Protocol adapters (MCP, A2A, gRPC)
+│   │   │   ├── mcp/
+│   │   │   ├── a2a/
+│   │   │   └── grpc/
+│   │   ├── ratelimit/     # Token bucket rate limiter
+│   │   └── observability/ # Metrics, tracing, structured logging
+│   ├── pkg/
+│   │   └── sdk/           # Public Go SDK for agent integration
+│   └── test/              # Integration tests
+├── cli/
+│   ├── go.mod             # github.com/bobberchat/bobberchat/cli
+│   ├── go.sum
+│   └── cmd/bobber/        # CLI tool binary
 │       └── main.go
-├── internal/
-│   ├── broker/           # NATS JetStream message routing
-│   ├── registry/         # Agent registry & discovery
-│   ├── auth/             # API secret & JWT authentication
-│   ├── protocol/         # Wire envelope, tag taxonomy, validation
-│   ├── conversation/     # Chat groups, topics, private chats
-│   ├── approval/         # Approval workflow engine
-│   ├── persistence/      # PostgreSQL + storage tier management
-│   ├── adapter/          # Protocol adapters (MCP, A2A, gRPC)
-│   │   ├── mcp/
-│   │   ├── a2a/
-│   │   └── grpc/
-│   └── observability/    # Metrics, tracing, structured logging
-├── pkg/
-│   └── sdk/              # Public Go SDK for agent integration
+├── tui/
+│   ├── go.mod             # github.com/bobberchat/bobberchat/tui
+│   ├── go.sum
+│   └── cmd/bobber-tui/    # TUI Client binary
+│       └── main.go
 ├── api/
-│   └── openapi/          # OpenAPI specs for REST endpoints
-├── migrations/           # PostgreSQL migration files
-├── configs/              # Default config files
-├── test/                 # Integration tests
-├── docs/                 # Design docs (existing)
-├── go.mod
-├── go.sum
+│   └── openapi/           # OpenAPI specs for REST endpoints
+├── migrations/            # PostgreSQL migration files
+├── configs/               # Default config files
+├── docs/                  # Design docs (existing)
 ├── Makefile
 └── Dockerfile
 ```
 
 ### 2.1 Module boundaries: `internal/` vs `pkg/`
 
-- `internal/`: private implementation packages for backend and binaries; not importable outside module per Go visibility rules.
-- `pkg/sdk`: stable public API surface intended for external agent authors; semantic versioning applies to exported types and methods.
+- `backend/internal/`: private implementation packages for the backend service; not importable outside the backend module per Go visibility rules.
+- `backend/pkg/sdk`: stable public API surface intended for external agent authors; semantic versioning applies to exported types and methods.
+- `cli/` and `tui/` modules have no `internal/` or `pkg/` directories — they are standalone binaries with zero cross-module dependencies.
 
 ### 2.2 Package responsibilities
 
 | Package | Responsibility |
 |---|---|
-| `internal/broker` | Owns JetStream stream/consumer setup, subject routing, dedupe handling, and delivery policy enforcement by tag family (Design Spec §3.5). |
-| `internal/registry` | Manages agent registration, heartbeat liveness, capability indexes, and discovery query execution (Design Spec §6). |
-| `internal/auth` | Handles human auth (JWT) and machine auth (API secret verification, rotation, revocation) (Design Spec §5, §11). |
-| `internal/protocol` | Defines canonical envelope structs, tag taxonomy constants, payload validators, and protocol version negotiation logic (Design Spec §3.6). |
-| `internal/conversation` | Implements private chat, chat groups, topic lifecycle, membership policies, and message ordering context (Design Spec §4). |
-| `internal/approval` | Implements `approval.request/granted/denied` state machine, timeout policy (`auto-deny`, `auto-approve`, `escalate`), and idempotency gates (Design Spec §7). |
-| `internal/persistence` | PostgreSQL repositories, message archival orchestration (hot/warm/cold boundaries), and migration integration (Design Spec §4.4). |
-| `internal/adapter/mcp` | Translates MCP JSON-RPC primitives to/from BobberChat envelope and tags (Design Spec §8.2). |
-| `internal/adapter/a2a` | Translates A2A messages, cards, and task lifecycles to/from BobberChat models (Design Spec §8.3). |
-| `internal/adapter/grpc` | Bridges unary/streaming gRPC operations to `request.*`, `progress.*`, and `response.*` tags (Design Spec §8.4). |
-| `internal/observability` | Exposes OpenTelemetry instrumentation, Prometheus metrics export, and structured JSON logs (Design Spec §10). |
-| `pkg/sdk` | Provides the external Go SDK client API for connection, messaging, subscriptions, and discovery. |
+| `backend/internal/broker` | Owns JetStream stream/consumer setup, subject routing, dedupe handling, and delivery policy enforcement by tag family (Design Spec §3.5). |
+| `backend/internal/registry` | Manages agent registration, heartbeat liveness, capability indexes, and discovery query execution (Design Spec §6). |
+| `backend/internal/auth` | Handles human auth (JWT) and machine auth (API secret verification, rotation, revocation) (Design Spec §5, §11). |
+| `backend/internal/protocol` | Defines canonical envelope structs, tag taxonomy constants, payload validators, and protocol version negotiation logic (Design Spec §3.6). |
+| `backend/internal/conversation` | Implements private chat, chat groups, topic lifecycle, membership policies, and message ordering context (Design Spec §4). |
+| `backend/internal/approval` | Implements `approval.request/granted/denied` state machine, timeout policy (`auto-deny`, `auto-approve`, `escalate`), and idempotency gates (Design Spec §7). |
+| `backend/internal/persistence` | PostgreSQL repositories, message archival orchestration (hot/warm/cold boundaries), and migration integration (Design Spec §4.4). |
+| `backend/internal/adapter/mcp` | Translates MCP JSON-RPC primitives to/from BobberChat envelope and tags (Design Spec §8.2). |
+| `backend/internal/adapter/a2a` | Translates A2A messages, cards, and task lifecycles to/from BobberChat models (Design Spec §8.3). |
+| `backend/internal/adapter/grpc` | Bridges unary/streaming gRPC operations to `request.*`, `progress.*`, and `response.*` tags (Design Spec §8.4). |
+| `backend/internal/observability` | Exposes OpenTelemetry instrumentation, Prometheus metrics export, and structured JSON logs (Design Spec §10). |
+| `backend/pkg/sdk` | Provides the external Go SDK client API for connection, messaging, subscriptions, and discovery. |
 
 ## 3. PostgreSQL Database Schema
 
@@ -568,7 +579,7 @@ reconnect:
 | Target | Description |
 |---|---|
 | `build` | Build `bobberd`, `bobber`, `bobber-tui` binaries. |
-| `test` | Run unit tests and integration tests (`go test ./...`). |
+| `test` | Run unit tests and integration tests (`go test ./backend/... ./cli/... ./tui/...`). |
 | `lint` | Run static analysis (`go vet`). |
 | `migrate` | Apply PostgreSQL migrations via psql. |
 | `run-backend` | Run backend service locally with default config. |
@@ -602,8 +613,8 @@ services:
 
 ### 9.3 Test strategy
 
-- **Unit tests**: per package in `internal/*` and `pkg/sdk`.
-- **Integration tests**: under `test/`, covering discovery, routing, approval, replay, and tenant isolation.
+- **Unit tests**: per package in `backend/internal/*`, `backend/pkg/sdk`, and `cli/cmd/bobber`.
+- **Integration tests**: under `backend/test/`, covering discovery, routing, approval, replay, and tenant isolation.
 - **Contract tests**: OpenAPI schema validation for REST, envelope validation for WebSocket frames.
 - **Performance tests**: load profile for 10k msg/sec per tenant and p99 latency assertions (Design Spec §12.1).
 

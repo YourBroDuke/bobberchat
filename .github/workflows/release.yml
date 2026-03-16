@@ -72,7 +72,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: backend/go.mod
 
       - name: Build binaries
         env:
@@ -81,9 +81,9 @@ jobs:
           CGO_ENABLED: "0"
         run: |
           mkdir -p dist
-          go build -o dist/bobberd-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/bobberd
-          go build -o dist/bobber-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/bobber
-          go build -o dist/bobber-tui-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/bobber-tui
+          go build -o dist/bobberd-${{ matrix.goos }}-${{ matrix.goarch }} ./backend/cmd/bobberd
+          go build -o dist/bobber-${{ matrix.goos }}-${{ matrix.goarch }} ./cli/cmd/bobber
+          go build -o dist/bobber-tui-${{ matrix.goos }}-${{ matrix.goarch }} ./tui/cmd/bobber-tui
 
       - name: Upload binaries
         uses: actions/upload-artifact@v4

@@ -1,13 +1,18 @@
 FROM golang:latest AS builder
 
 WORKDIR /src
-COPY go.mod go.sum ./
-RUN go mod download
+COPY go.work ./
+COPY backend/go.mod backend/go.sum ./backend/
+COPY cli/go.mod cli/go.sum ./cli/
+COPY tui/go.mod tui/go.sum ./tui/
+RUN cd backend && go mod download
+RUN cd cli && go mod download
+RUN cd tui && go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/bobberd ./cmd/bobberd
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/bobber ./cmd/bobber
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/bobber-tui ./cmd/bobber-tui
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/bobberd ./backend/cmd/bobberd
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/bobber ./cli/cmd/bobber
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/bobber-tui ./tui/cmd/bobber-tui
 
 FROM alpine:3.19
 

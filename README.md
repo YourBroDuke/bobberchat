@@ -39,7 +39,7 @@ make build
 
 **Using Go run:**
 ```bash
-go run ./cmd/bobber-tui --backend-url http://localhost:8080 --token <YOUR_JWT_TOKEN>
+go run ./tui/cmd/bobber-tui --backend-url http://localhost:8080 --token <YOUR_JWT_TOKEN>
 ```
 
 **Environment Variables:**
@@ -104,7 +104,7 @@ make build
 # binary at ./bin/bobber
 
 # or run directly
-go run ./cmd/bobber --help
+go run ./cli/cmd/bobber --help
 ```
 
 ### Configuration
@@ -255,7 +255,7 @@ Common development tasks are managed via the Makefile:
 
 To run integration tests:
 ```bash
-go test -v ./test/integration/...
+go test -v ./backend/test/integration/...
 ```
 
 To run end-to-end tests:
