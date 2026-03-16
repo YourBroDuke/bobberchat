@@ -75,6 +75,7 @@ func TestLogin_Success(t *testing.T) {
 	email := newEmail("login-success")
 	password := "password-123"
 	env.registerUser(t, tenantID, email, password)
+	env.verifyUserEmail(t, email)
 
 	resp := env.doRequest(t, http.MethodPost, "/v1/auth/login", map[string]any{
 		"email":    email,

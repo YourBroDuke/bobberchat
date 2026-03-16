@@ -271,10 +271,20 @@ func newEmail(prefix string) string {
 	return fmt.Sprintf("%s-%s@example.com", prefix, uuid.NewString())
 }
 
+func (e *testEnv) verifyUserEmail(t *testing.T, email string) {
+	t.Helper()
+	_, err := e.db.Pool().Exec(context.Background(),
+		"UPDATE users SET email_verified = true WHERE email = $1", email)
+	if err != nil {
+		t.Fatalf("verify user email in DB: %v", err)
+	}
+}
+
 func registerAndLogin(t *testing.T, env *testEnv, tenantID string, prefix string) (string, map[string]any) {
 	t.Helper()
 	email := newEmail(prefix)
 	password := "password-123"
 	env.registerUser(t, tenantID, email, password)
+	env.verifyUserEmail(t, email)
 	return env.loginUser(t, email, password)
 }
