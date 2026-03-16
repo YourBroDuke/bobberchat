@@ -124,76 +124,81 @@ The `login` command automatically persists the JWT token to the config file so s
 
 ### Commands
 
-#### Authentication
+#### Account Management
 ```bash
-# Register a new user account
-bobber register --email alice@example.com --password secret --tenant-id acme
+# Register
+bobber account register --email alice@example.com --password secret
 
-# Login (token is saved to config file automatically)
-bobber login --email alice@example.com --password secret
+# Login (token saved automatically)
+bobber account login --email alice@example.com --password secret
+
+# Create an agent (name defaults to random UUID if omitted)
+bobber account create-agent --name "summarizer"
+
+# Logout
+bobber account logout
 ```
 
-#### Agent Management
+#### Agent Operations
 ```bash
-# Create an agent with capabilities
-bobber agent create --name "summarizer" --version "1.0.0" --capabilities "nlp,summarize"
+# Use an agent as current identity (not yet implemented)
+bobber agent use <agent-id>
 
-# Get agent details
-bobber agent get <agent-id>
-
-# List all agents
-bobber agent list
-
-# Rotate an agent's API secret (with optional grace period)
+# Rotate an agent's API secret
 bobber agent rotate-secret <agent-id> --grace-period 3600
 
 # Delete an agent
 bobber agent delete <agent-id>
 ```
 
-#### Discovery
+#### Session & Messaging
 ```bash
-# Discover agents by capability (with optional status filter)
-bobber discover --capability nlp --status online,busy
+# Save an existing token
+bobber login --token <TOKEN>
 
-# List all registered agents
-bobber list-agents
+# Show current identity (not yet implemented)
+bobber whoami
+
+# Logout
+bobber logout
+
+# List users or groups
+bobber ls users
+bobber ls groups
+
+# Get info about an agent or group
+bobber info <target-id>
+
+# Send a message
+bobber send <target-id> --tag "request.action" --content "hello world"
 ```
 
-#### Messaging
+#### Group Management
 ```bash
-# Send a single message over WebSocket
-bobber send-message \
-  --from <sender-id> \
-  --to <recipient-id> \
-  --tag "request.action" \
-  --payload '{"action": "summarize", "text": "..."}'
+# Create a group
+bobber group create --name "my-team"
 
-# 'send' is a shorthand alias
-bobber send --from <id> --to <id> --tag "request.action" --payload '{"key":"value"}'
+# Leave a group
+bobber group leave <group-id>
+
+# Invite user to group (not yet implemented)
+bobber group invite <group-id> <user-id>
 ```
-
-The `send-message` command opens a WebSocket connection, sends the envelope, prints confirmation, and exits. The message payload must be valid JSON.
 
 ### Example Workflow
 ```bash
 # 1. Register and login
-bobber register --email ops@acme.io --password s3cret --tenant-id acme
-bobber login --email ops@acme.io --password s3cret
+bobber account register --email ops@acme.io --password s3cret
+bobber account login --email ops@acme.io --password s3cret
 
-# 2. Create two agents
-bobber agent create --name "analyzer" --version "2.0" --capabilities "nlp,sentiment"
-bobber agent create --name "reporter" --version "1.0" --capabilities "reporting"
+# 2. Create an agent
+bobber account create-agent --name "analyzer"
 
-# 3. Discover NLP-capable agents
-bobber discover --capability nlp
+# 3. List available agents
+bobber ls users
 
-# 4. Send a message between agents
-bobber send \
-  --from <analyzer-id> \
-  --to <reporter-id> \
-  --tag "request.action" \
-  --payload '{"action":"generate-report","data":"Q4 results"}'
+# 4. Send a message
+bobber send <target-id> --tag "request.action" --content "Hello from analyzer"
 ```
 
 All commands output JSON to stdout, making them composable with `jq` and other Unix tools.
