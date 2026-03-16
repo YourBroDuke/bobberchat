@@ -86,6 +86,20 @@ print_step "2/31 Register user"
 request "POST" "/v1/auth/register" "{\"tenant_id\":\"$TENANT_ID\",\"email\":\"test@example.com\",\"password\":\"testpass123\"}"
 assert_step "Register user" 201 "$LAST_STATUS" '"email":"test@example.com"'
 
+print_step "-- Verify email (extract token from console email logs)"
+sleep 1
+VERIFY_TOKEN="$(docker compose logs bobberd 2>/dev/null | grep -o 'token=[a-f0-9]*' | tail -1 | cut -d= -f2 || true)"
+if [ -n "$VERIFY_TOKEN" ]; then
+  request "POST" "/v1/auth/verify-email" "{\"token\":\"$VERIFY_TOKEN\"}"
+  if [ "$LAST_STATUS" -eq 200 ]; then
+    echo "  OK: Email verified (HTTP $LAST_STATUS)"
+  else
+    echo "  WARN: Email verification failed (HTTP $LAST_STATUS) — login may fail"
+  fi
+else
+  echo "  WARN: Could not extract verification token from logs — login may fail"
+fi
+
 print_step "3/31 Login"
 request "POST" "/v1/auth/login" "{\"email\":\"test@example.com\",\"password\":\"testpass123\"}"
 TOKEN="$(echo "$LAST_BODY" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4 || true)"

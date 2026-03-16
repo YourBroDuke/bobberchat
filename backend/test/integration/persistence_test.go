@@ -37,7 +37,7 @@ func setupDB(t *testing.T) (*persistence.DB, func()) {
 		DROP TYPE IF EXISTS connection_request_status, participant_type, urgency, approval_status, topic_status, group_visibility, agent_status CASCADE;
 	`)
 
-	migrationFiles, err := filepath.Glob("../../migrations/*.sql")
+	migrationFiles, err := filepath.Glob("../../../migrations/*.sql")
 	if err != nil {
 		db.Close()
 		t.Fatalf("find migrations: %v", err)
