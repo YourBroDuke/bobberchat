@@ -39,7 +39,7 @@ BOBBERCHAT_TEST_DSN="postgres://bobberchat:bobberchat@localhost:5432/bobberchat?
 | `docs/tech-design.md` | 721 | Technical design document |
 | `api/openapi/openapi.yaml` | 1,098 | OpenAPI 3.1.0 spec — 20 endpoint paths |
 | `README.md` | ~280 | Comprehensive project README with TUI user guide |
-| `docs/cli-reference.md` | ~400 | Complete CLI reference for bobber, bobberd, bobber-tui, and Makefile |
+| `docs/cli-reference.md` | ~595 | Complete CLI reference for bobber, bobberd, bobber-tui, and Makefile |
 | `docs/tsg/deploy-docker-compose.md` | ~120 | Docker Compose deployment guide |
 | `docs/tsg/deploy-kubernetes.md` | ~130 | Raw Kubernetes manifests deployment guide |
 | `docs/tsg/deploy-helm.md` | ~170 | Helm chart deployment guide |
@@ -108,7 +108,7 @@ Key implementation details:
 | Binary | Source | Lines | Description |
 |--------|--------|-------|-------------|
 | `bobberd` | `backend/cmd/bobberd/main.go` | ~1150 | Backend server — 25 REST endpoints + WebSocket + message replay + adapter ingest + production hardening |
-| `bobber` | `cli/cmd/bobber/main.go` | ~448 | CLI tool — agent management, messaging. 75 unit tests in `main_test.go` |
+| `bobber` | `cli/cmd/bobber/main.go` | ~634 | CLI tool — refactored command structure with account, agent, session, group management. Tests in `main_test.go` |
 | `bobber-tui` | `tui/cmd/bobber-tui/main.go` | ~1520 | TUI client — Bubble Tea terminal UI with groups, topics, filtering |
 
 ### SDK
@@ -138,7 +138,7 @@ Key implementation details:
 | `backend/internal/ratelimit/ratelimit_test.go` | 10 | Token bucket limiting, burst, refill, scoping, concurrent, cleanup |
 | `backend/cmd/bobberd/main_test.go` | 8 | Cross-tenant denial, rate limiting, audit trail, disabled limiter |
 | `backend/pkg/sdk/helpers_test.go` | 4 | Message helper functions |
-| `cli/cmd/bobber/main_test.go` | 75 | CLI unit tests: pure functions, doJSON HTTP client, register/login commands, agent subcommands, discover/list-agents, WebSocket send-message, config/flag precedence, edge cases |
+| `cli/cmd/bobber/main_test.go` | — | CLI unit tests: account register/login/create-agent/logout, agent use/rotate-secret/delete, login/whoami/logout, ls, connect/inbox/accept/reject/blacklist, info, send, poll, group create/leave/invite, config/flag precedence |
 | `backend/test/integration/persistence_test.go` | 5 | User, Agent, Group, Topic, Approval CRUD (build-tagged `//go:build integration`) |
 | `scripts/e2e-test.sh` | 31 | Full API lifecycle: auth, agents, groups, topics, approvals |
 
@@ -401,8 +401,8 @@ bobberchat/
 │   ├── go.mod                            # CLI module: github.com/bobberchat/bobberchat/cli
 │   ├── go.sum
 │   └── cmd/bobber/
-│       ├── main.go                       # CLI tool (448 lines)
-│       └── main_test.go                  # CLI tests (1,227 lines, 75 tests)
+│       ├── main.go                       # CLI tool (634 lines)
+│       └── main_test.go                  # CLI tests (refactored to match new command structure)
 ├── tui/
 │   ├── go.mod                            # TUI module: github.com/bobberchat/bobberchat/tui
 │   ├── go.sum

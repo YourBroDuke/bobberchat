@@ -37,12 +37,21 @@ func buildRootCmdForTest(cfg *cliConfig) *cobra.Command {
 	root.PersistentFlags().String("backend-url", cfg.v.GetString("backend_url"), "backend url")
 	root.PersistentFlags().String("token", cfg.v.GetString("token"), "jwt token")
 	root.AddCommand(
-		registerCmd(cfg),
-		loginCmd(cfg),
+		accountCmd(cfg),
 		agentCmd(cfg),
-		discoverCmd(cfg),
-		listAgentsCmd(cfg),
-		sendMessageCmd(cfg),
+		loginCmd(cfg),
+		whoamiCmd(cfg),
+		logoutCmd(cfg),
+		lsCmd(cfg),
+		connectCmd(cfg),
+		inboxCmd(cfg),
+		acceptCmd(cfg),
+		rejectCmd(cfg),
+		blacklistCmd(cfg),
+		infoCmd(cfg),
+		sendCmd(cfg),
+		pollCmd(cfg),
+		groupCmd(cfg),
 	)
 	return root
 }
@@ -340,8 +349,21 @@ func TestDoJSON(t *testing.T) {
 	})
 }
 
-func TestRegisterCommand(t *testing.T) {
-	t.Run("Success: correct payload sent to /v1/auth/register", func(t *testing.T) {
+func TestClearToken(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := testConfig("http://localhost:8080", "has-token")
+	cfg.v.SetConfigFile(filepath.Join(tmp, "config.yaml"))
+
+	if err := clearToken(cfg); err != nil {
+		t.Fatalf("clearToken failed: %v", err)
+	}
+	if got := cfg.token(); got != "" {
+		t.Fatalf("expected empty token, got %q", got)
+	}
+}
+
+func TestAccountRegister(t *testing.T) {
+	t.Run("Success: correct payload to /v1/auth/register", func(t *testing.T) {
 		var got map[string]any
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost || r.URL.Path != "/v1/auth/register" {
@@ -353,67 +375,64 @@ func TestRegisterCommand(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		cfg := testConfig(srv.URL, "")
-		cmd := registerCmd(cfg)
+		cmd := accountRegisterCmd(testConfig(srv.URL, ""))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"--email", "u@example.com", "--password", "pw", "--tenant-id", "t1"})
+		cmd.SetArgs([]string{"--email", "u@example.com", "--password", "pw"})
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("execute failed: %v", err)
 		}
-		if got["tenant_id"] != "t1" || got["email"] != "u@example.com" || got["password"] != "pw" {
+
+		if got["email"] != "u@example.com" || got["password"] != "pw" || got["tenant_id"] != "" {
 			t.Fatalf("unexpected payload: %v", got)
 		}
 	})
 
-	tests := []struct {
-		name string
-		args []string
-		want string
-	}{
-		{name: "Missing email", args: []string{"--email", "", "--password", "pw", "--tenant-id", "t1"}, want: "--email, --password and --tenant-id are required"},
-		{name: "Missing password", args: []string{"--email", "u@example.com", "--password", "", "--tenant-id", "t1"}, want: "--email, --password and --tenant-id are required"},
-		{name: "Missing tenant-id", args: []string{"--email", "u@example.com", "--password", "pw", "--tenant-id", ""}, want: "--email, --password and --tenant-id are required"},
-	}
+	t.Run("Missing email", func(t *testing.T) {
+		cmd := accountRegisterCmd(testConfig("http://localhost:8080", ""))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"--email", "", "--password", "pw"})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "--email and --password are required") {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	})
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			cfg := testConfig("http://localhost:8080", "")
-			cmd := registerCmd(cfg)
-			cmd.SetOut(io.Discard)
-			cmd.SetErr(io.Discard)
-			cmd.SetArgs(tc.args)
-			err := cmd.Execute()
-			if err == nil || !strings.Contains(err.Error(), tc.want) {
-				t.Fatalf("expected %q, got %v", tc.want, err)
-			}
-		})
-	}
+	t.Run("Missing password", func(t *testing.T) {
+		cmd := accountRegisterCmd(testConfig("http://localhost:8080", ""))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"--email", "u@example.com", "--password", ""})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "--email and --password are required") {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	})
 
-	t.Run("Backend error: 400 response propagated", func(t *testing.T) {
+	t.Run("Backend error: propagated", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusBadRequest)
 			_ = json.NewEncoder(w).Encode(map[string]any{"error": "bad request"})
 		}))
 		defer srv.Close()
 
-		cfg := testConfig(srv.URL, "")
-		cmd := registerCmd(cfg)
+		cmd := accountRegisterCmd(testConfig(srv.URL, ""))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"--email", "u@example.com", "--password", "pw", "--tenant-id", "t1"})
+		cmd.SetArgs([]string{"--email", "u@example.com", "--password", "pw"})
 		err := cmd.Execute()
 		if err == nil || !strings.Contains(err.Error(), "bad request") {
-			t.Fatalf("expected propagated backend error, got %v", err)
+			t.Fatalf("unexpected err: %v", err)
 		}
 	})
 }
 
-func TestLoginCommand(t *testing.T) {
-	t.Run("Success: sends email/password, gets token", func(t *testing.T) {
+func TestAccountLogin(t *testing.T) {
+	t.Run("Success: sends email/password to /v1/auth/login, gets token", func(t *testing.T) {
 		var got map[string]any
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path != "/v1/auth/login" || r.Method != http.MethodPost {
+			if r.Method != http.MethodPost || r.URL.Path != "/v1/auth/login" {
 				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 			}
 			b, _ := io.ReadAll(r.Body)
@@ -426,7 +445,7 @@ func TestLoginCommand(t *testing.T) {
 		cfg := testConfig(srv.URL, "")
 		cfg.v.SetConfigFile(filepath.Join(tmp, "config.yaml"))
 
-		cmd := loginCmd(cfg)
+		cmd := accountLoginCmd(cfg)
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
 		cmd.SetArgs([]string{"--email", "u@example.com", "--password", "pw"})
@@ -438,7 +457,7 @@ func TestLoginCommand(t *testing.T) {
 		}
 	})
 
-	t.Run("Token persistence: access_token written to config file", func(t *testing.T) {
+	t.Run("Token persistence: access_token written to config", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			_ = json.NewEncoder(w).Encode(map[string]any{"access_token": "persist-me"})
 		}))
@@ -449,7 +468,7 @@ func TestLoginCommand(t *testing.T) {
 		cfg := testConfig(srv.URL, "")
 		cfg.v.SetConfigFile(cfgPath)
 
-		cmd := loginCmd(cfg)
+		cmd := accountLoginCmd(cfg)
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
 		cmd.SetArgs([]string{"--email", "u@example.com", "--password", "pw"})
@@ -466,48 +485,46 @@ func TestLoginCommand(t *testing.T) {
 		}
 	})
 
-	tests := []struct {
-		name string
-		args []string
-		want string
-	}{
-		{name: "Missing email", args: []string{"--email", "", "--password", "pw"}, want: "--email and --password are required"},
-		{name: "Missing password", args: []string{"--email", "u@example.com", "--password", ""}, want: "--email and --password are required"},
-	}
+	t.Run("Missing email", func(t *testing.T) {
+		cmd := accountLoginCmd(testConfig("http://localhost:8080", ""))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"--email", "", "--password", "pw"})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "--email and --password are required") {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	})
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			cfg := testConfig("http://localhost:8080", "")
-			cmd := loginCmd(cfg)
-			cmd.SetOut(io.Discard)
-			cmd.SetErr(io.Discard)
-			cmd.SetArgs(tc.args)
-			err := cmd.Execute()
-			if err == nil || !strings.Contains(err.Error(), tc.want) {
-				t.Fatalf("expected %q, got %v", tc.want, err)
-			}
-		})
-	}
+	t.Run("Missing password", func(t *testing.T) {
+		cmd := accountLoginCmd(testConfig("http://localhost:8080", ""))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"--email", "u@example.com", "--password", ""})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "--email and --password are required") {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	})
 
-	t.Run("Wrong credentials: 401 error propagated", func(t *testing.T) {
+	t.Run("Wrong credentials: 401 propagated", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusUnauthorized)
 			_ = json.NewEncoder(w).Encode(map[string]any{"error": "invalid credentials"})
 		}))
 		defer srv.Close()
 
-		cfg := testConfig(srv.URL, "")
-		cmd := loginCmd(cfg)
+		cmd := accountLoginCmd(testConfig(srv.URL, ""))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
 		cmd.SetArgs([]string{"--email", "u@example.com", "--password", "bad"})
 		err := cmd.Execute()
 		if err == nil || !strings.Contains(err.Error(), "invalid credentials") {
-			t.Fatalf("expected invalid credentials error, got %v", err)
+			t.Fatalf("unexpected err: %v", err)
 		}
 	})
 
-	t.Run("No token in response: no crash, no config write", func(t *testing.T) {
+	t.Run("No token in response: no crash", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
 		}))
@@ -518,7 +535,7 @@ func TestLoginCommand(t *testing.T) {
 		cfg := testConfig(srv.URL, "")
 		cfg.v.SetConfigFile(cfgPath)
 
-		cmd := loginCmd(cfg)
+		cmd := accountLoginCmd(cfg)
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
 		cmd.SetArgs([]string{"--email", "u@example.com", "--password", "pw"})
@@ -531,8 +548,8 @@ func TestLoginCommand(t *testing.T) {
 	})
 }
 
-func TestAgentSubcommands(t *testing.T) {
-	t.Run("agent create: success", func(t *testing.T) {
+func TestAccountCreateAgent(t *testing.T) {
+	t.Run("Success with explicit name", func(t *testing.T) {
 		var got map[string]any
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost || r.URL.Path != "/v1/agents" {
@@ -544,57 +561,81 @@ func TestAgentSubcommands(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		cmd := agentCmd(testConfig(srv.URL, "tok"))
+		cmd := accountCreateAgentCmd(testConfig(srv.URL, "tok"))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"create", "--name", "agent-x", "--version", "1.0.0", "--capabilities", "chat,search"})
+		cmd.SetArgs([]string{"--name", "agent-x"})
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("execute failed: %v", err)
 		}
+
 		if got["display_name"] != "agent-x" || got["version"] != "1.0.0" {
 			t.Fatalf("unexpected payload: %v", got)
 		}
-	})
-
-	t.Run("agent create: missing name", func(t *testing.T) {
-		cmd := agentCmd(testConfig("http://localhost:8080", "tok"))
-		cmd.SetOut(io.Discard)
-		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"create", "--name", "", "--version", "1"})
-		err := cmd.Execute()
-		if err == nil || !strings.Contains(err.Error(), "--name and --version are required") {
-			t.Fatalf("unexpected err: %v", err)
+		caps, ok := got["capabilities"].([]any)
+		if !ok || len(caps) != 0 {
+			t.Fatalf("expected empty capabilities array, got: %v", got["capabilities"])
 		}
 	})
 
-	t.Run("agent create: missing version", func(t *testing.T) {
-		cmd := agentCmd(testConfig("http://localhost:8080", "tok"))
+	t.Run("Success with default name", func(t *testing.T) {
+		var got map[string]any
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			b, _ := io.ReadAll(r.Body)
+			got = mustJSONMap(t, string(b))
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "a1"})
+		}))
+		defer srv.Close()
+
+		cmd := accountCreateAgentCmd(testConfig(srv.URL, "tok"))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"create", "--name", "a", "--version", ""})
-		err := cmd.Execute()
-		if err == nil || !strings.Contains(err.Error(), "--name and --version are required") {
-			t.Fatalf("unexpected err: %v", err)
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("execute failed: %v", err)
+		}
+
+		name, _ := got["display_name"].(string)
+		if _, err := uuid.Parse(name); err != nil {
+			t.Fatalf("display_name should be UUID, got %q (%v)", name, err)
 		}
 	})
 
-	t.Run("agent create: no token", func(t *testing.T) {
-		cmd := agentCmd(testConfig("http://localhost:8080", ""))
+	t.Run("No token", func(t *testing.T) {
+		cmd := accountCreateAgentCmd(testConfig("http://localhost:8080", ""))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"create", "--name", "a", "--version", "1"})
 		err := cmd.Execute()
 		if err == nil || !strings.Contains(err.Error(), "token required") {
 			t.Fatalf("unexpected err: %v", err)
 		}
 	})
+}
 
-	t.Run("agent create: capabilities parsed from CSV", func(t *testing.T) {
-		var gotCaps []any
+func TestAccountLogout(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := testConfig("http://localhost:8080", "tok")
+	cfg.v.SetConfigFile(filepath.Join(tmp, "config.yaml"))
+
+	cmd := accountLogoutCmd(cfg)
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute failed: %v", err)
+	}
+	if got := cfg.token(); got != "" {
+		t.Fatalf("expected token cleared, got %q", got)
+	}
+}
+
+func TestAgentSubcommands(t *testing.T) {
+	t.Run("agent rotate-secret: success", func(t *testing.T) {
+		var got map[string]any
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost || r.URL.Path != "/v1/agents/a1/rotate-secret" {
+				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+			}
 			b, _ := io.ReadAll(r.Body)
-			p := mustJSONMap(t, string(b))
-			gotCaps, _ = p["capabilities"].([]any)
+			got = mustJSONMap(t, string(b))
 			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
 		}))
 		defer srv.Close()
@@ -602,51 +643,43 @@ func TestAgentSubcommands(t *testing.T) {
 		cmd := agentCmd(testConfig(srv.URL, "tok"))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"create", "--name", "a", "--version", "1", "--capabilities", " chat, search ,,act "})
+		cmd.SetArgs([]string{"rotate-secret", "a1", "--grace-period", "30"})
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("execute failed: %v", err)
 		}
-		if len(gotCaps) != 3 || gotCaps[0] != "chat" || gotCaps[1] != "search" || gotCaps[2] != "act" {
-			t.Fatalf("unexpected capabilities: %v", gotCaps)
+		if got["grace_period_seconds"].(float64) != 30 {
+			t.Fatalf("unexpected payload: %v", got)
 		}
 	})
 
-	t.Run("agent get: success", func(t *testing.T) {
+	t.Run("agent rotate-secret: grace period default is 0", func(t *testing.T) {
+		var got map[string]any
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet || r.URL.Path != "/v1/agents/a1" {
-				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"id": "a1"})
+			b, _ := io.ReadAll(r.Body)
+			got = mustJSONMap(t, string(b))
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
 		}))
 		defer srv.Close()
 
 		cmd := agentCmd(testConfig(srv.URL, "tok"))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"get", "a1"})
+		cmd.SetArgs([]string{"rotate-secret", "a1"})
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("execute failed: %v", err)
 		}
-	})
-
-	t.Run("agent get: no token", func(t *testing.T) {
-		cmd := agentCmd(testConfig("http://localhost:8080", ""))
-		cmd.SetOut(io.Discard)
-		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"get", "a1"})
-		err := cmd.Execute()
-		if err == nil || !strings.Contains(err.Error(), "token required") {
-			t.Fatalf("unexpected err: %v", err)
+		if got["grace_period_seconds"].(float64) != 0 {
+			t.Fatalf("unexpected payload: %v", got)
 		}
 	})
 
-	t.Run("agent get: missing arg", func(t *testing.T) {
-		cmd := agentCmd(testConfig("http://localhost:8080", "tok"))
+	t.Run("agent rotate-secret: no token", func(t *testing.T) {
+		cmd := agentCmd(testConfig("http://localhost:8080", ""))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"get"})
+		cmd.SetArgs([]string{"rotate-secret", "a1"})
 		err := cmd.Execute()
-		if err == nil || !strings.Contains(err.Error(), "accepts 1 arg(s)") {
+		if err == nil || !strings.Contains(err.Error(), "token required") {
 			t.Fatalf("unexpected err: %v", err)
 		}
 	})
@@ -680,63 +713,77 @@ func TestAgentSubcommands(t *testing.T) {
 		}
 	})
 
-	t.Run("agent rotate-secret: success", func(t *testing.T) {
-		var got map[string]any
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost || r.URL.Path != "/v1/agents/a1/rotate-secret" {
-				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-			}
-			b, _ := io.ReadAll(r.Body)
-			got = mustJSONMap(t, string(b))
-			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
-		}))
-		defer srv.Close()
-
-		cmd := agentCmd(testConfig(srv.URL, "tok"))
+	t.Run("agent use: not implemented", func(t *testing.T) {
+		cmd := agentCmd(testConfig("http://localhost:8080", "tok"))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"rotate-secret", "a1", "--grace-period", "30"})
-		if err := cmd.Execute(); err != nil {
-			t.Fatalf("execute failed: %v", err)
-		}
-		if got["grace_period_seconds"].(float64) != 30 {
-			t.Fatalf("unexpected grace_period_seconds: %v", got)
-		}
-	})
-
-	t.Run("agent rotate-secret: grace period default is 0", func(t *testing.T) {
-		var got map[string]any
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			b, _ := io.ReadAll(r.Body)
-			got = mustJSONMap(t, string(b))
-			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
-		}))
-		defer srv.Close()
-
-		cmd := agentCmd(testConfig(srv.URL, "tok"))
-		cmd.SetOut(io.Discard)
-		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"rotate-secret", "a1"})
-		if err := cmd.Execute(); err != nil {
-			t.Fatalf("execute failed: %v", err)
-		}
-		if got["grace_period_seconds"].(float64) != 0 {
-			t.Fatalf("expected grace_period_seconds=0, got %v", got)
-		}
-	})
-
-	t.Run("agent rotate-secret: no token", func(t *testing.T) {
-		cmd := agentCmd(testConfig("http://localhost:8080", ""))
-		cmd.SetOut(io.Discard)
-		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"rotate-secret", "a1"})
+		cmd.SetArgs([]string{"use", "a1"})
 		err := cmd.Execute()
-		if err == nil || !strings.Contains(err.Error(), "token required") {
+		if err == nil || !strings.Contains(err.Error(), "not implemented") {
 			t.Fatalf("unexpected err: %v", err)
 		}
 	})
+}
 
-	t.Run("agent list: success", func(t *testing.T) {
+func TestLoginCommand(t *testing.T) {
+	t.Run("Success: saves token to config", func(t *testing.T) {
+		tmp := t.TempDir()
+		cfgPath := filepath.Join(tmp, "config.yaml")
+		cfg := testConfig("http://localhost:8080", "")
+		cfg.v.SetConfigFile(cfgPath)
+
+		cmd := loginCmd(cfg)
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"--token", "saved-token"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("execute failed: %v", err)
+		}
+		if got := cfg.token(); got != "saved-token" {
+			t.Fatalf("expected saved token, got %q", got)
+		}
+	})
+
+	t.Run("Missing token", func(t *testing.T) {
+		cmd := loginCmd(testConfig("http://localhost:8080", ""))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"--token", ""})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "--token is required") {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	})
+}
+
+func TestWhoamiCommand(t *testing.T) {
+	cmd := whoamiCmd(testConfig("http://localhost:8080", "tok"))
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	err := cmd.Execute()
+	if err == nil || !strings.Contains(err.Error(), "not implemented") {
+		t.Fatalf("unexpected err: %v", err)
+	}
+}
+
+func TestLogoutCommand(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := testConfig("http://localhost:8080", "tok")
+	cfg.v.SetConfigFile(filepath.Join(tmp, "config.yaml"))
+
+	cmd := logoutCmd(cfg)
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("execute failed: %v", err)
+	}
+	if got := cfg.token(); got != "" {
+		t.Fatalf("expected token cleared, got %q", got)
+	}
+}
+
+func TestLsCommand(t *testing.T) {
+	t.Run("Default (no arg): GET /v1/registry/agents", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodGet || r.URL.Path != "/v1/registry/agents" {
 				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
@@ -745,99 +792,15 @@ func TestAgentSubcommands(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		cmd := agentCmd(testConfig(srv.URL, "tok"))
+		cmd := lsCmd(testConfig(srv.URL, "tok"))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"list"})
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("execute failed: %v", err)
 		}
 	})
 
-	t.Run("agent list: no token", func(t *testing.T) {
-		cmd := agentCmd(testConfig("http://localhost:8080", ""))
-		cmd.SetOut(io.Discard)
-		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"list"})
-		err := cmd.Execute()
-		if err == nil || !strings.Contains(err.Error(), "token required") {
-			t.Fatalf("unexpected err: %v", err)
-		}
-	})
-}
-
-func TestDiscoverCommand(t *testing.T) {
-	t.Run("Success: POST /v1/registry/discover with capability and status", func(t *testing.T) {
-		var got map[string]any
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost || r.URL.Path != "/v1/registry/discover" {
-				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
-			}
-			b, _ := io.ReadAll(r.Body)
-			got = mustJSONMap(t, string(b))
-			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
-		}))
-		defer srv.Close()
-
-		cmd := discoverCmd(testConfig(srv.URL, "tok"))
-		cmd.SetOut(io.Discard)
-		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"--capability", "chat", "--status", "online"})
-		if err := cmd.Execute(); err != nil {
-			t.Fatalf("execute failed: %v", err)
-		}
-		if got["capability"] != "chat" {
-			t.Fatalf("unexpected payload: %v", got)
-		}
-	})
-
-	t.Run("Status CSV parsed", func(t *testing.T) {
-		var got map[string]any
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			b, _ := io.ReadAll(r.Body)
-			got = mustJSONMap(t, string(b))
-			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
-		}))
-		defer srv.Close()
-
-		cmd := discoverCmd(testConfig(srv.URL, "tok"))
-		cmd.SetOut(io.Discard)
-		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"--capability", "chat", "--status", "online,busy"})
-		if err := cmd.Execute(); err != nil {
-			t.Fatalf("execute failed: %v", err)
-		}
-		status, _ := got["status"].([]any)
-		if len(status) != 2 || status[0] != "online" || status[1] != "busy" {
-			t.Fatalf("unexpected status array: %v", status)
-		}
-	})
-
-	t.Run("Missing capability", func(t *testing.T) {
-		cmd := discoverCmd(testConfig("http://localhost:8080", "tok"))
-		cmd.SetOut(io.Discard)
-		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"--capability", "", "--status", "online"})
-		err := cmd.Execute()
-		if err == nil || !strings.Contains(err.Error(), "--capability is required") {
-			t.Fatalf("unexpected err: %v", err)
-		}
-	})
-
-	t.Run("No token", func(t *testing.T) {
-		cmd := discoverCmd(testConfig("http://localhost:8080", ""))
-		cmd.SetOut(io.Discard)
-		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"--capability", "chat"})
-		err := cmd.Execute()
-		if err == nil || !strings.Contains(err.Error(), "token required") {
-			t.Fatalf("unexpected err: %v", err)
-		}
-	})
-}
-
-func TestListAgentsCommand(t *testing.T) {
-	t.Run("Success: GET /v1/registry/agents", func(t *testing.T) {
+	t.Run("ls users: GET /v1/registry/agents", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodGet || r.URL.Path != "/v1/registry/agents" {
 				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
@@ -846,16 +809,46 @@ func TestListAgentsCommand(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		cmd := listAgentsCmd(testConfig(srv.URL, "tok"))
+		cmd := lsCmd(testConfig(srv.URL, "tok"))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"users"})
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("execute failed: %v", err)
 		}
 	})
 
+	t.Run("ls groups: GET /v1/groups", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet || r.URL.Path != "/v1/groups" {
+				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"groups": []any{}})
+		}))
+		defer srv.Close()
+
+		cmd := lsCmd(testConfig(srv.URL, "tok"))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"groups"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("execute failed: %v", err)
+		}
+	})
+
+	t.Run("Invalid arg", func(t *testing.T) {
+		cmd := lsCmd(testConfig("http://localhost:8080", "tok"))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"nope"})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "invalid list target") {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	})
+
 	t.Run("No token", func(t *testing.T) {
-		cmd := listAgentsCmd(testConfig("http://localhost:8080", ""))
+		cmd := lsCmd(testConfig("http://localhost:8080", ""))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
 		err := cmd.Execute()
@@ -865,12 +858,74 @@ func TestListAgentsCommand(t *testing.T) {
 	})
 }
 
-func TestSendMessageCommand(t *testing.T) {
-	t.Run("Success: connects, sends envelope, prints sent true", func(t *testing.T) {
+func TestStubCommands(t *testing.T) {
+	tests := []struct {
+		name string
+		cmd  *cobra.Command
+		args []string
+	}{
+		{name: "connect", cmd: connectCmd(testConfig("http://localhost:8080", "tok")), args: []string{"user-id"}},
+		{name: "inbox", cmd: inboxCmd(testConfig("http://localhost:8080", "tok"))},
+		{name: "accept", cmd: acceptCmd(testConfig("http://localhost:8080", "tok")), args: []string{"user-id"}},
+		{name: "reject", cmd: rejectCmd(testConfig("http://localhost:8080", "tok")), args: []string{"user-id"}},
+		{name: "blacklist", cmd: blacklistCmd(testConfig("http://localhost:8080", "tok")), args: []string{"user-id"}},
+		{name: "poll", cmd: pollCmd(testConfig("http://localhost:8080", "tok")), args: []string{"user-id"}},
+		{name: "group invite", cmd: groupCmd(testConfig("http://localhost:8080", "tok")), args: []string{"invite", "group-id", "user-id"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.cmd.SetOut(io.Discard)
+			tc.cmd.SetErr(io.Discard)
+			tc.cmd.SetArgs(tc.args)
+			err := tc.cmd.Execute()
+			if err == nil || !strings.Contains(err.Error(), "not implemented") {
+				t.Fatalf("unexpected err: %v", err)
+			}
+		})
+	}
+}
+
+func TestInfoCommand(t *testing.T) {
+	t.Run("Success: GET /v1/agents/{id}", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet || r.URL.Path != "/v1/agents/a1" {
+				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "a1"})
+		}))
+		defer srv.Close()
+
+		cmd := infoCmd(testConfig(srv.URL, "tok"))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"a1"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("execute failed: %v", err)
+		}
+	})
+
+	t.Run("No token", func(t *testing.T) {
+		cmd := infoCmd(testConfig("http://localhost:8080", ""))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"a1"})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "token required") {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	})
+}
+
+func TestSendCommand(t *testing.T) {
+	t.Run("Success: connects WS and sends envelope", func(t *testing.T) {
 		received := make(chan map[string]any, 1)
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path != "/v1/ws/connect" {
 				t.Fatalf("unexpected ws path: %s", r.URL.Path)
+			}
+			if r.URL.Query().Get("token") != "tok" {
+				t.Fatalf("expected token query param, got %q", r.URL.Query().Get("token"))
 			}
 			up := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
 			c, err := up.Upgrade(w, r, nil)
@@ -886,10 +941,10 @@ func TestSendMessageCommand(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		cmd := sendMessageCmd(testConfig(srv.URL, "tok"))
+		cmd := sendCmd(testConfig(srv.URL, "tok"))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"--from", "a", "--to", "b", "--tag", "request.data", "--payload", `{"x":1}`})
+		cmd.SetArgs([]string{"a-target", "--tag", "request.data", "--content", "hello"})
 		out := captureStdout(t, func() {
 			if err := cmd.Execute(); err != nil {
 				t.Fatalf("execute failed: %v", err)
@@ -898,73 +953,66 @@ func TestSendMessageCommand(t *testing.T) {
 		if !strings.Contains(out, `"sent": true`) {
 			t.Fatalf("expected sent output, got: %q", out)
 		}
+
 		select {
 		case env := <-received:
-			if env["from"] != "a" || env["to"] != "b" || env["tag"] != "request.data" {
+			if env["from"] != "" || env["to"] != "a-target" || env["tag"] != "request.data" {
 				t.Fatalf("unexpected envelope: %v", env)
+			}
+			payload, ok := env["payload"].(map[string]any)
+			if !ok || payload["content"] != "hello" {
+				t.Fatalf("unexpected payload: %v", env["payload"])
 			}
 		case <-time.After(2 * time.Second):
 			t.Fatal("timeout waiting for websocket envelope")
 		}
 	})
 
-	t.Run("Invalid payload JSON", func(t *testing.T) {
-		cmd := sendMessageCmd(testConfig("http://localhost:8080", "tok"))
+	t.Run("Missing tag", func(t *testing.T) {
+		cmd := sendCmd(testConfig("http://localhost:8080", "tok"))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"--from", "a", "--to", "b", "--tag", "t", "--payload", "{"})
+		cmd.SetArgs([]string{"a-target", "--tag", "", "--content", "hello"})
 		err := cmd.Execute()
-		if err == nil || !strings.Contains(err.Error(), "invalid payload json") {
+		if err == nil || !strings.Contains(err.Error(), "--tag and --content are required") {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	})
+
+	t.Run("Missing content", func(t *testing.T) {
+		cmd := sendCmd(testConfig("http://localhost:8080", "tok"))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"a-target", "--tag", "request.data", "--content", ""})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "--tag and --content are required") {
 			t.Fatalf("unexpected err: %v", err)
 		}
 	})
 
 	t.Run("No token", func(t *testing.T) {
-		cmd := sendMessageCmd(testConfig("http://localhost:8080", ""))
+		cmd := sendCmd(testConfig("http://localhost:8080", ""))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"--from", "a", "--to", "b", "--tag", "t", "--payload", `{"x":1}`})
+		cmd.SetArgs([]string{"a-target", "--tag", "request.data", "--content", "hello"})
 		err := cmd.Execute()
 		if err == nil || !strings.Contains(err.Error(), "token required") {
 			t.Fatalf("unexpected err: %v", err)
 		}
 	})
 
-	missing := []struct {
-		name string
-		args []string
-		want string
-	}{
-		{name: "Missing --from", args: []string{"--to", "b", "--tag", "t", "--payload", `{"x":1}`}, want: "required flag(s) \"from\" not set"},
-		{name: "Missing --to", args: []string{"--from", "a", "--tag", "t", "--payload", `{"x":1}`}, want: "required flag(s) \"to\" not set"},
-		{name: "Missing --tag", args: []string{"--from", "a", "--to", "b", "--payload", `{"x":1}`}, want: "required flag(s) \"tag\" not set"},
-		{name: "Missing --payload", args: []string{"--from", "a", "--to", "b", "--tag", "t"}, want: "required flag(s) \"payload\" not set"},
-	}
-	for _, tc := range missing {
-		t.Run(tc.name, func(t *testing.T) {
-			cmd := sendMessageCmd(testConfig("http://localhost:8080", "tok"))
-			cmd.SetOut(io.Discard)
-			cmd.SetErr(io.Discard)
-			cmd.SetArgs(tc.args)
-			err := cmd.Execute()
-			if err == nil || !strings.Contains(err.Error(), tc.want) {
-				t.Fatalf("expected %q, got %v", tc.want, err)
-			}
-		})
-	}
-
-	t.Run("Connection failed: unreachable URL", func(t *testing.T) {
-		cmd := sendMessageCmd(testConfig("http://127.0.0.1:1", "tok"))
+	t.Run("Connection failed", func(t *testing.T) {
+		cmd := sendCmd(testConfig("http://127.0.0.1:1", "tok"))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"--from", "a", "--to", "b", "--tag", "t", "--payload", `{"x":1}`})
+		cmd.SetArgs([]string{"a-target", "--tag", "request.data", "--content", "hello"})
 		err := cmd.Execute()
 		if err == nil {
 			t.Fatal("expected dial error, got nil")
 		}
 	})
 
-	t.Run("Envelope fields include valid UUIDs and RFC3339 timestamp", func(t *testing.T) {
+	t.Run("Envelope fields: valid UUIDs and RFC3339 timestamp", func(t *testing.T) {
 		received := make(chan map[string]any, 1)
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			up := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
@@ -981,10 +1029,10 @@ func TestSendMessageCommand(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		cmd := sendMessageCmd(testConfig(srv.URL, "tok"))
+		cmd := sendCmd(testConfig(srv.URL, "tok"))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"--from", "x", "--to", "y", "--tag", "request.data", "--payload", `{"k":"v"}`})
+		cmd.SetArgs([]string{"a-target", "--tag", "request.data", "--content", "hello"})
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("execute failed: %v", err)
 		}
@@ -1007,27 +1055,89 @@ func TestSendMessageCommand(t *testing.T) {
 			t.Fatal("timeout waiting for envelope")
 		}
 	})
+}
 
-	t.Run("WS URL scheme transformation logic", func(t *testing.T) {
-		transform := func(in string) string {
-			url := strings.TrimSuffix(in, "/")
-			url = strings.Replace(url, "http://", "ws://", 1)
-			url = strings.Replace(url, "https://", "wss://", 1)
-			return url
-		}
-
-		cases := []struct {
-			in   string
-			want string
-		}{
-			{in: "http://localhost:8080", want: "ws://localhost:8080"},
-			{in: "https://api.example.com/", want: "wss://api.example.com"},
-		}
-
-		for _, tc := range cases {
-			if got := transform(tc.in); got != tc.want {
-				t.Fatalf("transform mismatch: in=%q got=%q want=%q", tc.in, got, tc.want)
+func TestGroupCreate(t *testing.T) {
+	t.Run("Success: POST /v1/groups with name and visibility public", func(t *testing.T) {
+		var got map[string]any
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost || r.URL.Path != "/v1/groups" {
+				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 			}
+			b, _ := io.ReadAll(r.Body)
+			got = mustJSONMap(t, string(b))
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "g1"})
+		}))
+		defer srv.Close()
+
+		cmd := groupCreateCmd(testConfig(srv.URL, "tok"))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"--name", "dev-group"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("execute failed: %v", err)
+		}
+		if got["name"] != "dev-group" || got["visibility"] != "public" {
+			t.Fatalf("unexpected payload: %v", got)
+		}
+	})
+
+	t.Run("Missing name", func(t *testing.T) {
+		cmd := groupCreateCmd(testConfig("http://localhost:8080", "tok"))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"--name", ""})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "--name is required") {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	})
+
+	t.Run("No token", func(t *testing.T) {
+		cmd := groupCreateCmd(testConfig("http://localhost:8080", ""))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"--name", "dev-group"})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "token required") {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	})
+}
+
+func TestGroupLeave(t *testing.T) {
+	t.Run("Success: POST /v1/groups/{id}/leave", func(t *testing.T) {
+		var got map[string]any
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost || r.URL.Path != "/v1/groups/g1/leave" {
+				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+			}
+			b, _ := io.ReadAll(r.Body)
+			got = mustJSONMap(t, string(b))
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+		}))
+		defer srv.Close()
+
+		cmd := groupLeaveCmd(testConfig(srv.URL, "tok"))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"g1"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("execute failed: %v", err)
+		}
+		if got["participant_id"] != "" || got["participant_kind"] != "user" {
+			t.Fatalf("unexpected payload: %v", got)
+		}
+	})
+
+	t.Run("No token", func(t *testing.T) {
+		cmd := groupLeaveCmd(testConfig("http://localhost:8080", ""))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"g1"})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "token required") {
+			t.Fatalf("unexpected err: %v", err)
 		}
 	})
 }
@@ -1162,7 +1272,7 @@ func TestConfigAndFlagPrecedence(t *testing.T) {
 }
 
 func TestEdgeCases(t *testing.T) {
-	t.Run("Root command help exits without error", func(t *testing.T) {
+	t.Run("Root help exits without error", func(t *testing.T) {
 		cfg := testConfig("http://localhost:8080", "tok")
 		root := buildRootCmdForTest(cfg)
 		root.SetOut(io.Discard)
@@ -1185,7 +1295,25 @@ func TestEdgeCases(t *testing.T) {
 		}
 	})
 
-	t.Run("Agent subcommand help lists subcommands", func(t *testing.T) {
+	t.Run("Account subcommand help lists register/login/create-agent/logout", func(t *testing.T) {
+		cfg := testConfig("http://localhost:8080", "tok")
+		root := buildRootCmdForTest(cfg)
+		var out bytes.Buffer
+		root.SetOut(&out)
+		root.SetErr(io.Discard)
+		root.SetArgs([]string{"account", "--help"})
+		if err := root.Execute(); err != nil {
+			t.Fatalf("account help should not error, got %v", err)
+		}
+		s := out.String()
+		for _, sub := range []string{"register", "login", "create-agent", "logout"} {
+			if !strings.Contains(s, sub) {
+				t.Fatalf("expected help output to contain %q, got: %s", sub, s)
+			}
+		}
+	})
+
+	t.Run("Agent subcommand help lists use/rotate-secret/delete", func(t *testing.T) {
 		cfg := testConfig("http://localhost:8080", "tok")
 		root := buildRootCmdForTest(cfg)
 		var out bytes.Buffer
@@ -1196,32 +1324,28 @@ func TestEdgeCases(t *testing.T) {
 			t.Fatalf("agent help should not error, got %v", err)
 		}
 		s := out.String()
-		for _, sub := range []string{"create", "get", "delete", "rotate-secret", "list"} {
+		for _, sub := range []string{"use", "rotate-secret", "delete"} {
 			if !strings.Contains(s, sub) {
 				t.Fatalf("expected help output to contain %q, got: %s", sub, s)
 			}
 		}
 	})
 
-	t.Run("Send alias works as alias for send-message", func(t *testing.T) {
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			up := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
-			c, err := up.Upgrade(w, r, nil)
-			if err != nil {
-				t.Fatalf("upgrade failed: %v", err)
-			}
-			defer c.Close()
-			_ = c.ReadJSON(&map[string]any{})
-		}))
-		defer srv.Close()
-
-		cfg := testConfig(srv.URL, "tok")
+	t.Run("Group subcommand help lists create/leave/invite", func(t *testing.T) {
+		cfg := testConfig("http://localhost:8080", "tok")
 		root := buildRootCmdForTest(cfg)
-		root.SetOut(io.Discard)
+		var out bytes.Buffer
+		root.SetOut(&out)
 		root.SetErr(io.Discard)
-		root.SetArgs([]string{"send", "--from", "a", "--to", "b", "--tag", "t", "--payload", `{"x":1}`})
+		root.SetArgs([]string{"group", "--help"})
 		if err := root.Execute(); err != nil {
-			t.Fatalf("send alias should work, got %v", err)
+			t.Fatalf("group help should not error, got %v", err)
+		}
+		s := out.String()
+		for _, sub := range []string{"create", "leave", "invite"} {
+			if !strings.Contains(s, sub) {
+				t.Fatalf("expected help output to contain %q, got: %s", sub, s)
+			}
 		}
 	})
 }

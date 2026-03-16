@@ -46,12 +46,21 @@ func main() {
 	root.PersistentFlags().String("token", v.GetString("token"), "jwt token")
 
 	root.AddCommand(
-		registerCmd(cfg),
-		loginCmd(cfg),
+		accountCmd(cfg),
 		agentCmd(cfg),
-		discoverCmd(cfg),
-		listAgentsCmd(cfg),
-		sendMessageCmd(cfg),
+		loginCmd(cfg),
+		whoamiCmd(cfg),
+		logoutCmd(cfg),
+		lsCmd(cfg),
+		connectCmd(cfg),
+		inboxCmd(cfg),
+		acceptCmd(cfg),
+		rejectCmd(cfg),
+		blacklistCmd(cfg),
+		infoCmd(cfg),
+		sendCmd(cfg),
+		pollCmd(cfg),
+		groupCmd(cfg),
 	)
 
 	if err := root.Execute(); err != nil {
@@ -60,17 +69,23 @@ func main() {
 	}
 }
 
-func registerCmd(cfg *cliConfig) *cobra.Command {
-	var email, password, tenantID string
+func accountCmd(cfg *cliConfig) *cobra.Command {
+	account := &cobra.Command{Use: "account", Short: "Account management commands"}
+	account.AddCommand(accountRegisterCmd(cfg), accountLoginCmd(cfg), accountCreateAgentCmd(cfg), accountLogoutCmd(cfg))
+	return account
+}
+
+func accountRegisterCmd(cfg *cliConfig) *cobra.Command {
+	var email, password string
 	cmd := &cobra.Command{
 		Use:   "register",
 		Short: "Register a new user",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			if email == "" || password == "" || tenantID == "" {
-				return errors.New("--email, --password and --tenant-id are required")
+			if email == "" || password == "" {
+				return errors.New("--email and --password are required")
 			}
 			resp, err := doJSON(http.MethodPost, cfg.backendURL()+"/v1/auth/register", "", map[string]any{
-				"tenant_id": tenantID,
+				"tenant_id": "",
 				"email":     email,
 				"password":  password,
 			})
@@ -83,14 +98,12 @@ func registerCmd(cfg *cliConfig) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&email, "email", "", "user email")
 	cmd.Flags().StringVar(&password, "password", "", "user password")
-	cmd.Flags().StringVar(&tenantID, "tenant-id", "", "tenant id")
 	_ = cmd.MarkFlagRequired("email")
 	_ = cmd.MarkFlagRequired("password")
-	_ = cmd.MarkFlagRequired("tenant-id")
 	return cmd
 }
 
-func loginCmd(cfg *cliConfig) *cobra.Command {
+func accountLoginCmd(cfg *cliConfig) *cobra.Command {
 	var email, password string
 	cmd := &cobra.Command{
 		Use:   "login",
@@ -125,30 +138,23 @@ func loginCmd(cfg *cliConfig) *cobra.Command {
 	return cmd
 }
 
-func agentCmd(cfg *cliConfig) *cobra.Command {
-	agent := &cobra.Command{Use: "agent", Short: "Agent management commands"}
-	agent.AddCommand(agentCreateCmd(cfg), agentGetCmd(cfg), agentDeleteCmd(cfg), agentRotateSecretCmd(cfg), agentListCmd(cfg))
-	return agent
-}
-
-func agentCreateCmd(cfg *cliConfig) *cobra.Command {
-	var name, version string
-	var capabilities string
+func accountCreateAgentCmd(cfg *cliConfig) *cobra.Command {
+	var name string
 	cmd := &cobra.Command{
-		Use:   "create",
+		Use:   "create-agent",
 		Short: "Create agent",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			if cfg.token() == "" {
 				return errors.New("token required")
 			}
-			if name == "" || version == "" {
-				return errors.New("--name and --version are required")
+			displayName := name
+			if strings.TrimSpace(displayName) == "" {
+				displayName = uuid.NewString()
 			}
-			caps := splitCSV(capabilities)
 			resp, err := doJSON(http.MethodPost, cfg.backendURL()+"/v1/agents", cfg.token(), map[string]any{
-				"display_name": name,
-				"capabilities": caps,
-				"version":      version,
+				"display_name": displayName,
+				"version":      "1.0.0",
+				"capabilities": []string{},
 			})
 			if err != nil {
 				return err
@@ -158,35 +164,40 @@ func agentCreateCmd(cfg *cliConfig) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&name, "name", "", "agent display name")
-	cmd.Flags().StringVar(&capabilities, "capabilities", "", "comma-separated capabilities")
-	cmd.Flags().StringVar(&version, "version", "", "agent version")
-	_ = cmd.MarkFlagRequired("name")
-	_ = cmd.MarkFlagRequired("version")
 	return cmd
 }
 
-func agentGetCmd(cfg *cliConfig) *cobra.Command {
+func accountLogoutCmd(cfg *cliConfig) *cobra.Command {
 	return &cobra.Command{
-		Use:   "get <id>",
-		Short: "Get agent by id",
+		Use:   "logout",
+		Short: "Logout account by clearing local token",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return clearToken(cfg)
+		},
+	}
+}
+
+func agentCmd(cfg *cliConfig) *cobra.Command {
+	agent := &cobra.Command{Use: "agent", Short: "Agent management commands"}
+	agent.AddCommand(agentUseCmd(cfg), agentRotateSecretCmd(cfg), agentDeleteCmd(cfg))
+	return agent
+}
+
+func agentUseCmd(cfg *cliConfig) *cobra.Command {
+	return &cobra.Command{
+		Use:   "use <agent_id>",
+		Short: "Use an agent as current identity",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			if cfg.token() == "" {
-				return errors.New("token required")
-			}
-			resp, err := doJSON(http.MethodGet, cfg.backendURL()+"/v1/agents/"+args[0], cfg.token(), nil)
-			if err != nil {
-				return err
-			}
-			prettyPrint(resp)
-			return nil
+			// TODO: Implement when backend API endpoint is available.
+			return errors.New("not implemented: agent use requires backend API endpoint")
 		},
 	}
 }
 
 func agentDeleteCmd(cfg *cliConfig) *cobra.Command {
 	return &cobra.Command{
-		Use:   "delete <id>",
+		Use:   "delete <agent_id>",
 		Short: "Delete agent",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
@@ -206,7 +217,7 @@ func agentDeleteCmd(cfg *cliConfig) *cobra.Command {
 func agentRotateSecretCmd(cfg *cliConfig) *cobra.Command {
 	var grace int
 	cmd := &cobra.Command{
-		Use:   "rotate-secret <id>",
+		Use:   "rotate-secret <agent_id>",
 		Short: "Rotate agent API secret",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
@@ -227,62 +238,75 @@ func agentRotateSecretCmd(cfg *cliConfig) *cobra.Command {
 	return cmd
 }
 
-func agentListCmd(cfg *cliConfig) *cobra.Command {
-	return &cobra.Command{
-		Use:   "list",
-		Short: "List agents",
-		RunE: func(_ *cobra.Command, _ []string) error {
-			if cfg.token() == "" {
-				return errors.New("token required")
-			}
-			resp, err := doJSON(http.MethodGet, cfg.backendURL()+"/v1/registry/agents", cfg.token(), nil)
-			if err != nil {
-				return err
-			}
-			prettyPrint(resp)
-			return nil
-		},
-	}
-}
-
-func discoverCmd(cfg *cliConfig) *cobra.Command {
-	var capability, status string
+func loginCmd(cfg *cliConfig) *cobra.Command {
+	var token string
 	cmd := &cobra.Command{
-		Use:   "discover",
-		Short: "Discover agents",
+		Use:   "login",
+		Short: "Login with existing token",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			if cfg.token() == "" {
-				return errors.New("token required")
+			if strings.TrimSpace(token) == "" {
+				return errors.New("--token is required")
 			}
-			if capability == "" {
-				return errors.New("--capability is required")
-			}
-			resp, err := doJSON(http.MethodPost, cfg.backendURL()+"/v1/registry/discover", cfg.token(), map[string]any{
-				"capability": capability,
-				"status":     splitCSV(status),
-			})
-			if err != nil {
+			cfg.v.Set("token", token)
+			if err := saveConfig(cfg.v); err != nil {
 				return err
 			}
-			prettyPrint(resp)
+			prettyPrint(map[string]any{"saved": true})
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&capability, "capability", "", "capability")
-	cmd.Flags().StringVar(&status, "status", "", "comma-separated statuses")
-	_ = cmd.MarkFlagRequired("capability")
+	cmd.Flags().StringVar(&token, "token", "", "jwt token")
+	_ = cmd.MarkFlagRequired("token")
 	return cmd
 }
 
-func listAgentsCmd(cfg *cliConfig) *cobra.Command {
+func whoamiCmd(cfg *cliConfig) *cobra.Command {
 	return &cobra.Command{
-		Use:   "list-agents",
-		Short: "List all agents",
+		Use:   "whoami",
+		Short: "Show current authenticated identity",
 		RunE: func(_ *cobra.Command, _ []string) error {
+			// TODO: Implement when backend API endpoint is available.
+			return errors.New("not implemented: whoami requires backend API endpoint")
+		},
+	}
+}
+
+func logoutCmd(cfg *cliConfig) *cobra.Command {
+	return &cobra.Command{
+		Use:   "logout",
+		Short: "Logout by clearing local token",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			return clearToken(cfg)
+		},
+	}
+}
+
+func lsCmd(cfg *cliConfig) *cobra.Command {
+	return &cobra.Command{
+		Use:   "ls [users|groups]",
+		Short: "List users or groups",
+		Args:  cobra.MaximumNArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
 			if cfg.token() == "" {
 				return errors.New("token required")
 			}
-			resp, err := doJSON(http.MethodGet, cfg.backendURL()+"/v1/registry/agents", cfg.token(), nil)
+
+			kind := "users"
+			if len(args) == 1 {
+				kind = args[0]
+			}
+
+			var endpoint string
+			switch kind {
+			case "users":
+				endpoint = "/v1/registry/agents"
+			case "groups":
+				endpoint = "/v1/groups"
+			default:
+				return errors.New("invalid list target: must be users or groups")
+			}
+
+			resp, err := doJSON(http.MethodGet, cfg.backendURL()+endpoint, cfg.token(), nil)
 			if err != nil {
 				return err
 			}
@@ -292,22 +316,96 @@ func listAgentsCmd(cfg *cliConfig) *cobra.Command {
 	}
 }
 
-func sendMessageCmd(cfg *cliConfig) *cobra.Command {
-	var from, to, tag, payload string
-	cmd := &cobra.Command{
-		Use:     "send-message",
-		Aliases: []string{"send"},
-		Short:   "Send one message over websocket",
+func connectCmd(cfg *cliConfig) *cobra.Command {
+	return &cobra.Command{
+		Use:   "connect <target_id>",
+		Short: "Request a connection with target",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			// TODO: Implement when backend API endpoint is available.
+			return errors.New("not implemented: connect requires backend API endpoint")
+		},
+	}
+}
+
+func inboxCmd(cfg *cliConfig) *cobra.Command {
+	return &cobra.Command{
+		Use:   "inbox",
+		Short: "Show pending connects and unread chats",
 		RunE: func(_ *cobra.Command, _ []string) error {
+			// TODO: Implement when backend API endpoint is available.
+			return errors.New("not implemented: inbox requires backend API endpoint")
+		},
+	}
+}
+
+func acceptCmd(cfg *cliConfig) *cobra.Command {
+	return &cobra.Command{
+		Use:   "accept <target_id>",
+		Short: "Accept incoming request from target",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			// TODO: Implement when backend API endpoint is available.
+			return errors.New("not implemented: accept requires backend API endpoint")
+		},
+	}
+}
+
+func rejectCmd(cfg *cliConfig) *cobra.Command {
+	return &cobra.Command{
+		Use:   "reject <target_id>",
+		Short: "Reject incoming request from target",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			// TODO: Implement when backend API endpoint is available.
+			return errors.New("not implemented: reject requires backend API endpoint")
+		},
+	}
+}
+
+func blacklistCmd(cfg *cliConfig) *cobra.Command {
+	return &cobra.Command{
+		Use:   "blacklist <target_id>",
+		Short: "Blacklist target",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			// TODO: Implement when backend API endpoint is available.
+			return errors.New("not implemented: blacklist requires backend API endpoint")
+		},
+	}
+}
+
+func infoCmd(cfg *cliConfig) *cobra.Command {
+	return &cobra.Command{
+		Use:   "info <target_id>",
+		Short: "Get information for an agent",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
 			if cfg.token() == "" {
 				return errors.New("token required")
 			}
-			if from == "" || to == "" || tag == "" || payload == "" {
-				return errors.New("--from --to --tag --payload are required")
+			resp, err := doJSON(http.MethodGet, cfg.backendURL()+"/v1/agents/"+args[0], cfg.token(), nil)
+			if err != nil {
+				return err
 			}
-			var payloadObj map[string]any
-			if err := json.Unmarshal([]byte(payload), &payloadObj); err != nil {
-				return fmt.Errorf("invalid payload json: %w", err)
+			prettyPrint(resp)
+			return nil
+		},
+	}
+}
+
+func sendCmd(cfg *cliConfig) *cobra.Command {
+	var tag, content string
+	cmd := &cobra.Command{
+		Use:   "send <target_id>",
+		Short: "Send one message over websocket",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			if cfg.token() == "" {
+				return errors.New("token required")
+			}
+			if tag == "" || content == "" {
+				return errors.New("--tag and --content are required")
 			}
 
 			url := strings.TrimSuffix(cfg.backendURL(), "/")
@@ -325,10 +423,10 @@ func sendMessageCmd(cfg *cliConfig) *cobra.Command {
 
 			env := map[string]any{
 				"id":        uuidString(),
-				"from":      from,
-				"to":        to,
+				"from":      "",
+				"to":        args[0],
 				"tag":       tag,
-				"payload":   payloadObj,
+				"payload":   map[string]any{"content": content},
 				"metadata":  map[string]any{},
 				"timestamp": time.Now().UTC().Format(time.RFC3339),
 				"trace_id":  uuidString(),
@@ -340,15 +438,98 @@ func sendMessageCmd(cfg *cliConfig) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&from, "from", "", "sender id")
-	cmd.Flags().StringVar(&to, "to", "", "recipient id")
 	cmd.Flags().StringVar(&tag, "tag", "", "message tag")
-	cmd.Flags().StringVar(&payload, "payload", "", "json payload")
-	_ = cmd.MarkFlagRequired("from")
-	_ = cmd.MarkFlagRequired("to")
+	cmd.Flags().StringVar(&content, "content", "", "message content")
 	_ = cmd.MarkFlagRequired("tag")
-	_ = cmd.MarkFlagRequired("payload")
+	_ = cmd.MarkFlagRequired("content")
 	return cmd
+}
+
+func pollCmd(cfg *cliConfig) *cobra.Command {
+	var limit int
+	var sinceTS, sinceID string
+	cmd := &cobra.Command{
+		Use:   "poll <target_id>",
+		Short: "Poll messages from target",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			_, _, _, _ = args, limit, sinceTS, sinceID
+			// TODO: Implement when backend API endpoint is available.
+			return errors.New("not implemented: poll requires backend API endpoint")
+		},
+	}
+	cmd.Flags().IntVar(&limit, "limit", 0, "maximum message count")
+	cmd.Flags().StringVar(&sinceTS, "since_ts", "", "fetch messages after timestamp")
+	cmd.Flags().StringVar(&sinceID, "since_id", "", "fetch messages after message id")
+	return cmd
+}
+
+func groupCmd(cfg *cliConfig) *cobra.Command {
+	group := &cobra.Command{Use: "group", Short: "Group management commands"}
+	group.AddCommand(groupCreateCmd(cfg), groupLeaveCmd(cfg), groupInviteCmd(cfg))
+	return group
+}
+
+func groupCreateCmd(cfg *cliConfig) *cobra.Command {
+	var name string
+	cmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create group",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			if cfg.token() == "" {
+				return errors.New("token required")
+			}
+			if strings.TrimSpace(name) == "" {
+				return errors.New("--name is required")
+			}
+			resp, err := doJSON(http.MethodPost, cfg.backendURL()+"/v1/groups", cfg.token(), map[string]any{
+				"name":       name,
+				"visibility": "public",
+			})
+			if err != nil {
+				return err
+			}
+			prettyPrint(resp)
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&name, "name", "", "group name")
+	_ = cmd.MarkFlagRequired("name")
+	return cmd
+}
+
+func groupLeaveCmd(cfg *cliConfig) *cobra.Command {
+	return &cobra.Command{
+		Use:   "leave <target_id>",
+		Short: "Leave group",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			if cfg.token() == "" {
+				return errors.New("token required")
+			}
+			resp, err := doJSON(http.MethodPost, cfg.backendURL()+"/v1/groups/"+args[0]+"/leave", cfg.token(), map[string]any{
+				"participant_id":   "",
+				"participant_kind": "user",
+			})
+			if err != nil {
+				return err
+			}
+			prettyPrint(resp)
+			return nil
+		},
+	}
+}
+
+func groupInviteCmd(cfg *cliConfig) *cobra.Command {
+	return &cobra.Command{
+		Use:   "invite <target_group_id> <target_user_id>",
+		Short: "Invite user to group",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(_ *cobra.Command, args []string) error {
+			// TODO: Implement when backend API endpoint is available.
+			return errors.New("not implemented: group invite requires backend API endpoint")
+		},
+	}
 }
 
 func doJSON(method, url, token string, body any) (map[string]any, error) {
@@ -395,6 +576,11 @@ func doJSON(method, url, token string, body any) (map[string]any, error) {
 func prettyPrint(v any) {
 	b, _ := json.MarshalIndent(v, "", "  ")
 	fmt.Println(string(b))
+}
+
+func clearToken(cfg *cliConfig) error {
+	cfg.v.Set("token", "")
+	return saveConfig(cfg.v)
 }
 
 func (c *cliConfig) backendURL() string {
