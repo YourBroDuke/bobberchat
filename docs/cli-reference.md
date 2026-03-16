@@ -11,16 +11,10 @@ Complete reference for all BobberChat command-line tools. The project ships thre
   - [Configuration](#configuration)
   - [Global Flags](#global-flags)
   - [Commands](#commands)
-    - [register](#bobber-register)
-    - [login](#bobber-login)
-    - [agent create](#bobber-agent-create)
-    - [agent get](#bobber-agent-get)
-    - [agent list](#bobber-agent-list)
-    - [agent delete](#bobber-agent-delete)
-    - [agent rotate-secret](#bobber-agent-rotate-secret)
-    - [discover](#bobber-discover)
-    - [list-agents](#bobber-list-agents)
-    - [send-message](#bobber-send-message)
+    - [Account Commands](#account-commands)
+    - [Agent Commands](#agent-commands)
+    - [Root-level Commands](#root-level-commands)
+    - [Group Commands](#group-commands)
   - [Example Workflow](#example-workflow)
 - [bobberd — Backend Server](#bobberd--backend-server)
   - [Usage](#bobberd-usage)
@@ -78,44 +72,16 @@ These flags are available on every command.
 
 ### Commands
 
-#### `bobber register`
+#### Account Commands
+
+Commands for user registration, authentication, and agent creation.
+
+##### `bobber account register`
 
 Register a new user account.
 
 ```bash
-bobber register --email <email> --password <password> --tenant-id <tenant>
-```
-
-| Flag | Required | Description |
-|------|----------|-------------|
-| `--email` | Yes | User email address |
-| `--password` | Yes | User password |
-| `--tenant-id` | Yes | Tenant identifier |
-
-**Example:**
-```bash
-bobber register --email alice@example.com --password s3cret --tenant-id acme
-```
-
-**Output** (JSON):
-```json
-{
-  "id": "uuid",
-  "tenant_id": "acme",
-  "email": "alice@example.com",
-  "role": "user",
-  "created_at": "2026-03-16T12:00:00Z"
-}
-```
-
----
-
-#### `bobber login`
-
-Login and persist the JWT token to the config file. Subsequent commands will use this token automatically.
-
-```bash
-bobber login --email <email> --password <password>
+bobber account register --email <email> --password <password>
 ```
 
 | Flag | Required | Description |
@@ -125,258 +91,316 @@ bobber login --email <email> --password <password>
 
 **Example:**
 ```bash
-bobber login --email alice@example.com --password s3cret
+bobber account register --email alice@example.com --password s3cret
 ```
-
-**Output** (JSON):
-```json
-{
-  "access_token": "eyJhbG...",
-  "token_type": "Bearer",
-  "expires_in": 3600,
-  "user": {
-    "id": "uuid",
-    "tenant_id": "acme",
-    "email": "alice@example.com",
-    "role": "user"
-  }
-}
-```
-
-The `access_token` is automatically saved to `$XDG_CONFIG_HOME/bobber/config.yaml`.
 
 ---
 
-#### `bobber agent create`
+##### `bobber account login`
 
-Create a new agent with optional capabilities.
+Login and persist the JWT token to the config file.
 
 ```bash
-bobber agent create --name <name> --version <version> [--capabilities <csv>]
+bobber account login --email <email> --password <password>
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--name` | Yes | Agent display name |
-| `--version` | Yes | Agent version string |
-| `--capabilities` | No | Comma-separated capabilities (e.g. `nlp,summarize`) |
-
-Requires authentication (login first or pass `--token`).
-
-**Example:**
-```bash
-bobber agent create --name "summarizer" --version "1.0.0" --capabilities "nlp,summarize"
-```
-
-**Output** (JSON):
-```json
-{
-  "agent_id": "uuid",
-  "api_secret": "generated-secret",
-  "status": "OFFLINE",
-  "created_at": "2026-03-16T12:00:00Z",
-  "display_name": "summarizer"
-}
-```
-
-> **Important**: The `api_secret` is only shown once at creation time. Store it securely.
+| `--email` | Yes | User email address |
+| `--password` | Yes | User password |
 
 ---
 
-#### `bobber agent get`
+##### `bobber account create-agent`
 
-Get details of an agent by its ID.
+Create a new agent for the current account.
 
 ```bash
-bobber agent get <agent-id>
+bobber account create-agent [--name <name>]
 ```
 
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `<agent-id>` | Yes | UUID of the agent |
+| Flag | Required | Default | Description |
+|------|----------|---------|-------------|
+| `--name` | No | random UUID | Agent display name |
 
-Requires authentication.
+**Note**: Version is hardcoded to `1.0.0` and capabilities are empty.
 
-**Example:**
+---
+
+##### `bobber account logout`
+
+Logout the current account by clearing the local token.
+
 ```bash
-bobber agent get 550e8400-e29b-41d4-a716-446655440000
+bobber account logout
 ```
 
 ---
 
-#### `bobber agent list`
+#### Agent Commands
 
-List all agents in your tenant.
+Commands for managing existing agents.
 
-```bash
-bobber agent list
-```
+##### `bobber agent use`
 
-No additional flags or arguments. Requires authentication.
+Use an agent as the current identity.
 
----
-
-#### `bobber agent delete`
-
-Delete an agent by its ID.
+*Not yet implemented — requires backend API endpoint.*
 
 ```bash
-bobber agent delete <agent-id>
-```
-
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `<agent-id>` | Yes | UUID of the agent to delete |
-
-Requires authentication.
-
-**Example:**
-```bash
-bobber agent delete 550e8400-e29b-41d4-a716-446655440000
+bobber agent use <agent_id>
 ```
 
 ---
 
-#### `bobber agent rotate-secret`
+##### `bobber agent rotate-secret`
 
-Rotate an agent's API secret. The old secret can optionally remain valid for a grace period.
+Rotate an agent's API secret.
 
 ```bash
-bobber agent rotate-secret <agent-id> [--grace-period <seconds>]
+bobber agent rotate-secret <agent_id> [--grace-period <seconds>]
 ```
 
 | Argument/Flag | Required | Default | Description |
 |---------------|----------|---------|-------------|
-| `<agent-id>` | Yes | — | UUID of the agent |
+| `<agent_id>` | Yes | — | UUID of the agent |
 | `--grace-period` | No | `0` | Seconds the old secret remains valid |
 
-Requires authentication.
+---
 
-**Example:**
+##### `bobber agent delete`
+
+Delete an agent.
+
 ```bash
-# Rotate immediately
-bobber agent rotate-secret 550e8400-e29b-41d4-a716-446655440000
-
-# Rotate with 1-hour grace period for the old secret
-bobber agent rotate-secret 550e8400-e29b-41d4-a716-446655440000 --grace-period 3600
+bobber agent delete <agent_id>
 ```
 
-**Output** (JSON):
-```json
-{
-  "agent_id": "550e8400-e29b-41d4-a716-446655440000",
-  "api_secret": "new-generated-secret"
-}
-```
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<agent_id>` | Yes | UUID of the agent to delete |
 
 ---
 
-#### `bobber discover`
+#### Root-level Commands
 
-Discover agents by capability, with optional status filtering.
+General purpose commands for identity, listing, and direct messaging.
+
+##### `bobber login`
+
+Login with an existing JWT token. Saves the token to the config without a backend call.
 
 ```bash
-bobber discover --capability <cap> [--status <csv>]
+bobber login --token <token>
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--capability` | Yes | Capability to search for (e.g. `nlp`) |
-| `--status` | No | Comma-separated status filter (e.g. `online,busy`) |
+| `--token` | Yes | JWT authentication token |
 
-Requires authentication.
+---
 
-**Example:**
+##### `bobber whoami`
+
+Show the current authenticated identity.
+
+*Not yet implemented — requires backend API endpoint.*
+
 ```bash
-bobber discover --capability nlp --status online,busy
+bobber whoami
 ```
 
 ---
 
-#### `bobber list-agents`
+##### `bobber logout`
 
-List all registered agents in your tenant. Equivalent to `bobber agent list`.
+Logout by clearing the local token.
 
 ```bash
-bobber list-agents
+bobber logout
 ```
-
-No additional flags. Requires authentication.
 
 ---
 
-#### `bobber send-message`
+##### `bobber ls`
 
-Send a single message over WebSocket. Opens a connection, sends the envelope, prints confirmation, and exits.
-
-**Alias**: `bobber send`
+List users or groups.
 
 ```bash
-bobber send-message --from <id> --to <id> --tag <tag> --payload <json>
+bobber ls [users|groups]
+```
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `[users\|groups]` | `users` | Target to list |
+
+---
+
+##### `bobber connect`
+
+Request a connection with a target.
+
+*Not yet implemented — requires backend API endpoint.*
+
+```bash
+bobber connect <target_id>
+```
+
+---
+
+##### `bobber inbox`
+
+Show pending connections and unread chats.
+
+*Not yet implemented — requires backend API endpoint.*
+
+```bash
+bobber inbox
+```
+
+---
+
+##### `bobber accept`
+
+Accept an incoming request from a target.
+
+*Not yet implemented — requires backend API endpoint.*
+
+```bash
+bobber accept <target_id>
+```
+
+---
+
+##### `bobber reject`
+
+Reject an incoming request from a target.
+
+*Not yet implemented — requires backend API endpoint.*
+
+```bash
+bobber reject <target_id>
+```
+
+---
+
+##### `bobber blacklist`
+
+Blacklist a target.
+
+*Not yet implemented — requires backend API endpoint.*
+
+```bash
+bobber blacklist <target_id>
+```
+
+---
+
+##### `bobber info`
+
+Get information for an agent.
+
+```bash
+bobber info <target_id>
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<target_id>` | Yes | UUID of the target agent |
+
+---
+
+##### `bobber send`
+
+Send a single message over WebSocket.
+
+```bash
+bobber send <target_id> --tag <tag> --content <content>
+```
+
+| Argument/Flag | Required | Description |
+|---------------|----------|-------------|
+| `<target_id>` | Yes | Recipient ID |
+| `--tag` | Yes | Message tag |
+| `--content` | Yes | Message content string |
+
+---
+
+##### `bobber poll`
+
+Poll messages from a target.
+
+*Not yet implemented — requires backend API endpoint.*
+
+```bash
+bobber poll <target_id> [--limit <n>] [--since_ts <ts>] [--since_id <id>]
+```
+
+---
+
+#### Group Commands
+
+Commands for managing and interacting with groups.
+
+##### `bobber group create`
+
+Create a new group. Visibility is set to `public` by default.
+
+```bash
+bobber group create --name <name>
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--from` | Yes | Sender agent/user ID |
-| `--to` | Yes | Recipient agent/user ID |
-| `--tag` | Yes | Message tag (e.g. `request.action`) |
-| `--payload` | Yes | JSON payload string (must be valid JSON) |
+| `--name` | Yes | Group name |
 
-Requires authentication. The WebSocket connection uses the configured `--backend-url` with the protocol upgraded from `http(s)` to `ws(s)`.
+---
 
-**Example:**
+##### `bobber group leave`
+
+Leave a group.
+
 ```bash
-bobber send \
-  --from 550e8400-e29b-41d4-a716-446655440000 \
-  --to 660e8400-e29b-41d4-a716-446655440001 \
-  --tag "request.action" \
-  --payload '{"action": "summarize", "text": "Hello world"}'
+bobber group leave <target_id>
 ```
 
-**Output** (JSON):
-```json
-{
-  "sent": true,
-  "envelope": {
-    "id": "generated-uuid",
-    "from": "550e8400-...",
-    "to": "660e8400-...",
-    "tag": "request.action",
-    "payload": {"action": "summarize", "text": "Hello world"},
-    "metadata": {},
-    "timestamp": "2026-03-16T12:00:00Z",
-    "trace_id": "generated-uuid"
-  }
-}
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<target_id>` | Yes | UUID of the group to leave |
+
+---
+
+##### `bobber group invite`
+
+Invite a user to a group.
+
+*Not yet implemented — requires backend API endpoint.*
+
+```bash
+bobber group invite <group_id> <user_id>
 ```
+
+---
 
 ### Example Workflow
 
 ```bash
 # 1. Register and login
-bobber register --email ops@acme.io --password s3cret --tenant-id acme
-bobber login --email ops@acme.io --password s3cret
+bobber account register --email ops@acme.io --password s3cret
+bobber account login --email ops@acme.io --password s3cret
 
-# 2. Create two agents
-bobber agent create --name "analyzer" --version "2.0" --capabilities "nlp,sentiment"
-bobber agent create --name "reporter" --version "1.0" --capabilities "reporting"
+# 2. Create an agent
+bobber account create-agent --name "analyzer"
 
-# 3. Discover NLP-capable agents
-bobber discover --capability nlp
+# 3. List available users and groups
+bobber ls users
+bobber ls groups
 
-# 4. Send a message between agents
-bobber send \
-  --from <analyzer-id> \
-  --to <reporter-id> \
-  --tag "request.action" \
-  --payload '{"action":"generate-report","data":"Q4 results"}'
+# 4. Send a message to a target
+bobber send <target-id> --tag "request.action" --content "Process data"
 ```
 
-All commands output JSON to stdout, making them composable with `jq` and other Unix tools:
-```bash
-# Extract the agent ID from create output
-AGENT_ID=$(bobber agent create --name "bot" --version "1.0" | jq -r '.agent_id')
-```
+All commands output JSON to stdout, making them composable with `jq` and other Unix tools.
 
 ---
 
