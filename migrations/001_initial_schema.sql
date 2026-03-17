@@ -35,17 +35,14 @@ END $$;
 
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL,
-  email CITEXT NOT NULL,
+  email CITEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'member',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (tenant_id, email)
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS agents (
   agent_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL,
   display_name TEXT NOT NULL,
   owner_user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   capabilities JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -59,13 +56,11 @@ CREATE TABLE IF NOT EXISTS agents (
 
 CREATE TABLE IF NOT EXISTS chat_groups (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL,
-  name TEXT NOT NULL,
+  name TEXT NOT NULL UNIQUE,
   description TEXT,
   visibility group_visibility NOT NULL DEFAULT 'private',
   creator_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (tenant_id, name)
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS chat_group_members (
@@ -78,7 +73,6 @@ CREATE TABLE IF NOT EXISTS chat_group_members (
 
 CREATE TABLE IF NOT EXISTS topics (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL,
   group_id UUID NOT NULL REFERENCES chat_groups(id) ON DELETE CASCADE,
   subject TEXT NOT NULL,
   status topic_status NOT NULL DEFAULT 'OPEN',
@@ -87,8 +81,7 @@ CREATE TABLE IF NOT EXISTS topics (
 );
 
 CREATE TABLE IF NOT EXISTS messages (
-  id UUID NOT NULL,
-  tenant_id UUID NOT NULL,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   from_id UUID NOT NULL,
   to_id UUID NOT NULL,
   tag TEXT NOT NULL,
@@ -96,13 +89,11 @@ CREATE TABLE IF NOT EXISTS messages (
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   "timestamp" TIMESTAMPTZ NOT NULL,
   trace_id UUID NOT NULL,
-  topic_id UUID REFERENCES topics(id) ON DELETE SET NULL,
-  PRIMARY KEY (tenant_id, "timestamp", id)
-) PARTITION BY LIST (tenant_id);
+  topic_id UUID REFERENCES topics(id) ON DELETE SET NULL
+);
 
 CREATE TABLE IF NOT EXISTS approval_requests (
   approval_id UUID PRIMARY KEY,
-  tenant_id UUID NOT NULL,
   agent_id UUID NOT NULL REFERENCES agents(agent_id) ON DELETE CASCADE,
   action TEXT NOT NULL,
   justification TEXT NOT NULL,
@@ -119,26 +110,23 @@ CREATE TABLE IF NOT EXISTS audit_log (
   event_type TEXT NOT NULL,
   actor_id UUID,
   agent_id UUID,
-  tenant_id UUID NOT NULL,
   details JSONB NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_agents_tenant_status ON agents (tenant_id, status);
-CREATE INDEX IF NOT EXISTS idx_agents_tenant_owner ON agents (tenant_id, owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_agents_status ON agents (status);
+CREATE INDEX IF NOT EXISTS idx_agents_owner ON agents (owner_user_id);
 CREATE INDEX IF NOT EXISTS idx_agents_capabilities_gin ON agents USING GIN (capabilities jsonb_path_ops);
 
-CREATE INDEX IF NOT EXISTS idx_topics_group_status ON topics (tenant_id, group_id, status, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_topics_parent ON topics (tenant_id, parent_topic_id);
+CREATE INDEX IF NOT EXISTS idx_topics_group_status ON topics (group_id, status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_topics_parent ON topics (parent_topic_id);
 
-CREATE INDEX IF NOT EXISTS idx_messages_trace ON messages (tenant_id, trace_id, "timestamp" DESC);
-CREATE INDEX IF NOT EXISTS idx_messages_topic_time ON messages (tenant_id, topic_id, "timestamp" DESC);
-CREATE INDEX IF NOT EXISTS idx_messages_to_tag_time ON messages (tenant_id, to_id, tag, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_trace ON messages (trace_id, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_topic_time ON messages (topic_id, "timestamp" DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_to_tag_time ON messages (to_id, tag, "timestamp" DESC);
 
-CREATE INDEX IF NOT EXISTS idx_approvals_pending ON approval_requests (tenant_id, status, urgency, created_at)
+CREATE INDEX IF NOT EXISTS idx_approvals_pending ON approval_requests (status, urgency, created_at)
 WHERE status = 'PENDING';
 
-CREATE INDEX IF NOT EXISTS idx_audit_tenant_time ON audit_log (tenant_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_audit_event_type ON audit_log (tenant_id, event_type, created_at DESC);
-
-CREATE TABLE IF NOT EXISTS messages_default PARTITION OF messages DEFAULT;
+CREATE INDEX IF NOT EXISTS idx_audit_time ON audit_log (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_event_type ON audit_log (event_type, created_at DESC);

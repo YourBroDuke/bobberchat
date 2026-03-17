@@ -91,13 +91,13 @@ Server endpoints for adapters:
 |----------------|-------|-------------|
 | `backend/internal/ratelimit/ratelimit.go` | ~160 | Token bucket rate limiter with per-agent, per-group, per-tag dimensions. Configurable rates, burst factor, auto-cleanup |
 | `backend/internal/ratelimit/ratelimit_test.go` | ~230 | 10 tests: basic limit, burst, refill, agent/group/tag scoping, concurrent, cleanup, disabled |
-| `backend/cmd/bobberd/main.go` (additions) | ~140 | `publishAndAudit` method: cross-tenant isolation (§11.3), rate limiting (§11.2.3), audit trail (§11.4). Enhanced graceful shutdown with `activeConns` drain-wait |
+| `backend/cmd/bobberd/main.go` (additions) | ~140 | `publishAndAudit` method: ownership-based access control (§11.3), rate limiting (§11.2.3), audit trail (§11.4). Enhanced graceful shutdown with `activeConns` drain-wait |
 | `backend/cmd/bobberd/main_test.go` | ~230 | 8 tests: cross-tenant denial, rate limiting (agent/group/tag), audit details, disabled limiter, no-audit-repo, empty caller tenant |
 | `backend/internal/observability/observability.go` (additions) | ~20 | `RateLimited` counter vec, `AuditLogged` counter, `ActiveWSConns` gauge |
 | `configs/backend.yaml` (additions) | ~10 | `rate_limits` config section with per-agent/group/tag rates and burst factor |
 
 Key implementation details:
-- **Cross-tenant isolation**: `publishAndAudit` blocks messages where envelope `tenant_id` differs from caller's `tenant_id` (returns 403)
+- **Ownership-based access control**: `publishAndAudit` verifies message sender ownership and group membership (returns 403 on violation)
 - **Rate limiting**: Token bucket per-agent, per-group, per-tag. Configurable via `configs/backend.yaml`. Returns 429 when exceeded
 - **Audit trail**: Every published message is logged to `audit_log` table via `AuditLogRepository.Append`
 - **Graceful shutdown**: `activeConns sync.WaitGroup` tracks live WebSocket connections; shutdown drains with timeout
@@ -162,7 +162,7 @@ Key implementation details:
 ### ~~Priority 1: Production Hardening~~ ✅ COMPLETE
 
 - [x] Rate limiting middleware (design spec §11.2) — Token bucket per-agent/group/tag in `backend/internal/ratelimit/`
-- [x] Cross-tenant isolation enforcement (design spec §11.3) — `publishAndAudit` blocks cross-tenant routing
+- [x] Ownership-based access control (design spec §11.3) — `publishAndAudit` verifies message sender ownership
 - [x] Audit trail logging to `audit_log` table (design spec §11.4) — via `AuditLogRepository.Append`
 - [x] Graceful shutdown with drain (design spec §12.5) — `activeConns` WaitGroup with timeout
 - [x] WebSocket ping/pong keepalive — already existed in `handleWebSocket`
@@ -275,18 +275,18 @@ Backend config: `configs/backend.yaml`
 - PostgreSQL 15+
 - 8 tables: `users`, `agents`, `chat_groups`, `chat_group_members`, `topics`, `messages`, `approval_requests`, `audit_log`
 - 6 enum types: `agent_status`, `group_visibility`, `topic_status`, `approval_status`, `urgency`, `participant_type`
-- `messages` table is partitioned by `tenant_id` (LIST) with a default partition
+- `messages` table uses time-based partitioning by `timestamp` (monthly ranges)
 - Migration: `migrations/001_initial_schema.sql`
 
 ### NATS JetStream Streams
 
 | Stream | Subject Pattern | Retention |
 |--------|----------------|-----------|
-| `BOBBER_MSG` | `bobberchat.*.msg.>` | 30 days |
-| `BOBBER_SYSTEM` | `bobberchat.*.system.>` | 24 hours |
-| `BOBBER_APPROVAL` | `bobberchat.*.approval.>` | 7 days |
+| `BOBBER_MSG` | `bobberchat.msg.>`, `bobberchat.group.>` | 30 days |
+| `BOBBER_SYSTEM` | `bobberchat.system.>` | 24 hours |
+| `BOBBER_APPROVAL` | `bobberchat.approval.>` | 7 days |
 
-Subject pattern: `bobberchat.{tenant_id}.msg.{to_id}`
+Subject pattern: `bobberchat.msg.{to_id}` for direct messages, `bobberchat.group.{group_id}` for groups
 
 ### REST API Endpoints (33 total)
 

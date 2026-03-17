@@ -98,7 +98,6 @@ bobber account register --email alice@example.com --password s3cret
 ```json
 {
   "id": "550e8400-e29b-41d4-a716-446655440000",
-  "tenant_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "email": "alice@example.com",
   "role": "user",
   "created_at": "2026-03-17T12:00:00Z"
@@ -128,7 +127,6 @@ bobber account login --email <email> --password <password>
   "expires_in": 3600,
   "user": {
     "id": "550e8400-e29b-41d4-a716-446655440000",
-    "tenant_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "email": "alice@example.com",
     "role": "user",
     "created_at": "2026-03-17T12:00:00Z"
@@ -287,13 +285,11 @@ Requires a valid JWT token; returns current user profile and owned agents.
 ```json
 {
   "user_id": "550e8400-e29b-41d4-a716-446655440000",
-  "tenant_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "email": "alice@example.com",
   "role": "user",
   "agents": [
     {
       "agent_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
-      "tenant_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
       "display_name": "analyzer",
       "owner_user_id": "550e8400-e29b-41d4-a716-446655440000",
       "capabilities": [],
@@ -339,7 +335,6 @@ bobber ls [users|groups]
   "agents": [
     {
       "agent_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
-      "tenant_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
       "display_name": "summarizer",
       "owner_user_id": "550e8400-e29b-41d4-a716-446655440000",
       "capabilities": ["summarize", "translate"],
@@ -359,7 +354,6 @@ bobber ls [users|groups]
   "groups": [
     {
       "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
-      "tenant_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
       "name": "my-team",
       "description": "",
       "visibility": "public",
@@ -385,7 +379,6 @@ bobber connect <target_id>
 {
   "request": {
     "id": "d4e5f6a7-b8c9-0123-def0-123456789abc",
-    "tenant_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "from_user_id": "550e8400-e29b-41d4-a716-446655440000",
     "to_user_id": "660f9500-f3ac-52e5-b827-557766550111",
     "status": "PENDING",
@@ -413,7 +406,6 @@ Returns pending connection requests addressed to the authenticated user.
   "requests": [
     {
       "id": "d4e5f6a7-b8c9-0123-def0-123456789abc",
-      "tenant_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
       "from_user_id": "660f9500-f3ac-52e5-b827-557766550111",
       "to_user_id": "550e8400-e29b-41d4-a716-446655440000",
       "status": "PENDING",
@@ -475,7 +467,6 @@ bobber blacklist <target_id>
 {
   "entry": {
     "id": "e5f6a7b8-c9d0-1234-ef01-23456789abcd",
-    "tenant_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     "user_id": "550e8400-e29b-41d4-a716-446655440000",
     "blocked_user_id": "660f9500-f3ac-52e5-b827-557766550111",
     "created_at": "2026-03-17T12:00:00Z"
@@ -501,7 +492,6 @@ bobber info <target_id>
 ```json
 {
   "agent_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
-  "tenant_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "display_name": "analyzer",
   "owner_user_id": "550e8400-e29b-41d4-a716-446655440000",
   "capabilities": ["summarize"],
@@ -570,7 +560,6 @@ bobber poll <target_id> [--limit <n>] [--since_ts <ts>] [--since_id <id>]
   "messages": [
     {
       "id": "f6a7b8c9-d0e1-2345-f012-3456789abcde",
-      "tenant_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
       "from_id": "660f9500-f3ac-52e5-b827-557766550111",
       "to_id": "550e8400-e29b-41d4-a716-446655440000",
       "tag": "request.action",
@@ -606,7 +595,6 @@ bobber group create --name <name>
 ```json
 {
   "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
-  "tenant_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "name": "my-team",
   "description": "",
   "visibility": "public",
@@ -754,7 +742,7 @@ Configuration is loaded from the YAML file and can be overridden with environmen
 - Connects to NATS JetStream and PostgreSQL on startup
 - Registers 3 protocol adapters: MCP, A2A, gRPC
 - Serves 33 REST + WebSocket endpoints on the configured address
-- Enforces cross-tenant message isolation
+- Enforces ownership-based access control
 - Applies per-agent, per-group, per-tag rate limiting (when enabled)
 - Logs audit trail for every published message
 - Graceful shutdown on `SIGINT` / `SIGTERM` with 15-second drain timeout for active WebSocket connections
@@ -772,14 +760,13 @@ Real-time dashboard for monitoring and interacting with the BobberChat agent eco
 You must obtain a JWT token first (via `bobber login` or the API directly).
 
 ```bash
-bobber-tui [--backend-url <url>] [--token <jwt>] [--tenant-id <id>]
+bobber-tui [--backend-url <url>] [--token <jwt>]
 ```
 
 | Flag | Env Var | Default | Description |
 |------|---------|---------|-------------|
 | `--backend-url` | `BOBBERCHAT_BACKEND_URL` | `http://localhost:8080` | Backend server URL |
 | `--token` | `BOBBERCHAT_TOKEN` | *(empty)* | JWT bearer token |
-| `--tenant-id` | `BOBBERCHAT_TENANT_ID` | *(empty)* | Tenant ID for the session |
 
 **Note**: The TUI uses `BOBBERCHAT_` env var prefix (not `BOBBER_`), distinct from the CLI.
 

@@ -102,7 +102,7 @@ ports:
    # Register and login to get a fresh token
    curl -s -X POST http://localhost:8080/v1/auth/register \
      -H "Content-Type: application/json" \
-     -d '{"email":"test@test.com","password":"pass1234","tenant_id":"550e8400-e29b-41d4-a716-446655440000"}'
+     -d '{"email":"test@test.com","password":"pass1234"}'
 
    curl -s -X POST http://localhost:8080/v1/auth/login \
      -H "Content-Type: application/json" \
@@ -258,8 +258,8 @@ helm upgrade bobberchat deploy/helm/bobberchat/ \
 
 **Symptom**: The left pane shows agents, but the center pane is empty.
 
-**Cause**: No messages have been sent yet, or the WebSocket is not subscribed to the correct tenant.
+**Cause**: No messages have been sent yet, or the WebSocket is not subscribed to the correct subjects.
 
 **Fix**:
 1. Send a test message via the API (see [manual-testing.md](manual-testing.md))
-2. Verify the `--tenant-id` flag matches the tenant used when creating agents and messages
+2. Verify your authentication token is valid and the WebSocket connection is established

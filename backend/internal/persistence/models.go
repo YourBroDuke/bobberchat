@@ -63,7 +63,6 @@ const (
 
 type User struct {
 	ID                         uuid.UUID  `json:"id"`
-	TenantID                   uuid.UUID  `json:"tenant_id"`
 	Email                      string     `json:"email"`
 	PasswordHash               string     `json:"-"`
 	Role                       string     `json:"role"`
@@ -75,7 +74,6 @@ type User struct {
 
 type Agent struct {
 	AgentID       uuid.UUID   `json:"agent_id"`
-	TenantID      uuid.UUID   `json:"tenant_id"`
 	DisplayName   string      `json:"display_name"`
 	OwnerUserID   uuid.UUID   `json:"owner_user_id"`
 	Capabilities  []string    `json:"capabilities"`
@@ -89,7 +87,6 @@ type Agent struct {
 
 type ChatGroup struct {
 	ID          uuid.UUID       `json:"id"`
-	TenantID    uuid.UUID       `json:"tenant_id"`
 	Name        string          `json:"name"`
 	Description *string         `json:"description,omitempty"`
 	Visibility  GroupVisibility `json:"visibility"`
@@ -106,7 +103,6 @@ type ChatGroupMember struct {
 
 type Topic struct {
 	ID            uuid.UUID   `json:"id"`
-	TenantID      uuid.UUID   `json:"tenant_id"`
 	GroupID       uuid.UUID   `json:"group_id"`
 	Subject       string      `json:"subject"`
 	Status        TopicStatus `json:"status"`
@@ -116,7 +112,6 @@ type Topic struct {
 
 type Message struct {
 	ID        uuid.UUID      `json:"id"`
-	TenantID  uuid.UUID      `json:"tenant_id"`
 	FromID    uuid.UUID      `json:"from_id"`
 	ToID      uuid.UUID      `json:"to_id"`
 	Tag       string         `json:"tag"`
@@ -129,7 +124,6 @@ type Message struct {
 
 type ApprovalRequest struct {
 	ApprovalID    uuid.UUID      `json:"approval_id"`
-	TenantID      uuid.UUID      `json:"tenant_id"`
 	AgentID       uuid.UUID      `json:"agent_id"`
 	Action        string         `json:"action"`
 	Justification string         `json:"justification"`
@@ -146,7 +140,6 @@ type AuditLogEntry struct {
 	EventType string         `json:"event_type"`
 	ActorID   *uuid.UUID     `json:"actor_id,omitempty"`
 	AgentID   *uuid.UUID     `json:"agent_id,omitempty"`
-	TenantID  uuid.UUID      `json:"tenant_id"`
 	Details   map[string]any `json:"details,omitempty"`
 	CreatedAt time.Time      `json:"created_at"`
 }
@@ -161,7 +154,6 @@ const (
 
 type ConnectionRequest struct {
 	ID         uuid.UUID               `json:"id"`
-	TenantID   uuid.UUID               `json:"tenant_id"`
 	FromUserID uuid.UUID               `json:"from_user_id"`
 	ToUserID   uuid.UUID               `json:"to_user_id"`
 	Status     ConnectionRequestStatus `json:"status"`
@@ -171,7 +163,6 @@ type ConnectionRequest struct {
 
 type BlacklistEntry struct {
 	ID            uuid.UUID `json:"id"`
-	TenantID      uuid.UUID `json:"tenant_id"`
 	UserID        uuid.UUID `json:"user_id"`
 	BlockedUserID uuid.UUID `json:"blocked_user_id"`
 	CreatedAt     time.Time `json:"created_at"`

@@ -12,7 +12,7 @@ func TestAllow_DisabledLimiter(t *testing.T) {
 	l := New(cfg)
 
 	for i := 0; i < 10000; i++ {
-		if !l.Allow(DimensionAgent, "t/a") {
+		if !l.Allow(DimensionAgent, "a") {
 			t.Fatalf("disabled limiter should always allow")
 		}
 	}
@@ -32,7 +32,7 @@ func TestAllow_BurstThenThrottle(t *testing.T) {
 
 	allowed := 0
 	for i := 0; i < 200; i++ {
-		if l.Allow(DimensionAgent, AgentKey("tenant1", "agent1")) {
+		if l.Allow(DimensionAgent, AgentKey("agent1")) {
 			allowed++
 		}
 	}
@@ -55,7 +55,7 @@ func TestAllow_RefillsOverTime(t *testing.T) {
 	now := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	l.now = func() time.Time { return now }
 
-	key := AgentKey("t", "a")
+	key := AgentKey("a")
 	for i := 0; i < 20; i++ {
 		l.Allow(DimensionAgent, key)
 	}
@@ -88,8 +88,8 @@ func TestAllow_DimensionIsolation(t *testing.T) {
 	frozen := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	l.now = func() time.Time { return frozen }
 
-	agentKey := AgentKey("t", "a")
-	groupKey := GroupKey("t", "g")
+	agentKey := AgentKey("a")
+	groupKey := GroupKey("g")
 
 	for i := 0; i < 5; i++ {
 		l.Allow(DimensionAgent, agentKey)
@@ -115,13 +115,13 @@ func TestAllow_PerKeyIsolation(t *testing.T) {
 	l.now = func() time.Time { return frozen }
 
 	for i := 0; i < 5; i++ {
-		l.Allow(DimensionAgent, AgentKey("t", "agent1"))
+		l.Allow(DimensionAgent, AgentKey("agent1"))
 	}
-	if l.Allow(DimensionAgent, AgentKey("t", "agent1")) {
+	if l.Allow(DimensionAgent, AgentKey("agent1")) {
 		t.Fatal("agent1 should be exhausted")
 	}
 
-	if !l.Allow(DimensionAgent, AgentKey("t", "agent2")) {
+	if !l.Allow(DimensionAgent, AgentKey("agent2")) {
 		t.Fatal("agent2 should be independent")
 	}
 }
@@ -186,17 +186,17 @@ func TestCleanup(t *testing.T) {
 func TestKeyFunctions(t *testing.T) {
 	tests := []struct {
 		name string
-		fn   func(string, string) string
-		a, b string
+		fn   func(string) string
+		a    string
 		want string
 	}{
-		{"AgentKey", AgentKey, "t1", "a1", "t1/a1"},
-		{"GroupKey", GroupKey, "t1", "g1", "t1/g1"},
-		{"TagKey", TagKey, "t1", "request.action", "t1/request.action"},
+		{"AgentKey", AgentKey, "a1", "agent:a1"},
+		{"GroupKey", GroupKey, "g1", "group:g1"},
+		{"TagKey", TagKey, "request.action", "tag:request.action"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := tt.fn(tt.a, tt.b)
+			got := tt.fn(tt.a)
 			if got != tt.want {
 				t.Fatalf("got %q, want %q", got, tt.want)
 			}

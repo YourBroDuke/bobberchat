@@ -55,7 +55,6 @@ type model struct {
 	backendURL string
 	wsConn     *websocket.Conn
 	token      string
-	tenantID   string
 	connected  bool
 
 	approvals      []approvalEntry
@@ -135,7 +134,7 @@ var (
 	selectedStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Bold(true)
 )
 
-func newModel(backendURL, token, tenantID string) model {
+func newModel(backendURL, token string) model {
 	ti := textinput.New()
 	ti.Placeholder = "Type message or command..."
 	ti.Prompt = "> "
@@ -148,7 +147,6 @@ func newModel(backendURL, token, tenantID string) model {
 	return model{
 		backendURL:  strings.TrimRight(strings.TrimSpace(backendURL), "/"),
 		token:       strings.TrimSpace(token),
-		tenantID:    strings.TrimSpace(tenantID),
 		textInput:   ti,
 		msgViewport: vp,
 		statusMsg:   "Starting...",
@@ -1512,10 +1510,9 @@ func envOr(key, fallback string) string {
 func main() {
 	backendURL := flag.String("backend-url", envOr("BOBBERCHAT_BACKEND_URL", "http://localhost:8080"), "BobberChat backend URL")
 	token := flag.String("token", envOr("BOBBERCHAT_TOKEN", ""), "JWT bearer token")
-	tenantID := flag.String("tenant-id", envOr("BOBBERCHAT_TENANT_ID", ""), "tenant ID")
 	flag.Parse()
 
-	m := newModel(*backendURL, *token, *tenantID)
+	m := newModel(*backendURL, *token)
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "bobber-tui error: %v\n", err)

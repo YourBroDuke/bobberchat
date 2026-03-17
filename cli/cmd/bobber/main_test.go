@@ -383,7 +383,7 @@ func TestAccountRegister(t *testing.T) {
 			t.Fatalf("execute failed: %v", err)
 		}
 
-		if got["email"] != "u@example.com" || got["password"] != "pw" || got["tenant_id"] != "" {
+		if got["email"] != "u@example.com" || got["password"] != "pw" {
 			t.Fatalf("unexpected payload: %v", got)
 		}
 	})

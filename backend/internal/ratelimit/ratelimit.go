@@ -107,18 +107,18 @@ func (l *Limiter) Allow(dimension string, key string) bool {
 }
 
 // AgentKey returns the rate-limit key for a per-agent check.
-func AgentKey(tenantID, agentID string) string {
-	return fmt.Sprintf("%s/%s", tenantID, agentID)
+func AgentKey(agentID string) string {
+	return fmt.Sprintf("agent:%s", agentID)
 }
 
 // GroupKey returns the rate-limit key for a per-group check.
-func GroupKey(tenantID, groupID string) string {
-	return fmt.Sprintf("%s/%s", tenantID, groupID)
+func GroupKey(groupID string) string {
+	return fmt.Sprintf("group:%s", groupID)
 }
 
 // TagKey returns the rate-limit key for a per-tag check.
-func TagKey(tenantID, tag string) string {
-	return fmt.Sprintf("%s/%s", tenantID, tag)
+func TagKey(tag string) string {
+	return fmt.Sprintf("tag:%s", tag)
 }
 
 // Dimensions used to select rate.

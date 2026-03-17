@@ -5,11 +5,13 @@ package api
 import (
 	"net/http"
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 func TestCreateAgent_Success(t *testing.T) {
 	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, newTenantID(), "agent-create-success")
+	token, _ := registerAndLogin(t, env, "agent-create-success")
 
 	resp := env.doRequest(t, http.MethodPost, "/v1/agents", map[string]any{
 		"display_name": "agent-create-success",
@@ -37,7 +39,7 @@ func TestCreateAgent_NoAuth(t *testing.T) {
 
 func TestCreateAgent_MissingFields(t *testing.T) {
 	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, newTenantID(), "agent-create-missing")
+	token, _ := registerAndLogin(t, env, "agent-create-missing")
 
 	respNoName := env.doRequest(t, http.MethodPost, "/v1/agents", map[string]any{
 		"capabilities": []string{"test"},
@@ -54,7 +56,7 @@ func TestCreateAgent_MissingFields(t *testing.T) {
 
 func TestGetAgent_Success(t *testing.T) {
 	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, newTenantID(), "agent-get-success")
+	token, _ := registerAndLogin(t, env, "agent-get-success")
 	agentID, _ := env.createAgent(t, token, "agent-get-success", []string{"cap"})
 
 	resp := env.doRequest(t, http.MethodGet, "/v1/agents/"+agentID, nil, token)
@@ -62,7 +64,6 @@ func TestGetAgent_Success(t *testing.T) {
 	body := env.readJSON(t, resp)
 
 	assertJSONFieldEquals(t, body, "agent_id", agentID)
-	assertJSONField(t, body, "tenant_id")
 	assertJSONFieldEquals(t, body, "display_name", "agent-get-success")
 	assertJSONField(t, body, "owner_user_id")
 	assertJSONField(t, body, "capabilities")
@@ -73,17 +74,17 @@ func TestGetAgent_Success(t *testing.T) {
 
 func TestGetAgent_NotFound(t *testing.T) {
 	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, newTenantID(), "agent-get-not-found")
+	token, _ := registerAndLogin(t, env, "agent-get-not-found")
 
-	resp := env.doRequest(t, http.MethodGet, "/v1/agents/"+newTenantID(), nil, token)
+	resp := env.doRequest(t, http.MethodGet, "/v1/agents/"+uuid.NewString(), nil, token)
 	assertStatus(t, resp, http.StatusNotFound)
 }
 
-func TestGetAgent_CrossTenant(t *testing.T) {
+func TestGetAgent_CrossOwner(t *testing.T) {
 	env := setupTestEnv(t)
-	tokenA, _ := registerAndLogin(t, env, newTenantID(), "agent-cross-tenant-a")
-	tokenB, _ := registerAndLogin(t, env, newTenantID(), "agent-cross-tenant-b")
-	agentID, _ := env.createAgent(t, tokenA, "agent-cross-tenant", []string{"cap"})
+	tokenA, _ := registerAndLogin(t, env, "agent-cross-owner-a")
+	tokenB, _ := registerAndLogin(t, env, "agent-cross-owner-b")
+	agentID, _ := env.createAgent(t, tokenA, "agent-cross-owner", []string{"cap"})
 
 	resp := env.doRequest(t, http.MethodGet, "/v1/agents/"+agentID, nil, tokenB)
 	assertStatus(t, resp, http.StatusForbidden)
@@ -91,7 +92,7 @@ func TestGetAgent_CrossTenant(t *testing.T) {
 
 func TestDeleteAgent_Success(t *testing.T) {
 	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, newTenantID(), "agent-delete-success")
+	token, _ := registerAndLogin(t, env, "agent-delete-success")
 	agentID, _ := env.createAgent(t, token, "agent-delete-success", []string{"cap"})
 
 	resp := env.doRequest(t, http.MethodDelete, "/v1/agents/"+agentID, nil, token)
@@ -102,15 +103,15 @@ func TestDeleteAgent_Success(t *testing.T) {
 
 func TestDeleteAgent_NotFound(t *testing.T) {
 	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, newTenantID(), "agent-delete-not-found")
+	token, _ := registerAndLogin(t, env, "agent-delete-not-found")
 
-	resp := env.doRequest(t, http.MethodDelete, "/v1/agents/"+newTenantID(), nil, token)
+	resp := env.doRequest(t, http.MethodDelete, "/v1/agents/"+uuid.NewString(), nil, token)
 	assertStatus(t, resp, http.StatusNotFound)
 }
 
 func TestRotateSecret_Success(t *testing.T) {
 	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, newTenantID(), "agent-rotate-success")
+	token, _ := registerAndLogin(t, env, "agent-rotate-success")
 	agentID, oldSecret := env.createAgent(t, token, "agent-rotate-success", []string{"cap"})
 
 	resp := env.doRequest(t, http.MethodPost, "/v1/agents/"+agentID+"/rotate-secret", map[string]any{
@@ -127,7 +128,7 @@ func TestRotateSecret_Success(t *testing.T) {
 
 func TestRotateSecret_GracePeriod(t *testing.T) {
 	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, newTenantID(), "agent-rotate-grace")
+	token, _ := registerAndLogin(t, env, "agent-rotate-grace")
 	agentID, oldSecret := env.createAgent(t, token, "agent-rotate-grace", []string{"cap"})
 
 	groupResp := env.doRequest(t, http.MethodPost, "/v1/groups", map[string]any{

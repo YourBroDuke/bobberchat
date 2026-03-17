@@ -185,12 +185,11 @@ func (e *testEnv) readJSON(t *testing.T, resp *http.Response) map[string]any {
 	return out
 }
 
-func (e *testEnv) registerUser(t *testing.T, tenantID, email, password string) map[string]any {
+func (e *testEnv) registerUser(t *testing.T, email, password string) map[string]any {
 	t.Helper()
 	resp := e.doRequest(t, http.MethodPost, "/v1/auth/register", map[string]any{
-		"tenant_id": tenantID,
-		"email":     email,
-		"password":  password,
+		"email":    email,
+		"password": password,
 	}, "")
 	assertStatus(t, resp, http.StatusCreated)
 	return e.readJSON(t, resp)
@@ -263,10 +262,6 @@ func assertJSONFieldEquals(t *testing.T, body map[string]any, field string, expe
 	}
 }
 
-func newTenantID() string {
-	return uuid.NewString()
-}
-
 func newEmail(prefix string) string {
 	return fmt.Sprintf("%s-%s@example.com", prefix, uuid.NewString())
 }
@@ -280,11 +275,11 @@ func (e *testEnv) verifyUserEmail(t *testing.T, email string) {
 	}
 }
 
-func registerAndLogin(t *testing.T, env *testEnv, tenantID string, prefix string) (string, map[string]any) {
+func registerAndLogin(t *testing.T, env *testEnv, prefix string) (string, map[string]any) {
 	t.Helper()
 	email := newEmail(prefix)
 	password := "password-123"
-	env.registerUser(t, tenantID, email, password)
+	env.registerUser(t, email, password)
 	env.verifyUserEmail(t, email)
 	return env.loginUser(t, email, password)
 }

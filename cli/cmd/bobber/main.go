@@ -86,9 +86,8 @@ func accountRegisterCmd(cfg *cliConfig) *cobra.Command {
 				return errors.New("--email and --password are required")
 			}
 			resp, err := doJSON(http.MethodPost, cfg.backendURL()+"/v1/auth/register", "", map[string]any{
-				"tenant_id": "",
-				"email":     email,
-				"password":  password,
+				"email":    email,
+				"password": password,
 			})
 			if err != nil {
 				return err

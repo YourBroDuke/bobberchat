@@ -48,19 +48,19 @@ func (b *Broker) Setup(ctx context.Context) error {
 	streams := []jetstream.StreamConfig{
 		{
 			Name:      "BOBBER_MSG",
-			Subjects:  []string{"bobberchat.*.msg.>", "bobberchat.*.group.>"},
+			Subjects:  []string{"bobberchat.msg.>", "bobberchat.group.>"},
 			Retention: jetstream.InterestPolicy,
 			MaxAge:    30 * 24 * time.Hour,
 		},
 		{
 			Name:      "BOBBER_SYSTEM",
-			Subjects:  []string{"bobberchat.*.system.>"},
+			Subjects:  []string{"bobberchat.system.>"},
 			Retention: jetstream.LimitsPolicy,
 			MaxAge:    24 * time.Hour,
 		},
 		{
 			Name:      "BOBBER_APPROVAL",
-			Subjects:  []string{"bobberchat.*.approval.>"},
+			Subjects:  []string{"bobberchat.approval.>"},
 			Retention: jetstream.WorkQueuePolicy,
 			MaxAge:    7 * 24 * time.Hour,
 		},
@@ -116,13 +116,13 @@ func (b *Broker) PublishMessage(ctx context.Context, env *protocol.Envelope) err
 	return nil
 }
 
-func (b *Broker) SubscribeAgent(ctx context.Context, tenantID, agentID string, handler func(*protocol.Envelope)) error {
-	if b == nil || b.js == nil || tenantID == "" || agentID == "" || handler == nil {
+func (b *Broker) SubscribeAgent(ctx context.Context, agentID string, handler func(*protocol.Envelope)) error {
+	if b == nil || b.js == nil || agentID == "" || handler == nil {
 		return errors.New("invalid subscribe agent input")
 	}
 
-	subject := fmt.Sprintf("bobberchat.%s.msg.%s", tenantID, agentID)
-	consumerName := fmt.Sprintf("agent-%s-%s", tenantID, agentID)
+	subject := fmt.Sprintf("bobberchat.msg.%s", agentID)
+	consumerName := fmt.Sprintf("agent-%s", agentID)
 	stream, err := b.js.Stream(ctx, "BOBBER_MSG")
 	if err != nil {
 		return err
@@ -154,13 +154,13 @@ func (b *Broker) SubscribeAgent(ctx context.Context, tenantID, agentID string, h
 	return nil
 }
 
-func (b *Broker) SubscribeGroup(ctx context.Context, tenantID, groupID string, handler func(*protocol.Envelope)) error {
-	if b == nil || b.js == nil || tenantID == "" || groupID == "" || handler == nil {
+func (b *Broker) SubscribeGroup(ctx context.Context, groupID string, handler func(*protocol.Envelope)) error {
+	if b == nil || b.js == nil || groupID == "" || handler == nil {
 		return errors.New("invalid subscribe group input")
 	}
 
-	subject := fmt.Sprintf("bobberchat.%s.group.%s", tenantID, groupID)
-	consumerName := fmt.Sprintf("group-%s-%s", tenantID, groupID)
+	subject := fmt.Sprintf("bobberchat.group.%s", groupID)
+	consumerName := fmt.Sprintf("group-%s", groupID)
 	stream, err := b.js.Stream(ctx, "BOBBER_MSG")
 	if err != nil {
 		return err
@@ -201,32 +201,22 @@ func (b *Broker) Close() {
 }
 
 func subjectForEnvelope(env *protocol.Envelope) (string, error) {
-	tenantID, ok := env.Metadata["tenant_id"].(string)
-	if !ok || tenantID == "" {
-		if t, ok := env.Metadata["tenant"].(string); ok {
-			tenantID = t
-		}
-	}
-	if tenantID == "" {
-		return "", errors.New("tenant_id missing in metadata")
-	}
-
 	family := protocol.ParseTagFamily(env.Tag)
 	switch family {
 	case protocol.TagSystem:
 		suffix := strings.TrimPrefix(env.Tag, protocol.TagSystem+".")
-		return fmt.Sprintf("bobberchat.%s.system.%s", tenantID, suffix), nil
+		return fmt.Sprintf("bobberchat.system.%s", suffix), nil
 	case protocol.TagApproval:
 		suffix := strings.TrimPrefix(env.Tag, protocol.TagApproval+".")
-		return fmt.Sprintf("bobberchat.%s.approval.%s", tenantID, suffix), nil
+		return fmt.Sprintf("bobberchat.approval.%s", suffix), nil
 	default:
 		if strings.HasPrefix(env.To, "group:") {
 			groupID := strings.TrimPrefix(env.To, "group:")
 			if groupID == "" {
 				return "", errors.New("group id missing")
 			}
-			return fmt.Sprintf("bobberchat.%s.group.%s", tenantID, groupID), nil
+			return fmt.Sprintf("bobberchat.group.%s", groupID), nil
 		}
-		return fmt.Sprintf("bobberchat.%s.msg.%s", tenantID, env.To), nil
+		return fmt.Sprintf("bobberchat.msg.%s", env.To), nil
 	}
 }

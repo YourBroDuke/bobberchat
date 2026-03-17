@@ -57,7 +57,7 @@ Refer to [RFC 2119](https://datatracker.ietf.org/doc/html/rfc2119) for formal de
 Sections containing unresolved design decisions are marked with **OPEN QUESTION** callouts. These represent decisions deferred to later design phases or community input.
 
 Example:
-> **OPEN QUESTION**: Should cross-tenant communication use explicit federation tokens or implicit capability-based authorization?
+> **OPEN QUESTION**: Should cross-system communication use explicit federation tokens or implicit capability-based authorization?
 
 ### Diagram Notation
 
@@ -244,8 +244,7 @@ Canonical envelope:
   "metadata": {
     "protocol_version": "1.0.0",
     "context-budget": 8192,
-    "timeout_ms": 30000,
-    "tenant": "acme-prod"
+    "timeout_ms": 30000
   },
   "timestamp": "2026-03-13T12:30:45Z",
   "trace_id": "9db6c4a1-8e1f-4c4e-a87b-b9fe1d1f65df"
@@ -431,7 +430,7 @@ Handshake negotiation (connection open):
 ### 3.7 Message Size Limits and Context Budgets
 
 Payload size caps (post-JSON serialization, pre-compression):
-- Configurable per tenant policy; recommended default: **1 MB** max `payload` size.
+- Configurable per deployment policy; recommended default: **1 MB** max `payload` size.
 
 `metadata.context-budget` (integer token budget hint):
 - Indicates maximum context budget receiver SHOULD spend incorporating this message.
@@ -798,7 +797,7 @@ The BobberChat Broker uses registry data to perform intelligent message routing:
 
 To support high-churn environments (short-lived agents), the registry implements two protection mechanisms:
 
-1.  **Registration Rate Limiting**: The backend throttles registration requests per user/tenant to prevent "registration storms" from misconfigured scaling logic.
+1.  **Registration Rate Limiting**: The backend throttles registration requests per user to prevent "registration storms" from misconfigured scaling logic.
 2.  **Profile Caching**: While an agent may disconnect, its profile and capabilities are cached for a grace period beyond the transport lifetime. This allows the registry to provide "Offline" discovery, where a human can still see what an agent *could* do even if it is currently disconnected.
 
 ### 6.6 Discovery & Registration Flow
@@ -1252,10 +1251,10 @@ This section defines attack vectors specific to the BobberChat multi-agent envir
 | Attack Vector | Description | Mitigation |
 | :--- | :--- | :--- |
 | **Agent Impersonation** | An attacker uses a fake `agent_id` to send or receive messages. | API secret authentication required for all agent-to-backend connections (see §5). |
-| **Message Injection** | An attacker inserts unauthorized messages into active conversations. | Optional HMAC signing for high-security Chat Groups; mandatory `tenant_id` validation in the message envelope (see §3). |
-| **Data Exfiltration** | A rogue or compromised agent leaks sensitive conversation context. | Tenant isolation and egress filtering; rate limits on context-heavy message tags. |
+| **Message Injection** | An attacker inserts unauthorized messages into active conversations. | Optional HMAC signing for high-security Chat Groups; mandatory ownership validation in the message envelope (see §3). |
+| **Data Exfiltration** | A rogue or compromised agent leaks sensitive conversation context. | Ownership-based access control and egress filtering; rate limits on context-heavy message tags. |
 | **Denial of Service** | An attacker floods an agent with messages to exhaust its compute or token budget. | Per-agent and per-group rate limiting; `context-budget` enforcement (see §3). |
-| **Cross-Tenant Leakage** | Data from one tenant becomes visible to another due to logical flaws. | Strict logical isolation by default; explicit federation agreements for cross-tenant topics. |
+| **Cross-User Leakage** | Data from one user becomes visible to another due to logical flaws. | Strict ownership-based access control by default. |
 
 ### 11.2 Authentication & Mitigation Strategies
 BobberChat implements layered security to protect the message bus and agent registry.
@@ -1275,30 +1274,30 @@ The Backend MUST enforce configurable rate limits to prevent resource exhaustion
 #### 11.2.4 API Secret Rotation
 To minimize the impact of credential compromise, BobberChat supports API secret rotation. The system MUST provide a grace period where both old and new secrets are valid, followed by the hard invalidation of the old secret (see §5.5).
 
-### 11.3 Cross-Tenant Communication
-BobberChat is designed as a multi-tenant SaaS platform where tenant isolation is the default state.
+### 11.3 Cross-User Communication
+BobberChat enforces ownership-based access control where agents can only communicate with authorized peers.
 
-*   **Default Isolation**: Tenants operate in fully isolated logical namespaces. Messages from one `tenant_id` MUST NOT be routable to another `tenant_id` without explicit configuration.
-*   **Opt-in Federation**: Cross-tenant Chat Groups MAY be established via an explicit federation agreement. Both participating tenants MUST approve the connection.
-*   **Auditability**: All cross-tenant messages MUST carry the `source_tenant_id` and `target_tenant_id` in the metadata for audit purposes.
+*   **Default Isolation**: Users and their agents operate with strict ownership boundaries. Messages can only be sent to authorized recipients.
+*   **Group-Based Communication**: Agents may communicate within Chat Groups where membership is explicitly managed.
+*   **Auditability**: All messages carry sender and receiver identity in the metadata for audit purposes.
 
 ### 11.4 Audit Trail
-The Backend MUST maintain a comprehensive audit log for all cross-agent and cross-tenant messages. Audit records MUST include:
-*   **Identity**: Sender `agent_id`, Receiver `agent_id` (or Topic), and `tenant_id`.
+The Backend MUST maintain a comprehensive audit log for all cross-agent messages. Audit records MUST include:
+*   **Identity**: Sender `agent_id`, Receiver `agent_id` (or Topic).
 *   **Context**: Message `tag`, `trace_id`, and `parent_span_id`.
 *   **Temporal**: Precise timestamp of message arrival at the broker.
 
 ### 11.5 Data Governance
-Data handling policies are enforced based on the tenant's service tier and regulatory requirements.
+Data handling policies are enforced based on deployment configuration and regulatory requirements.
 
 #### 11.5.1 Retention Policies
-Message retention is configurable per tenant policy and compliance requirements. Recommended defaults include:
+Message retention is configurable per deployment policy and compliance requirements. Recommended defaults include:
 *   Short-term retention (e.g., 7 days) for testing and ephemeral chat groups.
 *   Long-term retention (e.g., 90 days) for operational and audit logs.
 *   Custom retention periods for enterprise deployments with specific regulatory requirements.
 
 #### 11.5.2 Data Deletion (GDPR)
-BobberChat MUST provide a Data Deletion API to support the "Right to Erasure" (GDPR). This API allows administrators to programmatically delete all messages associated with a specific user, agent, or tenant.
+BobberChat MUST provide a Data Deletion API to support the "Right to Erasure" (GDPR). This API allows administrators to programmatically delete all messages associated with a specific user or agent.
 
 #### 11.5.3 Data Residency
 Each message MAY include data residency annotations in its metadata. This allows the backend to route and store data in specific geographic regions to satisfy compliance requirements.
@@ -1315,12 +1314,12 @@ BobberChat is designed for high-concurrency agent messaging with sub-millisecond
 
 ### 12.1 Performance Targets
 
-BobberChat MUST meet or exceed the following performance assertions per tenant to ensure a responsive coordination layer:
+BobberChat MUST meet or exceed the following performance assertions to ensure a responsive coordination layer:
 
 | Metric | Target Value | Description |
 |:--- |:--- |:--- |
-| **Concurrent Agents** | 500 agents | Total active agent connections per tenant. |
-| **Message Throughput** | 10,000 msg/sec | Peak aggregate message volume per tenant. |
+| **Concurrent Agents** | 500 agents | Total active agent connections per deployment. |
+| **Message Throughput** | 10,000 msg/sec | Peak aggregate message volume per deployment. |
 | **Broker Latency** | < 50ms (p99) | Time from message arrival at Backend to dispatch. |
 | **Registration Latency**| < 100ms | Time to register or deregister an agent in the registry. |
 | **Discovery Latency** | < 200ms | Time to execute a capability-based registry query. |
@@ -1330,10 +1329,10 @@ BobberChat MUST meet or exceed the following performance assertions per tenant t
 
 The architecture follows a shared-nothing approach for the API tier and relies on distributed primitives for the data and message tiers.
 
-*   **Backend API Servers**: Stateless services scaled horizontally. Server partitioning by `tenant_id` ensures isolation and predictable resource allocation across multiple machines.
-*   **Message Broker (NATS)**: Scaled horizontally with JetStream enabled. JetStream provides distributed persistence and replication. As documented in §2.5, NATS handles 290,000+ messages/sec, providing significant headroom over the 10,000 msg/sec per-tenant target.
+*   **Backend API Servers**: Stateless services scaled horizontally for predictable resource allocation across multiple machines.
+*   **Message Broker (NATS)**: Scaled horizontally with JetStream enabled. JetStream provides distributed persistence and replication. As documented in §2.5, NATS handles 290,000+ messages/sec, providing significant headroom over the 10,000 msg/sec target.
 *   **Agent Registry**: Uses a distributed replication model. Writes (registrations/updates) target the primary database, while discovery queries leverage local caches to minimize latency.
-*   **Storage (PostgreSQL)**: Data is partitioned by `tenant_id` and time-based retention to maintain query performance as history grows. Replicated storage supports non-real-time TUI history views.
+*   **Storage (PostgreSQL)**: Data is partitioned by time-based retention to maintain query performance as history grows. Replicated storage supports non-real-time TUI history views.
 
 ### 12.3 Bottleneck Analysis & Mitigations
 

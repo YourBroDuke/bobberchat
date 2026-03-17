@@ -5,12 +5,13 @@ package api
 import (
 	"net/http"
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 func TestCreateGroup_Success(t *testing.T) {
 	env := setupTestEnv(t)
-	tenantID := newTenantID()
-	token, _ := registerAndLogin(t, env, tenantID, "group-create-success")
+	token, _ := registerAndLogin(t, env, "group-create-success")
 
 	resp := env.doRequest(t, http.MethodPost, "/v1/groups", map[string]any{
 		"name":        "group-create-success",
@@ -23,12 +24,11 @@ func TestCreateGroup_Success(t *testing.T) {
 	assertJSONField(t, body, "id")
 	assertJSONFieldEquals(t, body, "name", "group-create-success")
 	assertJSONFieldEquals(t, body, "visibility", "private")
-	assertJSONFieldEquals(t, body, "tenant_id", tenantID)
 }
 
 func TestCreateGroup_MissingName(t *testing.T) {
 	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, newTenantID(), "group-create-missing")
+	token, _ := registerAndLogin(t, env, "group-create-missing")
 
 	resp := env.doRequest(t, http.MethodPost, "/v1/groups", map[string]any{
 		"description": "desc",
@@ -47,11 +47,11 @@ func TestCreateGroup_NoAuth(t *testing.T) {
 
 func TestListGroups_Success(t *testing.T) {
 	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, newTenantID(), "group-list-success")
+	token, _ := registerAndLogin(t, env, "group-list-success")
 
 	for i := 0; i < 2; i++ {
 		resp := env.doRequest(t, http.MethodPost, "/v1/groups", map[string]any{
-			"name":       "group-list-success-" + newTenantID(),
+			"name":       "group-list-success-" + uuid.NewString(),
 			"visibility": "private",
 		}, token)
 		assertStatus(t, resp, http.StatusCreated)
@@ -69,7 +69,7 @@ func TestListGroups_Success(t *testing.T) {
 
 func TestJoinGroup_Success(t *testing.T) {
 	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, newTenantID(), "group-join-success")
+	token, _ := registerAndLogin(t, env, "group-join-success")
 
 	createResp := env.doRequest(t, http.MethodPost, "/v1/groups", map[string]any{
 		"name":       "group-join-success",
@@ -86,7 +86,7 @@ func TestJoinGroup_Success(t *testing.T) {
 
 func TestLeaveGroup_Success(t *testing.T) {
 	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, newTenantID(), "group-leave-success")
+	token, _ := registerAndLogin(t, env, "group-leave-success")
 
 	createResp := env.doRequest(t, http.MethodPost, "/v1/groups", map[string]any{
 		"name":       "group-leave-success",
@@ -107,7 +107,7 @@ func TestLeaveGroup_Success(t *testing.T) {
 
 func TestCreateTopic_Success(t *testing.T) {
 	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, newTenantID(), "topic-create-success")
+	token, _ := registerAndLogin(t, env, "topic-create-success")
 
 	createGroupResp := env.doRequest(t, http.MethodPost, "/v1/groups", map[string]any{
 		"name":       "topic-create-success",
@@ -127,7 +127,7 @@ func TestCreateTopic_Success(t *testing.T) {
 
 func TestCreateTopic_MissingSubject(t *testing.T) {
 	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, newTenantID(), "topic-create-missing")
+	token, _ := registerAndLogin(t, env, "topic-create-missing")
 
 	createGroupResp := env.doRequest(t, http.MethodPost, "/v1/groups", map[string]any{
 		"name":       "topic-create-missing",
@@ -142,7 +142,7 @@ func TestCreateTopic_MissingSubject(t *testing.T) {
 
 func TestListTopics_Success(t *testing.T) {
 	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, newTenantID(), "topic-list-success")
+	token, _ := registerAndLogin(t, env, "topic-list-success")
 
 	createGroupResp := env.doRequest(t, http.MethodPost, "/v1/groups", map[string]any{
 		"name":       "topic-list-success",

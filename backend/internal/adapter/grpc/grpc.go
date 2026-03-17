@@ -119,9 +119,6 @@ func (a *GRPCAdapter) Ingest(ctx context.Context, raw []byte, meta adapter.Trans
 		to = strings.TrimSpace(meta.Headers["X-Target-Agent"])
 	}
 	if to == "" {
-		to = strings.TrimSpace(meta.TenantID)
-	}
-	if to == "" {
 		to = "broadcast"
 	}
 

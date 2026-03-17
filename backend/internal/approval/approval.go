@@ -37,7 +37,7 @@ func (s *Service) SubmitRequest(ctx context.Context, req *persistence.ApprovalRe
 		To:        "approval_queue",
 		Tag:       protocol.TagApprovalRequest,
 		Payload:   map[string]any{"approval_id": created.ApprovalID.String(), "action": created.Action, "urgency": string(created.Urgency), "justification": created.Justification},
-		Metadata:  map[string]any{"tenant_id": created.TenantID.String(), "timeout_ms": created.TimeoutMS},
+		Metadata:  map[string]any{"timeout_ms": created.TimeoutMS},
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 		TraceID:   created.ApprovalID.String(),
 	}
@@ -49,17 +49,13 @@ func (s *Service) SubmitRequest(ctx context.Context, req *persistence.ApprovalRe
 	return nil
 }
 
-func (s *Service) GetPending(ctx context.Context, tenantID string) ([]persistence.ApprovalRequest, error) {
-	if s == nil || s.db == nil || tenantID == "" {
+func (s *Service) GetPending(ctx context.Context) ([]persistence.ApprovalRequest, error) {
+	if s == nil || s.db == nil {
 		return nil, persistence.ErrInvalidInput
 	}
 
-	tid, err := uuid.Parse(tenantID)
-	if err != nil {
-		return nil, err
-	}
 	repos := persistence.NewPostgresRepositories(s.db)
-	return repos.Approvals.GetPending(ctx, tid)
+	return repos.Approvals.GetPending(ctx)
 }
 
 func (s *Service) Decide(ctx context.Context, approvalID string, decision persistence.ApprovalStatus, approverID, reason string) error {
@@ -77,15 +73,14 @@ func (s *Service) Decide(ctx context.Context, approvalID string, decision persis
 	}
 
 	row := s.db.Pool().QueryRow(ctx, `
-		SELECT tenant_id, status, agent_id
+		SELECT status, agent_id
 		FROM approval_requests
 		WHERE approval_id = $1
 	`, aid)
 
-	var tenantID uuid.UUID
 	var currentStatus string
 	var agentID uuid.UUID
-	if err := row.Scan(&tenantID, &currentStatus, &agentID); err != nil {
+	if err := row.Scan(&currentStatus, &agentID); err != nil {
 		return err
 	}
 
@@ -97,7 +92,7 @@ func (s *Service) Decide(ctx context.Context, approvalID string, decision persis
 	}
 
 	repos := persistence.NewPostgresRepositories(s.db)
-	if err := repos.Approvals.Decide(ctx, tenantID, aid, uid, decision, time.Now().UTC()); err != nil {
+	if err := repos.Approvals.Decide(ctx, aid, uid, decision, time.Now().UTC()); err != nil {
 		if err == persistence.ErrNotFound {
 			return persistence.ErrConflict
 		}
@@ -114,7 +109,7 @@ func (s *Service) Decide(ctx context.Context, approvalID string, decision persis
 		To:        agentID.String(),
 		Tag:       tag,
 		Payload:   map[string]any{"approval_id": approvalID, "decision": string(decision), "reason": reason},
-		Metadata:  map[string]any{"tenant_id": tenantID.String()},
+		Metadata:  map[string]any{},
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 		TraceID:   approvalID,
 	}

@@ -140,17 +140,14 @@ CREATE TYPE participant_type AS ENUM ('user', 'agent');
 ```sql
 CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL,
-  email CITEXT NOT NULL,
+  email CITEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'member',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (tenant_id, email)
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE agents (
   agent_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL,
   display_name TEXT NOT NULL,
   owner_user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   capabilities JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -164,13 +161,11 @@ CREATE TABLE agents (
 
 CREATE TABLE chat_groups (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL,
-  name TEXT NOT NULL,
+  name TEXT NOT NULL UNIQUE,
   description TEXT,
   visibility group_visibility NOT NULL DEFAULT 'private',
   creator_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (tenant_id, name)
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE chat_group_members (
@@ -183,7 +178,6 @@ CREATE TABLE chat_group_members (
 
 CREATE TABLE topics (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL,
   group_id UUID NOT NULL REFERENCES chat_groups(id) ON DELETE CASCADE,
   subject TEXT NOT NULL,
   status topic_status NOT NULL DEFAULT 'OPEN',
@@ -192,8 +186,7 @@ CREATE TABLE topics (
 );
 
 CREATE TABLE messages (
-  id UUID NOT NULL,
-  tenant_id UUID NOT NULL,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   from_id UUID NOT NULL,
   to_id UUID NOT NULL,
   tag TEXT NOT NULL,
@@ -201,13 +194,11 @@ CREATE TABLE messages (
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   "timestamp" TIMESTAMPTZ NOT NULL,
   trace_id UUID NOT NULL,
-  topic_id UUID REFERENCES topics(id) ON DELETE SET NULL,
-  PRIMARY KEY (tenant_id, "timestamp", id)
-) PARTITION BY LIST (tenant_id);
+  topic_id UUID REFERENCES topics(id) ON DELETE SET NULL
+);
 
 CREATE TABLE approval_requests (
   approval_id UUID PRIMARY KEY,
-  tenant_id UUID NOT NULL,
   agent_id UUID NOT NULL REFERENCES agents(agent_id) ON DELETE CASCADE,
   action TEXT NOT NULL,
   justification TEXT NOT NULL,
@@ -224,7 +215,6 @@ CREATE TABLE audit_log (
   event_type TEXT NOT NULL,
   actor_id UUID,
   agent_id UUID,
-  tenant_id UUID NOT NULL,
   details JSONB NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -232,72 +222,64 @@ CREATE TABLE audit_log (
 
 ### 3.3 Partitioning strategy (`messages`)
 
-- Partition by **tenant_id + time** using two-level partitioning:
-  1. root table partitioned by `LIST (tenant_id)`;
-  2. each tenant partition sub-partitioned by `RANGE (timestamp)` monthly.
-- This keeps tenant isolation explicit while preserving efficient time-window pruning.
-- Example migration pattern:
+The `messages` table uses time-based partitioning for efficient archival and query performance:
+- Partition by `RANGE (timestamp)` monthly
+- Monthly partitions match warm-tier retention and simplify archive/export jobs
+- Retention worker detaches and archives old partitions to cold storage per policy
 
+Example:
 ```sql
-CREATE TABLE messages_tenant_acme PARTITION OF messages
-FOR VALUES IN ('00000000-0000-0000-0000-000000000001')
-PARTITION BY RANGE ("timestamp");
-
-CREATE TABLE messages_tenant_acme_2026_03 PARTITION OF messages_tenant_acme
+CREATE TABLE messages_2026_03 PARTITION OF messages
 FOR VALUES FROM ('2026-03-01T00:00:00Z') TO ('2026-04-01T00:00:00Z');
 ```
-
-Operational notes:
-- Monthly partitions match warm-tier retention and simplify archive/export jobs.
-- Retention worker detaches and archives old partitions to cold storage per policy.
 
 ### 3.4 Index strategy
 
 ```sql
-CREATE INDEX idx_agents_tenant_status ON agents (tenant_id, status);
-CREATE INDEX idx_agents_tenant_owner ON agents (tenant_id, owner_user_id);
+CREATE INDEX idx_agents_status ON agents (status);
+CREATE INDEX idx_agents_owner ON agents (owner_user_id);
 CREATE INDEX idx_agents_capabilities_gin ON agents USING GIN (capabilities jsonb_path_ops);
 
-CREATE INDEX idx_topics_group_status ON topics (tenant_id, group_id, status, created_at DESC);
-CREATE INDEX idx_topics_parent ON topics (tenant_id, parent_topic_id);
+CREATE INDEX idx_topics_group_status ON topics (group_id, status, created_at DESC);
+CREATE INDEX idx_topics_parent ON topics (parent_topic_id);
 
-CREATE INDEX idx_messages_trace ON messages (tenant_id, trace_id, "timestamp" DESC);
-CREATE INDEX idx_messages_topic_time ON messages (tenant_id, topic_id, "timestamp" DESC);
-CREATE INDEX idx_messages_to_tag_time ON messages (tenant_id, to_id, tag, "timestamp" DESC);
+CREATE INDEX idx_messages_trace ON messages (trace_id, "timestamp" DESC);
+CREATE INDEX idx_messages_topic_time ON messages (topic_id, "timestamp" DESC);
+CREATE INDEX idx_messages_to_tag_time ON messages (to_id, tag, "timestamp" DESC);
 
-CREATE INDEX idx_approvals_pending ON approval_requests (tenant_id, status, urgency, created_at)
+CREATE INDEX idx_approvals_pending ON approval_requests (status, urgency, created_at)
 WHERE status = 'PENDING';
 
-CREATE INDEX idx_audit_tenant_time ON audit_log (tenant_id, created_at DESC);
-CREATE INDEX idx_audit_event_type ON audit_log (tenant_id, event_type, created_at DESC);
+CREATE INDEX idx_audit_time ON audit_log (created_at DESC);
+CREATE INDEX idx_audit_event_type ON audit_log (event_type, created_at DESC);
 ```
 
 ## 4. NATS JetStream Subject & Stream Design
 
 Subject namespace (Design Spec §2.3, §3, §7, §11.3):
 
-- `bobberchat.{tenant_id}.msg.{to_id}` — direct point-to-point messages.
-- `bobberchat.{tenant_id}.group.{group_id}` — group broadcasts.
-- `bobberchat.{tenant_id}.system.*` — lifecycle/system events (`system.heartbeat`, `system.join`, `system.leave`).
-- `bobberchat.{tenant_id}.approval.*` — approval workflow events.
+- `bobberchat.msg.{to_id}` — direct point-to-point messages.
+- `bobberchat.group.{group_id}` — group broadcasts.
+- `bobberchat.system.*` — lifecycle/system events (`system.heartbeat`, `system.join`, `system.leave`).
+- `bobberchat.approval.*` — approval workflow events.
 
 ### 4.1 Stream definitions
 
 | Stream | Subjects | Retention | Max Age | Replicas | Notes |
 |---|---|---|---|---|---|
-| `BOBBER_MSG` | `bobberchat.*.msg.*`, `bobberchat.*.group.*` | Interest | 30d | 3 | Warm-tier replay source; dedupe window 2m using `Nats-Msg-Id`. |
-| `BOBBER_SYSTEM` | `bobberchat.*.system.*` | Limits | 24h | 3 | Heartbeat and lifecycle telemetry; high churn, short retention. |
-| `BOBBER_APPROVAL` | `bobberchat.*.approval.*` | WorkQueue | 7d | 3 | Exactly-once-ish workflow with idempotent `approval_id` state in DB. |
-| `BOBBER_AUDIT` | `bobberchat.*.>` | Limits | 90d | 3 | Optional full-bus append-only stream for compliance export. |
+| `BOBBER_MSG` | `bobberchat.msg.*`, `bobberchat.group.*` | Interest | 30d | 3 | Warm-tier replay source; dedupe window 2m using `Nats-Msg-Id`. |
+| `BOBBER_SYSTEM` | `bobberchat.system.*` | Limits | 24h | 3 | Heartbeat and lifecycle telemetry; high churn, short retention. |
+| `BOBBER_APPROVAL` | `bobberchat.approval.*` | WorkQueue | 7d | 3 | Exactly-once-ish workflow with idempotent `approval_id` state in DB. |
+| `BOBBER_AUDIT` | `bobberchat.>` | Limits | 90d | 3 | Optional full-bus append-only stream for compliance export. |
 
 ### 4.2 Consumer configuration (SDK clients)
 
 | Consumer type | Durable | Ack policy | Ack wait | Replay | Filter subject | Use |
 |---|---|---|---|---|---|---|
-| Agent inbox | Yes (`agent-{tenant}-{id}`) | Explicit | 30s | Instant | `bobberchat.{tenant}.msg.{agent_id}` | Direct delivery to an agent. |
-| Group stream | Yes (`group-{tenant}-{id}`) | Explicit | 30s | Instant | `bobberchat.{tenant}.group.{group_id}` | Group membership fanout. |
-| System observer | No (ephemeral) | None | n/a | Instant | `bobberchat.{tenant}.system.*` | Non-critical status updates. |
-| Approval queue | Yes (`approval-{tenant}-{approver}`) | Explicit | 60s | Instant | `bobberchat.{tenant}.approval.*` | Human/arbiter approval processing. |
+| Agent inbox | Yes (`agent-{id}`) | Explicit | 30s | Instant | `bobberchat.msg.{agent_id}` | Direct delivery to an agent. |
+| Group stream | Yes (`group-{id}`) | Explicit | 30s | Instant | `bobberchat.group.{group_id}` | Group membership fanout. |
+| System observer | No (ephemeral) | None | n/a | Instant | `bobberchat.system.*` | Non-critical status updates. |
+| Approval queue | Yes (`approval-{approver}`) | Explicit | 60s | Instant | `bobberchat.approval.*` | Human/arbiter approval processing. |
 
 ### 4.3 Delivery guarantees mapped to tag families (Design Spec §3.5)
 
@@ -325,10 +307,10 @@ Authentication model:
 
 | Method | Path | Auth | Request JSON | Response JSON | Status codes |
 |---|---|---|---|---|---|
-| POST | `/v1/auth/register` | None | `{ "tenant_id": "uuid", "email": "user@example.com", "password": "string" }` | `{ "user_id": "uuid", "email": "...", "created_at": "..." }` | 201, 400, 409 |
-| POST | `/v1/auth/login` | None | `{ "email": "user@example.com", "password": "string" }` | `{ "access_token": "jwt", "token_type": "Bearer", "expires_in": 3600, "user": { "user_id": "uuid", "tenant_id": "uuid", "role": "member" } }` | 200, 400, 401 |
+| POST | `/v1/auth/register` | None | `{ "email": "user@example.com", "password": "string" }` | `{ "user_id": "uuid", "email": "...", "created_at": "..." }` | 201, 400, 409 |
+| POST | `/v1/auth/login` | None | `{ "email": "user@example.com", "password": "string" }` | `{ "access_token": "jwt", "token_type": "Bearer", "expires_in": 3600, "user": { "user_id": "uuid", "role": "member" } }` | 200, 400, 401 |
 | POST | `/v1/auth/verify-email` | None | `{ "token": "string" }` | `{ "verified": true, "user_id": "uuid", "email": "user@example.com" }` | 200, 400 |
-| POST | `/v1/auth/resend-verification` | None | `{ "tenant_id": "uuid", "email": "user@example.com" }` | `{ "sent": true }` | 200, 400 |
+| POST | `/v1/auth/resend-verification` | None | `{ "email": "user@example.com" }` | `{ "sent": true }` | 200, 400 |
 
 #### 5.1.2 Agents
 
@@ -402,8 +384,7 @@ Message frame format (JSON envelope from Design Spec §3.1):
   "metadata": {
     "protocol_version": "1.0.0",
     "context-budget": 8192,
-    "timeout_ms": 30000,
-    "tenant": "acme-prod"
+    "timeout_ms": 30000
   },
   "timestamp": "2026-03-13T12:30:45Z",
   "trace_id": "9db6c4a1-8e1f-4c4e-a87b-b9fe1d1f65df"
@@ -437,7 +418,6 @@ type Config struct {
     BackendURL        string
     AgentID           string
     APISecret         string
-    TenantID          string
     DisplayName       string
     Capabilities      []string
     HeartbeatInterval int // milliseconds
@@ -526,7 +506,6 @@ observability:
 
 ```yaml
 backend_url: "https://api.bobberchat.local"
-tenant_id: "00000000-0000-0000-0000-000000000000"
 agent_id: "11111111-1111-1111-1111-111111111111"
 api_secret: "set-via-env-or-secret-manager"
 display_name: "planner-agent"
@@ -647,7 +626,6 @@ Claims:
 {
   "sub": "user:<user_id>",
   "user_id": "uuid",
-  "tenant_id": "uuid",
   "role": "member|admin",
   "iat": 1710300000,
   "exp": 1710303600
@@ -660,11 +638,11 @@ Claims:
 - Separate buckets by tag class (`request.action` stricter than `progress.*`).
 - Exceeding limit returns `429` for REST and emits `error.recoverable` for message path.
 
-### 10.4 Tenant isolation
+### 10.4 Ownership-based access control
 
-- Enforce `tenant_id` in authenticated session context and envelope metadata.
-- Route only within `bobberchat.{tenant_id}.*` subject namespace.
-- Reject publish/subscribe attempts outside session tenant.
+- Enforce ownership verification in authenticated session context.
+- Route messages based on agent ownership and group membership.
+- Reject publish/subscribe attempts outside authorized scope.
 
 ## 11. Observability Implementation
 
@@ -691,7 +669,7 @@ Aligned with Design Spec §10.
 
 JSON logs using zerolog with required fields:
 - `level`, `time`, `msg`
-- `tenant_id`, `trace_id`, `tag`
+- `trace_id`, `tag`
 - `agent_id` and/or `user_id`
 - `group_id`, `topic_id` (when present)
 - `component` (`broker`, `registry`, `approval`, etc.)
@@ -703,7 +681,6 @@ Example log event:
   "level": "info",
   "time": "2026-03-13T12:35:03Z",
   "component": "broker",
-  "tenant_id": "acme-prod",
   "trace_id": "5cd4df56-d4d9-4c62-a893-c9ec9a352737",
   "tag": "response.success",
   "agent_id": "agent.search",

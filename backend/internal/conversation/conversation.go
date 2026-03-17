@@ -15,13 +15,9 @@ func NewService(db *persistence.DB) *Service {
 	return &Service{db: db}
 }
 
-func (s *Service) CreateGroup(ctx context.Context, tenantID, name, description, visibility, creatorID string) (*persistence.ChatGroup, error) {
-	if s == nil || s.db == nil || tenantID == "" || name == "" || creatorID == "" {
+func (s *Service) CreateGroup(ctx context.Context, name, description, visibility, creatorID string) (*persistence.ChatGroup, error) {
+	if s == nil || s.db == nil || name == "" || creatorID == "" {
 		return nil, persistence.ErrInvalidInput
-	}
-	tid, err := uuid.Parse(tenantID)
-	if err != nil {
-		return nil, err
 	}
 	cid, err := uuid.Parse(creatorID)
 	if err != nil {
@@ -39,7 +35,6 @@ func (s *Service) CreateGroup(ctx context.Context, tenantID, name, description, 
 
 	repos := persistence.NewPostgresRepositories(s.db)
 	return repos.Groups.Create(ctx, persistence.ChatGroup{
-		TenantID:    tid,
 		Name:        name,
 		Description: desc,
 		Visibility:  v,
@@ -55,25 +50,16 @@ func (s *Service) GetGroup(ctx context.Context, groupID string) (*persistence.Ch
 	if err != nil {
 		return nil, err
 	}
-	row := s.db.Pool().QueryRow(ctx, `SELECT tenant_id FROM chat_groups WHERE id = $1`, gid)
-	var tid uuid.UUID
-	if err := row.Scan(&tid); err != nil {
-		return nil, err
-	}
 	repos := persistence.NewPostgresRepositories(s.db)
-	return repos.Groups.GetByID(ctx, tid, gid)
+	return repos.Groups.GetByID(ctx, gid)
 }
 
-func (s *Service) ListGroups(ctx context.Context, tenantID string) ([]persistence.ChatGroup, error) {
-	if s == nil || s.db == nil || tenantID == "" {
+func (s *Service) ListGroups(ctx context.Context) ([]persistence.ChatGroup, error) {
+	if s == nil || s.db == nil {
 		return nil, persistence.ErrInvalidInput
 	}
-	tid, err := uuid.Parse(tenantID)
-	if err != nil {
-		return nil, err
-	}
 	repos := persistence.NewPostgresRepositories(s.db)
-	return repos.Groups.ListByTenant(ctx, tid)
+	return repos.Groups.ListAll(ctx)
 }
 
 func (s *Service) JoinGroup(ctx context.Context, groupID, participantID string, kind persistence.ParticipantType) error {
@@ -118,13 +104,9 @@ func (s *Service) LeaveGroup(ctx context.Context, groupID, participantID string,
 	})
 }
 
-func (s *Service) CreateTopic(ctx context.Context, tenantID, groupID, subject string, parentTopicID *string) (*persistence.Topic, error) {
-	if s == nil || s.db == nil || tenantID == "" || groupID == "" || subject == "" {
+func (s *Service) CreateTopic(ctx context.Context, groupID, subject string, parentTopicID *string) (*persistence.Topic, error) {
+	if s == nil || s.db == nil || groupID == "" || subject == "" {
 		return nil, persistence.ErrInvalidInput
-	}
-	tid, err := uuid.Parse(tenantID)
-	if err != nil {
-		return nil, err
 	}
 	gid, err := uuid.Parse(groupID)
 	if err != nil {
@@ -142,7 +124,6 @@ func (s *Service) CreateTopic(ctx context.Context, tenantID, groupID, subject st
 
 	repos := persistence.NewPostgresRepositories(s.db)
 	return repos.Topics.Create(ctx, persistence.Topic{
-		TenantID:      tid,
 		GroupID:       gid,
 		Subject:       subject,
 		Status:        persistence.TopicStatusOpen,
@@ -158,13 +139,8 @@ func (s *Service) GetTopic(ctx context.Context, topicID string) (*persistence.To
 	if err != nil {
 		return nil, err
 	}
-	row := s.db.Pool().QueryRow(ctx, `SELECT tenant_id FROM topics WHERE id = $1`, tid)
-	var tenantID uuid.UUID
-	if err := row.Scan(&tenantID); err != nil {
-		return nil, err
-	}
 	repos := persistence.NewPostgresRepositories(s.db)
-	return repos.Topics.GetByID(ctx, tenantID, tid)
+	return repos.Topics.GetByID(ctx, tid)
 }
 
 func (s *Service) ListTopics(ctx context.Context, groupID string) ([]persistence.Topic, error) {
@@ -175,13 +151,8 @@ func (s *Service) ListTopics(ctx context.Context, groupID string) ([]persistence
 	if err != nil {
 		return nil, err
 	}
-	row := s.db.Pool().QueryRow(ctx, `SELECT tenant_id FROM chat_groups WHERE id = $1`, gid)
-	var tenantID uuid.UUID
-	if err := row.Scan(&tenantID); err != nil {
-		return nil, err
-	}
 	repos := persistence.NewPostgresRepositories(s.db)
-	return repos.Topics.ListByGroup(ctx, tenantID, gid)
+	return repos.Topics.ListByGroup(ctx, gid)
 }
 
 func (s *Service) UpdateTopicStatus(ctx context.Context, topicID string, status persistence.TopicStatus) error {
@@ -192,11 +163,6 @@ func (s *Service) UpdateTopicStatus(ctx context.Context, topicID string, status 
 	if err != nil {
 		return err
 	}
-	row := s.db.Pool().QueryRow(ctx, `SELECT tenant_id FROM topics WHERE id = $1`, topicUUID)
-	var tenantID uuid.UUID
-	if err := row.Scan(&tenantID); err != nil {
-		return err
-	}
 	repos := persistence.NewPostgresRepositories(s.db)
-	return repos.Topics.UpdateStatus(ctx, tenantID, topicUUID, status)
+	return repos.Topics.UpdateStatus(ctx, topicUUID, status)
 }

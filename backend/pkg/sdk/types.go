@@ -9,7 +9,6 @@ type Config struct {
 	BackendURL        string
 	AgentID           string
 	APISecret         string
-	TenantID          string
 	DisplayName       string
 	Capabilities      []string
 	HeartbeatInterval time.Duration

@@ -16,91 +16,58 @@ func TestSubjectForEnvelope(t *testing.T) {
 		wantErr     string
 	}{
 		{
-			name: "missing tenant_id in metadata returns error",
+			name: "default family with agent recipient routes to msg subject",
 			env: &protocol.Envelope{
 				To:       "agent-1",
 				Tag:      protocol.TagRequestAction,
 				Metadata: map[string]any{},
 			},
-			wantErr: "tenant_id missing in metadata",
-		},
-		{
-			name: "tenant_id key is used",
-			env: &protocol.Envelope{
-				To:  "agent-1",
-				Tag: protocol.TagRequestAction,
-				Metadata: map[string]any{
-					"tenant_id": "tenant-a",
-					"tenant":    "tenant-fallback",
-				},
-			},
-			wantSubject: "bobberchat.tenant-a.msg.agent-1",
-		},
-		{
-			name: "tenant fallback key is used when tenant_id missing",
-			env: &protocol.Envelope{
-				To:  "agent-2",
-				Tag: protocol.TagRequestAction,
-				Metadata: map[string]any{
-					"tenant": "tenant-b",
-				},
-			},
-			wantSubject: "bobberchat.tenant-b.msg.agent-2",
+			wantSubject: "bobberchat.msg.agent-1",
 		},
 		{
 			name: "system family routes to system subject",
 			env: &protocol.Envelope{
-				To:  "ignored-for-system",
-				Tag: "system.agent.connected",
-				Metadata: map[string]any{
-					"tenant_id": "tenant-sys",
-				},
+				To:       "ignored-for-system",
+				Tag:      "system.agent.connected",
+				Metadata: map[string]any{},
 			},
-			wantSubject: "bobberchat.tenant-sys.system.agent.connected",
+			wantSubject: "bobberchat.system.agent.connected",
 		},
 		{
 			name: "approval family routes to approval subject",
 			env: &protocol.Envelope{
-				To:  "ignored-for-approval",
-				Tag: protocol.TagApprovalRequest,
-				Metadata: map[string]any{
-					"tenant_id": "tenant-app",
-				},
+				To:       "ignored-for-approval",
+				Tag:      protocol.TagApprovalRequest,
+				Metadata: map[string]any{},
 			},
-			wantSubject: "bobberchat.tenant-app.approval.request",
+			wantSubject: "bobberchat.approval.request",
 		},
 		{
 			name: "default family with group prefix routes to group subject",
 			env: &protocol.Envelope{
-				To:  "group:team-42",
-				Tag: protocol.TagRequestAction,
-				Metadata: map[string]any{
-					"tenant_id": "tenant-group",
-				},
+				To:       "group:team-42",
+				Tag:      protocol.TagRequestAction,
+				Metadata: map[string]any{},
 			},
-			wantSubject: "bobberchat.tenant-group.group.team-42",
+			wantSubject: "bobberchat.group.team-42",
 		},
 		{
 			name: "default family with empty group id returns error",
 			env: &protocol.Envelope{
-				To:  "group:",
-				Tag: protocol.TagRequestAction,
-				Metadata: map[string]any{
-					"tenant_id": "tenant-group",
-				},
+				To:       "group:",
+				Tag:      protocol.TagRequestAction,
+				Metadata: map[string]any{},
 			},
 			wantErr: "group id missing",
 		},
 		{
 			name: "default family with normal recipient routes to msg subject",
 			env: &protocol.Envelope{
-				To:  "agent-9",
-				Tag: protocol.TagRequestAction,
-				Metadata: map[string]any{
-					"tenant_id": "tenant-msg",
-				},
+				To:       "agent-9",
+				Tag:      protocol.TagRequestAction,
+				Metadata: map[string]any{},
 			},
-			wantSubject: "bobberchat.tenant-msg.msg.agent-9",
+			wantSubject: "bobberchat.msg.agent-9",
 		},
 	}
 

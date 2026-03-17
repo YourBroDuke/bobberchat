@@ -12,7 +12,6 @@ This guide provides a step-by-step walkthrough for manually testing BobberChat u
 
 ```bash
 BASE_URL="http://localhost:8080"
-TENANT_ID="550e8400-e29b-41d4-a716-446655440000"
 ```
 
 ## 1. Register a User
@@ -22,8 +21,7 @@ curl -s -X POST "$BASE_URL/v1/auth/register" \
   -H "Content-Type: application/json" \
   -d "{
     \"email\": \"testuser@example.com\",
-    \"password\": \"testpass123\",
-    \"tenant_id\": \"$TENANT_ID\"
+    \"password\": \"testpass123\"
   }" | jq .
 ```
 

@@ -18,7 +18,6 @@ type Adapter interface {
 type TransportMeta struct {
 	ConnectionID string
 	SourceAddr   string
-	TenantID     string
 	AgentID      string
 	Headers      map[string]string
 }

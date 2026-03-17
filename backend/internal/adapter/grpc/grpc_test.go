@@ -122,7 +122,6 @@ func TestGRPCAdapterIngestUnaryRequest(t *testing.T) {
 
 	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{
 		ConnectionID: "conn-1",
-		TenantID:     "tenant-1",
 	})
 	if err != nil {
 		t.Fatalf("Ingest() error = %v, want nil", err)
@@ -188,7 +187,6 @@ func TestGRPCAdapterIngestUnarySuccess(t *testing.T) {
 
 	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{
 		ConnectionID: "conn-2",
-		TenantID:     "tenant-2",
 		AgentID:      "agent-123",
 		Headers: map[string]string{
 			"X-Target-Agent": "agent-target",
@@ -250,7 +248,7 @@ func TestGRPCAdapterIngestStreamProgress(t *testing.T) {
 	a := NewGRPCAdapter()
 	raw := []byte(`{"type":"stream","request_id":"rpc-456","stream_id":"stream-1","body":{"progress":42,"stage":"compiling","message":"Processing file 42/100"}}`)
 
-	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-4", TenantID: "tenant-4"})
+	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-4"})
 	if err != nil {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
@@ -286,7 +284,7 @@ func TestGRPCAdapterIngestStreamNonNumericProgress(t *testing.T) {
 	a := NewGRPCAdapter()
 	raw := []byte(`{"type":"stream","stream_id":"stream-9","body":{"progress":"halfway","stage":"compiling"}}`)
 
-	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-9", TenantID: "tenant-9"})
+	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-9"})
 	if err != nil {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}

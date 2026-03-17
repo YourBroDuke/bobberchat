@@ -43,7 +43,6 @@ echo "════════════════════════�
 echo "  SMOKE TEST: $BASE_URL"
 echo "═══════════════════════════════════════════"
 
-TENANT_ID=$(python3 -c "import uuid; print(uuid.uuid4())")
 TS=$(date +%s)
 EMAIL="smoke-${TS}@test.cc"
 PASSWORD="SmokePass123!"
@@ -55,7 +54,7 @@ check "GET /v1/metrics" "200" "GET" "/v1/metrics" ""
 
 echo ""
 echo "▸ Auth"
-check "POST /v1/auth/register" "201" "POST" "/v1/auth/register" "{\"tenant_id\":\"$TENANT_ID\",\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}"
+check "POST /v1/auth/register" "201" "POST" "/v1/auth/register" "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}"
 USER_ID=$(jp "['id']")
 
 check "POST /v1/auth/login" "200" "POST" "/v1/auth/login" "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}"
@@ -116,7 +115,7 @@ check "GET /v1/adapter" "200" "GET" "/v1/adapter" "" -H "Authorization: Bearer $
 echo ""
 echo "▸ Negative Tests"
 check "No auth → 401" "401" "GET" "/v1/groups" ""
-check "Duplicate email → 400" "400" "POST" "/v1/auth/register" "{\"tenant_id\":\"$TENANT_ID\",\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}"
+check "Duplicate email → 400" "400" "POST" "/v1/auth/register" "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}"
 check "Wrong password → 401" "401" "POST" "/v1/auth/login" "{\"email\":\"$EMAIL\",\"password\":\"wrong\"}"
 
 echo ""

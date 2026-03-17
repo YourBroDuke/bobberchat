@@ -27,8 +27,6 @@ func LoadConfig(path string) (Config, error) {
 	_ = v.BindEnv("backend_url", "BOBBERCHAT_BACKEND_URL")
 	_ = v.BindEnv("agent_id", "BOBBERCHAT_AGENT_ID")
 	_ = v.BindEnv("api_secret", "BOBBERCHAT_API_SECRET")
-	_ = v.BindEnv("tenant_id", "BOBBERCHAT_TENANT_ID")
-
 	if err := v.ReadInConfig(); err != nil {
 		return Config{}, fmt.Errorf("read config: %w", err)
 	}
@@ -37,7 +35,6 @@ func LoadConfig(path string) (Config, error) {
 		BackendURL:   strings.TrimSpace(v.GetString("backend_url")),
 		AgentID:      strings.TrimSpace(v.GetString("agent_id")),
 		APISecret:    strings.TrimSpace(v.GetString("api_secret")),
-		TenantID:     strings.TrimSpace(v.GetString("tenant_id")),
 		DisplayName:  strings.TrimSpace(v.GetString("display_name")),
 		Capabilities: v.GetStringSlice("capabilities"),
 
@@ -67,7 +64,6 @@ func LoadConfigFromEnv() Config {
 		BackendURL:        strings.TrimSpace(os.Getenv("BOBBERCHAT_BACKEND_URL")),
 		AgentID:           strings.TrimSpace(os.Getenv("BOBBERCHAT_AGENT_ID")),
 		APISecret:         strings.TrimSpace(os.Getenv("BOBBERCHAT_API_SECRET")),
-		TenantID:          strings.TrimSpace(os.Getenv("BOBBERCHAT_TENANT_ID")),
 		DisplayName:       strings.TrimSpace(os.Getenv("BOBBERCHAT_DISPLAY_NAME")),
 		Capabilities:      csvListEnv("BOBBERCHAT_CAPABILITIES"),
 		HeartbeatInterval: defaultHeartbeatInterval,

@@ -47,9 +47,9 @@ func TestApprovalMethods_InvalidInput(t *testing.T) {
 		err  error
 	}{
 		{
-			name: "GetPending empty tenantID",
+			name: "GetPending nil db",
 			err: func() error {
-				_, err := (&Service{}).GetPending(context.Background(), "")
+				_, err := (&Service{}).GetPending(context.Background())
 				return err
 			}(),
 		},

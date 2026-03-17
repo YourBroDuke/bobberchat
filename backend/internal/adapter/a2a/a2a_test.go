@@ -95,7 +95,7 @@ func TestA2AAdapterIngestMessageSendAction(t *testing.T) {
 	a := NewA2AAdapter()
 	raw := []byte(`{"method":"message/send","id":"msg-1","params":{"message":{"role":"user","parts":[{"type":"text","text":"please run deployment"}],"messageId":"m-11","taskId":"task-11","contextId":"ctx-11"}}}`)
 
-	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-1", TenantID: "tenant-1"})
+	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-1"})
 	if err != nil {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
@@ -159,7 +159,7 @@ func TestA2AAdapterIngestMessageSendDataIntent(t *testing.T) {
 	a := NewA2AAdapter()
 	raw := []byte(`{"method":"message/send","id":"msg-2","params":{"message":{"role":"user","parts":[{"type":"text","text":"fetch usage data report"}]}}}`)
 
-	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-2", TenantID: "tenant-2"})
+	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-2"})
 	if err != nil {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
@@ -173,7 +173,7 @@ func TestA2AAdapterIngestMessageSendApprovalIntent(t *testing.T) {
 	a := NewA2AAdapter()
 	raw := []byte(`{"method":"message/send","id":"msg-3","params":{"message":{"role":"user","parts":[{"type":"text","text":"please approve this deploy"}]}}}`)
 
-	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-3", TenantID: "tenant-3"})
+	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-3"})
 	if err != nil {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
@@ -187,7 +187,7 @@ func TestA2AAdapterIngestAgentCard(t *testing.T) {
 	a := NewA2AAdapter()
 	raw := []byte(`{"method":"agent/card","id":"card-1","params":{"name":"alpha-agent","description":"handles retrieval","capabilities":["Search","Summarize"],"endpoint":"https://agents.example/alpha"}}`)
 
-	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-4", TenantID: "tenant-4"})
+	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-4"})
 	if err != nil {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
@@ -221,7 +221,7 @@ func TestA2AAdapterIngestTaskCreate(t *testing.T) {
 	a := NewA2AAdapter()
 	raw := []byte(`{"method":"task/create","id":"task-create-1","params":{"taskId":"task-100","status":"created","result":{"scope":"full"}}}`)
 
-	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-5", TenantID: "tenant-5"})
+	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-5"})
 	if err != nil {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
@@ -247,7 +247,7 @@ func TestA2AAdapterIngestTaskUpdateCompleted(t *testing.T) {
 	a := NewA2AAdapter()
 	raw := []byte(`{"method":"task/update","id":"task-up-1","params":{"taskId":"task-200","status":"completed","result":{"output":"done"}}}`)
 
-	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-6", TenantID: "tenant-6"})
+	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-6"})
 	if err != nil {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
@@ -267,7 +267,7 @@ func TestA2AAdapterIngestTaskUpdateFailed(t *testing.T) {
 	a := NewA2AAdapter()
 	raw := []byte(`{"method":"task/update","id":"task-up-2","params":{"taskId":"task-201","status":"failed","result":{"code":"E42","message":"boom"}}}`)
 
-	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-7", TenantID: "tenant-7"})
+	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-7"})
 	if err != nil {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
@@ -290,7 +290,7 @@ func TestA2AAdapterIngestTaskUpdateInProgress(t *testing.T) {
 	a := NewA2AAdapter()
 	raw := []byte(`{"method":"task/update","id":"task-up-3","params":{"taskId":"task-202","status":"in_progress","result":{"percent":50}}}`)
 
-	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-8", TenantID: "tenant-8"})
+	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-8"})
 	if err != nil {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
@@ -307,7 +307,7 @@ func TestA2AAdapterIngestUsesProvidedAgentID(t *testing.T) {
 	a := NewA2AAdapter()
 	raw := []byte(`{"method":"message/send","id":"msg-10","params":{"message":{"role":"user","parts":[{"type":"text","text":"run action"}]}}}`)
 
-	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-9", TenantID: "tenant-9", AgentID: "agent-123"})
+	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-9", AgentID: "agent-123"})
 	if err != nil {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
@@ -321,7 +321,7 @@ func TestA2AAdapterIngestFallbackUnknownConnection(t *testing.T) {
 	a := NewA2AAdapter()
 	raw := []byte(`{"method":"message/send","id":"msg-11","params":{"message":{"role":"user","parts":[{"type":"text","text":"run action"}]}}}`)
 
-	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{TenantID: "tenant-10"})
+	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{})
 	if err != nil {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
@@ -337,7 +337,6 @@ func TestA2AAdapterIngestUsesTargetAgentHeader(t *testing.T) {
 
 	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{
 		ConnectionID: "conn-10",
-		TenantID:     "tenant-10",
 		Headers:      map[string]string{"X-Target-Agent": "agent-target"},
 	})
 	if err != nil {

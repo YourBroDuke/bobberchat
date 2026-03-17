@@ -81,10 +81,9 @@ type messagePublisher interface {
 }
 
 const (
-	ctxTenantID contextKey = "tenant_id"
-	ctxUserID   contextKey = "user_id"
-	ctxRole     contextKey = "role"
-	ctxAgentID  contextKey = "agent_id"
+	ctxUserID  contextKey = "user_id"
+	ctxRole    contextKey = "role"
+	ctxAgentID contextKey = "agent_id"
 )
 
 type app struct {
@@ -321,7 +320,7 @@ func (a *app) authenticate(r *http.Request, allowJWT, allowAgentSecret bool) (co
 		if token != "" {
 			claims, err := a.authSvc.ValidateJWT(token)
 			if err == nil {
-				ctx := context.WithValue(r.Context(), ctxTenantID, claims.TenantID)
+				ctx := r.Context()
 				ctx = context.WithValue(ctx, ctxUserID, claims.UserID)
 				ctx = context.WithValue(ctx, ctxRole, claims.Role)
 				return ctx, nil
@@ -335,7 +334,7 @@ func (a *app) authenticate(r *http.Request, allowJWT, allowAgentSecret bool) (co
 		if agentID != "" && secret != "" {
 			agent, err := a.authSvc.ValidateAPISecret(r.Context(), agentID, secret)
 			if err == nil {
-				ctx := context.WithValue(r.Context(), ctxTenantID, agent.TenantID.String())
+				ctx := r.Context()
 				ctx = context.WithValue(ctx, ctxUserID, "")
 				ctx = context.WithValue(ctx, ctxRole, "agent")
 				ctx = context.WithValue(ctx, ctxAgentID, agent.AgentID.String())
@@ -349,7 +348,6 @@ func (a *app) authenticate(r *http.Request, allowJWT, allowAgentSecret bool) (co
 
 func (a *app) handleRegister(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		TenantID string `json:"tenant_id"`
 		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
@@ -358,7 +356,7 @@ func (a *app) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := a.authSvc.RegisterUser(r.Context(), req.TenantID, req.Email, req.Password)
+	user, err := a.authSvc.RegisterUser(r.Context(), req.Email, req.Password)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -366,7 +364,6 @@ func (a *app) handleRegister(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"id":         user.ID,
-		"tenant_id":  user.TenantID,
 		"email":      user.Email,
 		"role":       user.Role,
 		"created_at": user.CreatedAt,
@@ -395,7 +392,6 @@ func (a *app) handleLogin(w http.ResponseWriter, r *http.Request) {
 		"expires_in":   int(time.Hour.Seconds()),
 		"user": map[string]any{
 			"id":         user.ID,
-			"tenant_id":  user.TenantID,
 			"email":      user.Email,
 			"role":       user.Role,
 			"created_at": user.CreatedAt,
@@ -425,14 +421,13 @@ func (a *app) handleVerifyEmail(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) handleResendVerification(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Email    string `json:"email"`
-		TenantID string `json:"tenant_id"`
+		Email string `json:"email"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := a.authSvc.ResendVerification(r.Context(), req.TenantID, req.Email); err != nil {
+	if err := a.authSvc.ResendVerification(r.Context(), req.Email); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -440,11 +435,6 @@ func (a *app) handleResendVerification(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleWhoAmI(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := uuid.Parse(contextString(r.Context(), ctxTenantID))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid tenant context")
-		return
-	}
 	userID, err := uuid.Parse(contextString(r.Context(), ctxUserID))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid user context")
@@ -452,23 +442,22 @@ func (a *app) handleWhoAmI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	repos := persistence.NewPostgresRepositories(a.db)
-	user, err := repos.Users.GetByID(r.Context(), tenantID, userID)
+	user, err := repos.Users.GetByID(r.Context(), userID)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	agents, err := repos.Agents.ListByOwner(r.Context(), tenantID, userID)
+	agents, err := repos.Agents.ListByOwner(r.Context(), userID)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"user_id":   user.ID,
-		"tenant_id": user.TenantID,
-		"email":     user.Email,
-		"role":      user.Role,
-		"agents":    agents,
+		"user_id": user.ID,
+		"email":   user.Email,
+		"role":    user.Role,
+		"agents":  agents,
 	})
 }
 
@@ -483,9 +472,8 @@ func (a *app) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tenantID := contextString(r.Context(), ctxTenantID)
 	userID := contextString(r.Context(), ctxUserID)
-	agent, secret, err := a.authSvc.CreateAgent(r.Context(), tenantID, userID, req.DisplayName, req.Capabilities, req.Version)
+	agent, secret, err := a.authSvc.CreateAgent(r.Context(), userID, req.DisplayName, req.Capabilities, req.Version)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -507,13 +495,8 @@ func (a *app) handleGetAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
-	if agent.TenantID.String() != contextString(r.Context(), ctxTenantID) {
-		writeError(w, http.StatusForbidden, "forbidden")
-		return
-	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"agent_id":       agent.AgentID,
-		"tenant_id":      agent.TenantID,
 		"display_name":   agent.DisplayName,
 		"owner_user_id":  agent.OwnerUserID,
 		"capabilities":   agent.Capabilities,
@@ -527,13 +510,9 @@ func (a *app) handleGetAgent(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	agent, err := a.registrySvc.GetAgent(r.Context(), id)
+	_, err := a.registrySvc.GetAgent(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
-		return
-	}
-	if agent.TenantID.String() != contextString(r.Context(), ctxTenantID) {
-		writeError(w, http.StatusForbidden, "forbidden")
 		return
 	}
 	if err := a.registrySvc.Deregister(r.Context(), id); err != nil {
@@ -577,7 +556,7 @@ func (a *app) handleDiscover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	agents, err := a.registrySvc.Discover(r.Context(), contextString(r.Context(), ctxTenantID), registry.DiscoveryQuery{
+	agents, err := a.registrySvc.Discover(r.Context(), registry.DiscoveryQuery{
 		Capability:    req.Capability,
 		SupportedTags: req.SupportedTags,
 		Status:        req.Status,
@@ -591,7 +570,7 @@ func (a *app) handleDiscover(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleListAgents(w http.ResponseWriter, r *http.Request) {
-	agents, err := a.registrySvc.ListAgents(r.Context(), contextString(r.Context(), ctxTenantID))
+	agents, err := a.registrySvc.ListAgents(r.Context())
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -612,7 +591,6 @@ func (a *app) handleCreateGroup(w http.ResponseWriter, r *http.Request) {
 
 	group, err := a.convSvc.CreateGroup(
 		r.Context(),
-		contextString(r.Context(), ctxTenantID),
 		req.Name,
 		req.Description,
 		req.Visibility,
@@ -626,7 +604,7 @@ func (a *app) handleCreateGroup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleListGroups(w http.ResponseWriter, r *http.Request) {
-	groups, err := a.convSvc.ListGroups(r.Context(), contextString(r.Context(), ctxTenantID))
+	groups, err := a.convSvc.ListGroups(r.Context())
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -708,7 +686,7 @@ func (a *app) handleCreateTopic(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	topic, err := a.convSvc.CreateTopic(r.Context(), contextString(r.Context(), ctxTenantID), id, req.Subject, req.ParentTopicID)
+	topic, err := a.convSvc.CreateTopic(r.Context(), id, req.Subject, req.ParentTopicID)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -722,17 +700,12 @@ func (a *app) handleMessagesByTraceID(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "trace_id is required")
 		return
 	}
-	tid, err := uuid.Parse(contextString(r.Context(), ctxTenantID))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid tenant context")
-		return
-	}
 	tr, err := uuid.Parse(traceID)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid trace_id")
 		return
 	}
-	msgs, err := persistence.NewPostgresRepositories(a.db).Messages.GetByTraceID(r.Context(), tid, tr)
+	msgs, err := persistence.NewPostgresRepositories(a.db).Messages.GetByTraceID(r.Context(), tr)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -752,11 +725,6 @@ func (a *app) handlePollMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tenantID, err := uuid.Parse(contextString(r.Context(), ctxTenantID))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid tenant context")
-		return
-	}
 	userID, err := uuid.Parse(contextString(r.Context(), ctxUserID))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid user context")
@@ -793,7 +761,7 @@ func (a *app) handlePollMessages(w http.ResponseWriter, r *http.Request) {
 		sinceID = &parsed
 	}
 
-	msgs, err := persistence.NewPostgresRepositories(a.db).Messages.GetByPeer(r.Context(), tenantID, userID, peerID, limit, sinceTS, sinceID)
+	msgs, err := persistence.NewPostgresRepositories(a.db).Messages.GetByPeer(r.Context(), userID, peerID, limit, sinceTS, sinceID)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -811,11 +779,6 @@ func (a *app) handleConnectionRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tenantID, err := uuid.Parse(contextString(r.Context(), ctxTenantID))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid tenant context")
-		return
-	}
 	userID, err := uuid.Parse(contextString(r.Context(), ctxUserID))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid user context")
@@ -828,7 +791,6 @@ func (a *app) handleConnectionRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	created, err := persistence.NewPostgresRepositories(a.db).ConnectionRequests.Create(r.Context(), persistence.ConnectionRequest{
-		TenantID:   tenantID,
 		FromUserID: userID,
 		ToUserID:   targetID,
 		Status:     persistence.ConnectionRequestStatusPending,
@@ -842,18 +804,13 @@ func (a *app) handleConnectionRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleConnectionInbox(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := uuid.Parse(contextString(r.Context(), ctxTenantID))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid tenant context")
-		return
-	}
 	userID, err := uuid.Parse(contextString(r.Context(), ctxUserID))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid user context")
 		return
 	}
 
-	requests, err := persistence.NewPostgresRepositories(a.db).ConnectionRequests.GetPendingForUser(r.Context(), tenantID, userID)
+	requests, err := persistence.NewPostgresRepositories(a.db).ConnectionRequests.GetPendingForUser(r.Context(), userID)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -868,13 +825,7 @@ func (a *app) handleConnectionAccept(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
-	tenantID, err := uuid.Parse(contextString(r.Context(), ctxTenantID))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid tenant context")
-		return
-	}
-
-	if err := persistence.NewPostgresRepositories(a.db).ConnectionRequests.UpdateStatus(r.Context(), tenantID, requestID, persistence.ConnectionRequestStatusAccepted); err != nil {
+	if err := persistence.NewPostgresRepositories(a.db).ConnectionRequests.UpdateStatus(r.Context(), requestID, persistence.ConnectionRequestStatusAccepted); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -888,13 +839,7 @@ func (a *app) handleConnectionReject(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
-	tenantID, err := uuid.Parse(contextString(r.Context(), ctxTenantID))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid tenant context")
-		return
-	}
-
-	if err := persistence.NewPostgresRepositories(a.db).ConnectionRequests.UpdateStatus(r.Context(), tenantID, requestID, persistence.ConnectionRequestStatusRejected); err != nil {
+	if err := persistence.NewPostgresRepositories(a.db).ConnectionRequests.UpdateStatus(r.Context(), requestID, persistence.ConnectionRequestStatusRejected); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -911,11 +856,6 @@ func (a *app) handleBlacklist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tenantID, err := uuid.Parse(contextString(r.Context(), ctxTenantID))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid tenant context")
-		return
-	}
 	userID, err := uuid.Parse(contextString(r.Context(), ctxUserID))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid user context")
@@ -928,7 +868,6 @@ func (a *app) handleBlacklist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	entry, err := persistence.NewPostgresRepositories(a.db).Blacklist.Create(r.Context(), persistence.BlacklistEntry{
-		TenantID:      tenantID,
 		UserID:        userID,
 		BlockedUserID: targetID,
 	})
@@ -941,11 +880,6 @@ func (a *app) handleBlacklist(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleUnblacklist(w http.ResponseWriter, r *http.Request) {
-	tenantID, err := uuid.Parse(contextString(r.Context(), ctxTenantID))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid tenant context")
-		return
-	}
 	userID, err := uuid.Parse(contextString(r.Context(), ctxUserID))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid user context")
@@ -957,7 +891,7 @@ func (a *app) handleUnblacklist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := persistence.NewPostgresRepositories(a.db).Blacklist.Delete(r.Context(), tenantID, userID, targetID); err != nil {
+	if err := persistence.NewPostgresRepositories(a.db).Blacklist.Delete(r.Context(), userID, targetID); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -981,23 +915,15 @@ func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tenantIDRaw := contextString(r.Context(), ctxTenantID)
-	tenantID, err := uuid.Parse(tenantIDRaw)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid tenant context")
-		return
-	}
-
 	var original persistence.Message
 	var payloadRaw []byte
 	var metadataRaw []byte
 	err = a.db.Pool().QueryRow(r.Context(), `
-		SELECT id, tenant_id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id, topic_id
+		SELECT id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id, topic_id
 		FROM messages
-		WHERE tenant_id = $1 AND id = $2
-	`, tenantID, originalID).Scan(
+		WHERE id = $1
+	`, originalID).Scan(
 		&original.ID,
-		&original.TenantID,
 		&original.FromID,
 		&original.ToID,
 		&original.Tag,
@@ -1040,11 +966,10 @@ func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
 	payload["original_message_id"] = original.ID.String()
 	payload["replay_reason"] = strings.TrimSpace(req.Reason)
 
-	metadata := make(map[string]any, len(original.Metadata)+1)
+	metadata := make(map[string]any, len(original.Metadata))
 	for k, v := range original.Metadata {
 		metadata[k] = v
 	}
-	metadata["tenant_id"] = tenantIDRaw
 
 	newMessageID := uuid.NewString()
 	newTraceID := uuid.NewString()
@@ -1059,13 +984,9 @@ func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
 		TraceID:   newTraceID,
 	}
 
-	if err := a.publishAndAudit(r.Context(), env, tenantIDRaw); err != nil {
+	if err := a.publishAndAudit(r.Context(), env); err != nil {
 		if errors.Is(err, errRateLimited) {
 			writeError(w, http.StatusTooManyRequests, "rate limited")
-			return
-		}
-		if errors.Is(err, errCrossTenantDenied) {
-			writeError(w, http.StatusForbidden, err.Error())
 			return
 		}
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -1081,7 +1002,7 @@ func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handlePendingApprovals(w http.ResponseWriter, r *http.Request) {
-	items, err := a.approvalSvc.GetPending(r.Context(), contextString(r.Context(), ctxTenantID))
+	items, err := a.approvalSvc.GetPending(r.Context())
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -1135,7 +1056,6 @@ func (a *app) handleAdapterIngest(w http.ResponseWriter, r *http.Request) {
 	meta := adapter.TransportMeta{
 		ConnectionID: strings.TrimSpace(r.Header.Get("X-Connection-ID")),
 		SourceAddr:   r.RemoteAddr,
-		TenantID:     contextString(r.Context(), ctxTenantID),
 		AgentID:      contextString(r.Context(), ctxAgentID),
 		Headers:      map[string]string{},
 	}
@@ -1152,15 +1072,10 @@ func (a *app) handleAdapterIngest(w http.ResponseWriter, r *http.Request) {
 	if env.Metadata == nil {
 		env.Metadata = map[string]any{}
 	}
-	env.Metadata["tenant_id"] = meta.TenantID
 
-	if err := a.publishAndAudit(r.Context(), env, meta.TenantID); err != nil {
+	if err := a.publishAndAudit(r.Context(), env); err != nil {
 		if errors.Is(err, errRateLimited) {
 			writeError(w, http.StatusTooManyRequests, "rate limited")
-			return
-		}
-		if errors.Is(err, errCrossTenantDenied) {
-			writeError(w, http.StatusForbidden, err.Error())
 			return
 		}
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -1232,7 +1147,7 @@ func (a *app) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	outbound := make(chan *protocol.Envelope, 128)
-	if err := a.broker.SubscribeAgent(ctx, claims.TenantID, claims.UserID, func(env *protocol.Envelope) {
+	if err := a.broker.SubscribeAgent(ctx, claims.UserID, func(env *protocol.Envelope) {
 		select {
 		case outbound <- env:
 		default:
@@ -1272,7 +1187,6 @@ func (a *app) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			if env.Metadata == nil {
 				env.Metadata = map[string]any{}
 			}
-			env.Metadata["tenant_id"] = claims.TenantID
 			if env.From == "" {
 				env.From = claims.UserID
 			}
@@ -1280,7 +1194,7 @@ func (a *app) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				_ = conn.WriteJSON(map[string]any{"error": err.Error()})
 				continue
 			}
-			if err := a.publishAndAudit(ctx, &env, claims.TenantID); err != nil {
+			if err := a.publishAndAudit(ctx, &env); err != nil {
 				_ = conn.WriteJSON(map[string]any{"error": err.Error()})
 			}
 		}
@@ -1328,25 +1242,12 @@ func readJSON(r *http.Request, dst any) error {
 }
 
 var (
-	errRateLimited       = errors.New("rate limited")
-	errCrossTenantDenied = errors.New("cross-tenant message routing denied")
+	errRateLimited = errors.New("rate limited")
 )
 
-func (a *app) publishAndAudit(ctx context.Context, env *protocol.Envelope, callerTenantID string) error {
-	envTenantID, _ := env.Metadata["tenant_id"].(string)
-	if envTenantID == "" {
-		envTenantID = callerTenantID
-	}
-
-	if callerTenantID != "" && envTenantID != callerTenantID {
-		if a.metrics != nil {
-			a.metrics.ErrorsCount.WithLabelValues(env.From, "cross_tenant_denied").Inc()
-		}
-		return errCrossTenantDenied
-	}
-
+func (a *app) publishAndAudit(ctx context.Context, env *protocol.Envelope) error {
 	if a.limiter != nil {
-		agentKey := ratelimit.AgentKey(envTenantID, env.From)
+		agentKey := ratelimit.AgentKey(env.From)
 		if !a.limiter.Allow(ratelimit.DimensionAgent, agentKey) {
 			if a.metrics != nil {
 				a.metrics.RateLimited.WithLabelValues(ratelimit.DimensionAgent, agentKey).Inc()
@@ -1355,7 +1256,7 @@ func (a *app) publishAndAudit(ctx context.Context, env *protocol.Envelope, calle
 		}
 
 		if strings.HasPrefix(env.To, "group:") {
-			groupKey := ratelimit.GroupKey(envTenantID, strings.TrimPrefix(env.To, "group:"))
+			groupKey := ratelimit.GroupKey(strings.TrimPrefix(env.To, "group:"))
 			if !a.limiter.Allow(ratelimit.DimensionGroup, groupKey) {
 				if a.metrics != nil {
 					a.metrics.RateLimited.WithLabelValues(ratelimit.DimensionGroup, groupKey).Inc()
@@ -1364,7 +1265,7 @@ func (a *app) publishAndAudit(ctx context.Context, env *protocol.Envelope, calle
 			}
 		}
 
-		tagKey := ratelimit.TagKey(envTenantID, env.Tag)
+		tagKey := ratelimit.TagKey(env.Tag)
 		if !a.limiter.Allow(ratelimit.DimensionTag, tagKey) {
 			if a.metrics != nil {
 				a.metrics.RateLimited.WithLabelValues(ratelimit.DimensionTag, tagKey).Inc()
@@ -1378,12 +1279,10 @@ func (a *app) publishAndAudit(ctx context.Context, env *protocol.Envelope, calle
 	}
 
 	if a.auditRepo != nil {
-		tid, _ := uuid.Parse(envTenantID)
 		fromID, _ := uuid.Parse(env.From)
 		toID, _ := uuid.Parse(env.To)
 		entry := persistence.AuditLogEntry{
 			EventType: "message.published",
-			TenantID:  tid,
 			AgentID:   &fromID,
 			Details: map[string]any{
 				"message_id":  env.ID,

@@ -9,7 +9,7 @@ import (
 
 func TestListAdapters_Success(t *testing.T) {
 	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, newTenantID(), "adapter-list-success")
+	token, _ := registerAndLogin(t, env, "adapter-list-success")
 
 	resp := env.doRequest(t, http.MethodGet, "/v1/adapter", nil, token)
 	assertStatus(t, resp, http.StatusOK)
@@ -28,7 +28,7 @@ func TestListAdapters_NoAuth(t *testing.T) {
 
 func TestAdapterIngest_UnknownAdapter(t *testing.T) {
 	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, newTenantID(), "adapter-unknown")
+	token, _ := registerAndLogin(t, env, "adapter-unknown")
 
 	resp := env.doRequest(t, http.MethodPost, "/v1/adapter/unknown/ingest", map[string]any{"foo": "bar"}, token)
 	assertStatus(t, resp, http.StatusNotFound)
@@ -42,7 +42,7 @@ func TestAdapterIngest_NoAuth(t *testing.T) {
 
 func TestAdapterIngest_EmptyBody(t *testing.T) {
 	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, newTenantID(), "adapter-empty-body")
+	token, _ := registerAndLogin(t, env, "adapter-empty-body")
 
 	resp := env.doRawRequest(t, http.MethodPost, "/v1/adapter/mcp/ingest", []byte{}, token, nil)
 	assertStatus(t, resp, http.StatusBadRequest)
@@ -50,7 +50,7 @@ func TestAdapterIngest_EmptyBody(t *testing.T) {
 
 func TestAdapterIngest_MCP(t *testing.T) {
 	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, newTenantID(), "adapter-mcp")
+	token, _ := registerAndLogin(t, env, "adapter-mcp")
 
 	resp := env.doRequest(t, http.MethodPost, "/v1/adapter/mcp/ingest", map[string]any{
 		"jsonrpc": "2.0",
@@ -66,7 +66,7 @@ func TestAdapterIngest_MCP(t *testing.T) {
 
 func TestAdapterIngest_A2A(t *testing.T) {
 	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, newTenantID(), "adapter-a2a")
+	token, _ := registerAndLogin(t, env, "adapter-a2a")
 
 	resp := env.doRequest(t, http.MethodPost, "/v1/adapter/a2a/ingest", map[string]any{
 		"method": "task/create",
@@ -81,7 +81,7 @@ func TestAdapterIngest_A2A(t *testing.T) {
 
 func TestAdapterIngest_GRPC(t *testing.T) {
 	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, newTenantID(), "adapter-grpc")
+	token, _ := registerAndLogin(t, env, "adapter-grpc")
 
 	resp := env.doRequest(t, http.MethodPost, "/v1/adapter/grpc/ingest", map[string]any{
 		"type":       "unary",

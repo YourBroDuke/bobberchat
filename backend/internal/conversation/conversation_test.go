@@ -19,28 +19,21 @@ func TestCreateGroup_InvalidInput(t *testing.T) {
 			name: "nil service",
 			err: func() error {
 				var s *Service
-				_, err := s.CreateGroup(context.Background(), "tenant", "name", "desc", "private", "creator")
-				return err
-			}(),
-		},
-		{
-			name: "empty tenantID",
-			err: func() error {
-				_, err := (&Service{}).CreateGroup(context.Background(), "", "name", "desc", "private", "creator")
+				_, err := s.CreateGroup(context.Background(), "name", "desc", "private", "creator")
 				return err
 			}(),
 		},
 		{
 			name: "empty name",
 			err: func() error {
-				_, err := (&Service{}).CreateGroup(context.Background(), "tenant", "", "desc", "private", "creator")
+				_, err := (&Service{}).CreateGroup(context.Background(), "", "desc", "private", "creator")
 				return err
 			}(),
 		},
 		{
 			name: "empty creatorID",
 			err: func() error {
-				_, err := (&Service{}).CreateGroup(context.Background(), "tenant", "name", "desc", "private", "")
+				_, err := (&Service{}).CreateGroup(context.Background(), "name", "desc", "private", "")
 				return err
 			}(),
 		},
@@ -72,9 +65,9 @@ func TestConversationMethods_InvalidInput(t *testing.T) {
 			}(),
 		},
 		{
-			name: "ListGroups empty tenantID",
+			name: "ListGroups nil db",
 			err: func() error {
-				_, err := (&Service{}).ListGroups(context.Background(), "")
+				_, err := (&Service{}).ListGroups(context.Background())
 				return err
 			}(),
 		},
@@ -103,23 +96,16 @@ func TestConversationMethods_InvalidInput(t *testing.T) {
 			err:  (&Service{}).LeaveGroup(context.Background(), "group", "participant", ""),
 		},
 		{
-			name: "CreateTopic empty tenantID",
-			err: func() error {
-				_, err := (&Service{}).CreateTopic(context.Background(), "", "group", "subject", nil)
-				return err
-			}(),
-		},
-		{
 			name: "CreateTopic empty groupID",
 			err: func() error {
-				_, err := (&Service{}).CreateTopic(context.Background(), "tenant", "", "subject", nil)
+				_, err := (&Service{}).CreateTopic(context.Background(), "", "subject", nil)
 				return err
 			}(),
 		},
 		{
 			name: "CreateTopic empty subject",
 			err: func() error {
-				_, err := (&Service{}).CreateTopic(context.Background(), "tenant", "group", "", nil)
+				_, err := (&Service{}).CreateTopic(context.Background(), "group", "", nil)
 				return err
 			}(),
 		},

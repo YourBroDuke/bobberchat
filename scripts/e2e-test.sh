@@ -3,7 +3,6 @@
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:8080}"
-TENANT_ID="550e8400-e29b-41d4-a716-446655440000"
 
 PASS=0
 FAIL=0
@@ -83,7 +82,7 @@ request "GET" "/v1/health"
 assert_step "Health check" 200 "$LAST_STATUS" '"status":"ok"'
 
 print_step "2/31 Register user"
-request "POST" "/v1/auth/register" "{\"tenant_id\":\"$TENANT_ID\",\"email\":\"test@example.com\",\"password\":\"testpass123\"}"
+request "POST" "/v1/auth/register" "{\"email\":\"test@example.com\",\"password\":\"testpass123\"}"
 assert_step "Register user" 201 "$LAST_STATUS" '"email":"test@example.com"'
 
 print_step "-- Verify email (extract token from console email logs)"
@@ -173,7 +172,7 @@ assert_status "Metrics" 200 "$LAST_STATUS"
 # NEGATIVE TEST CASES
 
 print_step "15/31 Register duplicate email"
-request "POST" "/v1/auth/register" "{\"tenant_id\":\"$TENANT_ID\",\"email\":\"test@example.com\",\"password\":\"different123\"}"
+request "POST" "/v1/auth/register" "{\"email\":\"test@example.com\",\"password\":\"different123\"}"
 assert_status "Register duplicate email" 400 "$LAST_STATUS"
 
 print_step "16/31 Login wrong password"

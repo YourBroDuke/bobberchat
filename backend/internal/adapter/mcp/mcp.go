@@ -99,9 +99,6 @@ func (a *MCPAdapter) Ingest(ctx context.Context, raw []byte, meta adapter.Transp
 		to = strings.TrimSpace(meta.Headers["X-Target-Agent"])
 	}
 	if to == "" {
-		to = strings.TrimSpace(meta.TenantID)
-	}
-	if to == "" {
 		to = "broadcast"
 	}
 

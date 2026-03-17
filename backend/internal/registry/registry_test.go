@@ -69,9 +69,9 @@ func TestRegistryMethods_InvalidInput(t *testing.T) {
 			err:  (&Service{}).Heartbeat(context.Background(), "", persistence.AgentStatusOnline),
 		},
 		{
-			name: "Discover with empty tenantID",
+			name: "Discover nil db",
 			err: func() error {
-				_, err := (&Service{}).Discover(context.Background(), "", DiscoveryQuery{})
+				_, err := (&Service{}).Discover(context.Background(), DiscoveryQuery{})
 				return err
 			}(),
 		},
@@ -83,9 +83,9 @@ func TestRegistryMethods_InvalidInput(t *testing.T) {
 			}(),
 		},
 		{
-			name: "ListAgents with empty tenantID",
+			name: "ListAgents nil db",
 			err: func() error {
-				_, err := (&Service{}).ListAgents(context.Background(), "")
+				_, err := (&Service{}).ListAgents(context.Background())
 				return err
 			}(),
 		},
@@ -114,7 +114,7 @@ func TestRegistryMethods_InvalidInput(t *testing.T) {
 			name: "nil service Discover",
 			err: func() error {
 				var s *Service
-				_, err := s.Discover(context.Background(), "tenant", DiscoveryQuery{})
+				_, err := s.Discover(context.Background(), DiscoveryQuery{})
 				return err
 			}(),
 		},
@@ -130,7 +130,7 @@ func TestRegistryMethods_InvalidInput(t *testing.T) {
 			name: "nil service ListAgents",
 			err: func() error {
 				var s *Service
-				_, err := s.ListAgents(context.Background(), "tenant")
+				_, err := s.ListAgents(context.Background())
 				return err
 			}(),
 		},

@@ -33,15 +33,13 @@ type Service struct {
 }
 
 type JWTClaims struct {
-	UserID   string
-	TenantID string
-	Role     string
+	UserID string
+	Role   string
 }
 
 type jwtTokenClaims struct {
-	UserID   string `json:"user_id"`
-	TenantID string `json:"tenant_id"`
-	Role     string `json:"role"`
+	UserID string `json:"user_id"`
+	Role   string `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -73,14 +71,9 @@ func NewService(db *persistence.DB, jwtSecret string, emailSender email.Sender, 
 	}
 }
 
-func (s *Service) RegisterUser(ctx context.Context, tenantID, emailAddr, password string) (*persistence.User, error) {
-	if s == nil || s.db == nil || strings.TrimSpace(tenantID) == "" || strings.TrimSpace(emailAddr) == "" || password == "" {
+func (s *Service) RegisterUser(ctx context.Context, emailAddr, password string) (*persistence.User, error) {
+	if s == nil || s.db == nil || strings.TrimSpace(emailAddr) == "" || password == "" {
 		return nil, persistence.ErrInvalidInput
-	}
-
-	tid, err := uuid.Parse(tenantID)
-	if err != nil {
-		return nil, fmt.Errorf("parse tenant id: %w", err)
 	}
 
 	repos := persistence.NewPostgresRepositories(s.db)
@@ -90,7 +83,6 @@ func (s *Service) RegisterUser(ctx context.Context, tenantID, emailAddr, passwor
 	}
 
 	created, err := repos.Users.Create(ctx, persistence.User{
-		TenantID:     tid,
 		Email:        strings.ToLower(strings.TrimSpace(emailAddr)),
 		PasswordHash: string(hash),
 		Role:         "member",
@@ -130,7 +122,7 @@ func (s *Service) LoginUser(ctx context.Context, email, password string) (access
 		return "", nil, persistence.ErrInvalidInput
 	}
 
-	u, err := s.getUserByEmailAnyTenant(ctx, email)
+	u, err := s.getUserByEmail(ctx, email)
 	if err != nil {
 		return "", nil, err
 	}
@@ -144,9 +136,8 @@ func (s *Service) LoginUser(ctx context.Context, email, password string) (access
 
 	now := time.Now().UTC()
 	claims := jwtTokenClaims{
-		UserID:   u.ID.String(),
-		TenantID: u.TenantID.String(),
-		Role:     u.Role,
+		UserID: u.ID.String(),
+		Role:   u.Role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   "user:" + u.ID.String(),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -172,18 +163,13 @@ func (s *Service) VerifyEmail(ctx context.Context, token string) (*persistence.U
 	return repos.Users.VerifyEmail(ctx, strings.TrimSpace(token))
 }
 
-func (s *Service) ResendVerification(ctx context.Context, tenantID, emailAddr string) error {
-	if s == nil || s.db == nil || strings.TrimSpace(tenantID) == "" || strings.TrimSpace(emailAddr) == "" {
+func (s *Service) ResendVerification(ctx context.Context, emailAddr string) error {
+	if s == nil || s.db == nil || strings.TrimSpace(emailAddr) == "" {
 		return persistence.ErrInvalidInput
 	}
 
-	tid, err := uuid.Parse(tenantID)
-	if err != nil {
-		return fmt.Errorf("parse tenant id: %w", err)
-	}
-
 	repos := persistence.NewPostgresRepositories(s.db)
-	u, err := repos.Users.GetByEmail(ctx, tid, emailAddr)
+	u, err := repos.Users.GetByEmail(ctx, emailAddr)
 	if err != nil {
 		return err
 	}
@@ -237,18 +223,14 @@ func (s *Service) ValidateJWT(tokenStr string) (*JWTClaims, error) {
 		return nil, errors.New("invalid token claims")
 	}
 
-	return &JWTClaims{UserID: claims.UserID, TenantID: claims.TenantID, Role: claims.Role}, nil
+	return &JWTClaims{UserID: claims.UserID, Role: claims.Role}, nil
 }
 
-func (s *Service) CreateAgent(ctx context.Context, tenantID, ownerUserID, displayName string, capabilities []string, version string) (agent *persistence.Agent, apiSecret string, err error) {
-	if s == nil || s.db == nil || tenantID == "" || ownerUserID == "" || displayName == "" || version == "" {
+func (s *Service) CreateAgent(ctx context.Context, ownerUserID, displayName string, capabilities []string, version string) (agent *persistence.Agent, apiSecret string, err error) {
+	if s == nil || s.db == nil || ownerUserID == "" || displayName == "" || version == "" {
 		return nil, "", persistence.ErrInvalidInput
 	}
 
-	tid, err := uuid.Parse(tenantID)
-	if err != nil {
-		return nil, "", err
-	}
 	ownerID, err := uuid.Parse(ownerUserID)
 	if err != nil {
 		return nil, "", err
@@ -265,7 +247,6 @@ func (s *Service) CreateAgent(ctx context.Context, tenantID, ownerUserID, displa
 
 	repos := persistence.NewPostgresRepositories(s.db)
 	created, err := repos.Agents.Create(ctx, persistence.Agent{
-		TenantID:      tid,
 		OwnerUserID:   ownerID,
 		DisplayName:   displayName,
 		Capabilities:  capabilities,
@@ -331,13 +312,13 @@ func (s *Service) RotateSecret(ctx context.Context, agentID string, gracePeriodS
 	return secret, nil
 }
 
-func (s *Service) getUserByEmailAnyTenant(ctx context.Context, email string) (*persistence.User, error) {
+func (s *Service) getUserByEmail(ctx context.Context, email string) (*persistence.User, error) {
 	if s.db == nil || s.db.Pool() == nil {
 		return nil, persistence.ErrInvalidInput
 	}
 
 	row := s.db.Pool().QueryRow(ctx, `
-		SELECT id, tenant_id, email, password_hash, role, created_at,
+		SELECT id, email, password_hash, role, created_at,
 			email_verified, verification_token, verification_token_expires_at
 		FROM users
 		WHERE email = $1
@@ -348,7 +329,6 @@ func (s *Service) getUserByEmailAnyTenant(ctx context.Context, email string) (*p
 	u := persistence.User{}
 	if err := row.Scan(
 		&u.ID,
-		&u.TenantID,
 		&u.Email,
 		&u.PasswordHash,
 		&u.Role,
@@ -377,14 +357,14 @@ func (s *Service) getAgentByID(ctx context.Context, agentID string) (*persistenc
 	}
 
 	row := s.db.Pool().QueryRow(ctx, `
-		SELECT agent_id, tenant_id, display_name, owner_user_id, capabilities, version, status, api_secret_hash, connected_at, last_heartbeat, created_at
+		SELECT agent_id, display_name, owner_user_id, capabilities, version, status, api_secret_hash, connected_at, last_heartbeat, created_at
 		FROM agents
 		WHERE agent_id = $1
 	`, id)
 
 	a := persistence.Agent{}
 	var status string
-	if err := row.Scan(&a.AgentID, &a.TenantID, &a.DisplayName, &a.OwnerUserID, &a.Capabilities, &a.Version, &status, &a.APISecretHash, &a.ConnectedAt, &a.LastHeartbeat, &a.CreatedAt); err != nil {
+	if err := row.Scan(&a.AgentID, &a.DisplayName, &a.OwnerUserID, &a.Capabilities, &a.Version, &status, &a.APISecretHash, &a.ConnectedAt, &a.LastHeartbeat, &a.CreatedAt); err != nil {
 		return nil, err
 	}
 	a.Status = persistence.AgentStatus(status)

@@ -9,7 +9,7 @@ import (
 
 func TestListAgents_Success(t *testing.T) {
 	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, newTenantID(), "registry-list-success")
+	token, _ := registerAndLogin(t, env, "registry-list-success")
 	env.createAgent(t, token, "registry-agent-1", []string{"search"})
 	env.createAgent(t, token, "registry-agent-2", []string{"summarize"})
 
@@ -24,7 +24,7 @@ func TestListAgents_Success(t *testing.T) {
 
 func TestListAgents_Empty(t *testing.T) {
 	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, newTenantID(), "registry-list-empty")
+	token, _ := registerAndLogin(t, env, "registry-list-empty")
 
 	resp := env.doRequest(t, http.MethodGet, "/v1/registry/agents", nil, token)
 	assertStatus(t, resp, http.StatusOK)
@@ -43,7 +43,7 @@ func TestListAgents_NoAuth(t *testing.T) {
 
 func TestDiscover_ByCapability(t *testing.T) {
 	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, newTenantID(), "registry-discover-cap")
+	token, _ := registerAndLogin(t, env, "registry-discover-cap")
 	env.createAgent(t, token, "discover-search", []string{"search"})
 	env.createAgent(t, token, "discover-plan", []string{"plan"})
 
@@ -62,7 +62,7 @@ func TestDiscover_ByCapability(t *testing.T) {
 
 func TestDiscover_ByStatus(t *testing.T) {
 	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, newTenantID(), "registry-discover-status")
+	token, _ := registerAndLogin(t, env, "registry-discover-status")
 	env.createAgent(t, token, "discover-status", []string{"search"})
 
 	resp := env.doRequest(t, http.MethodPost, "/v1/registry/discover", map[string]any{
@@ -80,7 +80,7 @@ func TestDiscover_ByStatus(t *testing.T) {
 
 func TestDiscover_WithLimit(t *testing.T) {
 	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, newTenantID(), "registry-discover-limit")
+	token, _ := registerAndLogin(t, env, "registry-discover-limit")
 	env.createAgent(t, token, "discover-limit-1", []string{"search"})
 	env.createAgent(t, token, "discover-limit-2", []string{"search"})
 

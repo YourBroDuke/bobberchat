@@ -46,12 +46,10 @@ go run ./tui/cmd/bobber-tui --backend-url http://localhost:8080 --token <YOUR_JW
 The TUI also supports configuration via environment variables:
 - `BOBBERCHAT_BACKEND_URL`: URL of the bobberd server.
 - `BOBBERCHAT_TOKEN`: Valid JWT for authentication.
-- `BOBBERCHAT_TENANT_ID`: The tenant ID for the session.
 
 **Command-line Flags:**
 - `--backend-url`: Defaults to http://localhost:8080.
 - `--token`: Your authentication token.
-- `--tenant-id`: Specific tenant identifier.
 
 ### Layout
 The TUI features a three-pane layout for comprehensive monitoring:

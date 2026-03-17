@@ -21,18 +21,18 @@ var (
 
 type AgentRepository interface {
 	Create(ctx context.Context, agent Agent) (*Agent, error)
-	GetByID(ctx context.Context, tenantID, agentID uuid.UUID) (*Agent, error)
-	UpdateStatus(ctx context.Context, tenantID, agentID uuid.UUID, status AgentStatus) error
-	Delete(ctx context.Context, tenantID, agentID uuid.UUID) error
-	ListByTenant(ctx context.Context, tenantID uuid.UUID) ([]Agent, error)
-	ListByOwner(ctx context.Context, tenantID, ownerUserID uuid.UUID) ([]Agent, error)
-	DiscoverByCapability(ctx context.Context, tenantID uuid.UUID, capability string, statuses []AgentStatus, limit int) ([]Agent, error)
+	GetByID(ctx context.Context, agentID uuid.UUID) (*Agent, error)
+	UpdateStatus(ctx context.Context, agentID uuid.UUID, status AgentStatus) error
+	Delete(ctx context.Context, agentID uuid.UUID) error
+	ListAll(ctx context.Context) ([]Agent, error)
+	ListByOwner(ctx context.Context, ownerUserID uuid.UUID) ([]Agent, error)
+	DiscoverByCapability(ctx context.Context, capability string, statuses []AgentStatus, limit int) ([]Agent, error)
 }
 
 type UserRepository interface {
 	Create(ctx context.Context, user User) (*User, error)
-	GetByEmail(ctx context.Context, tenantID uuid.UUID, email string) (*User, error)
-	GetByID(ctx context.Context, tenantID, userID uuid.UUID) (*User, error)
+	GetByEmail(ctx context.Context, email string) (*User, error)
+	GetByID(ctx context.Context, userID uuid.UUID) (*User, error)
 	SetVerificationToken(ctx context.Context, userID uuid.UUID, token string, expiresAt time.Time) error
 	VerifyEmail(ctx context.Context, token string) (*User, error)
 	GetByVerificationToken(ctx context.Context, token string) (*User, error)
@@ -40,50 +40,50 @@ type UserRepository interface {
 
 type ChatGroupRepository interface {
 	Create(ctx context.Context, group ChatGroup) (*ChatGroup, error)
-	GetByID(ctx context.Context, tenantID, groupID uuid.UUID) (*ChatGroup, error)
-	ListByTenant(ctx context.Context, tenantID uuid.UUID) ([]ChatGroup, error)
+	GetByID(ctx context.Context, groupID uuid.UUID) (*ChatGroup, error)
+	ListAll(ctx context.Context) ([]ChatGroup, error)
 	AddMember(ctx context.Context, member ChatGroupMember) error
 	RemoveMember(ctx context.Context, member ChatGroupMember) error
 }
 
 type TopicRepository interface {
 	Create(ctx context.Context, topic Topic) (*Topic, error)
-	GetByID(ctx context.Context, tenantID, topicID uuid.UUID) (*Topic, error)
-	ListByGroup(ctx context.Context, tenantID, groupID uuid.UUID) ([]Topic, error)
-	UpdateStatus(ctx context.Context, tenantID, topicID uuid.UUID, status TopicStatus) error
+	GetByID(ctx context.Context, topicID uuid.UUID) (*Topic, error)
+	ListByGroup(ctx context.Context, groupID uuid.UUID) ([]Topic, error)
+	UpdateStatus(ctx context.Context, topicID uuid.UUID, status TopicStatus) error
 }
 
 type MessageRepository interface {
 	Save(ctx context.Context, message Message) (*Message, error)
-	GetByTraceID(ctx context.Context, tenantID, traceID uuid.UUID) ([]Message, error)
-	GetByTopic(ctx context.Context, tenantID, topicID uuid.UUID) ([]Message, error)
-	GetByID(ctx context.Context, tenantID, messageID uuid.UUID, timestamp time.Time) (*Message, error)
-	GetByPeer(ctx context.Context, tenantID, userID, peerID uuid.UUID, limit int, sinceTS *time.Time, sinceID *uuid.UUID) ([]Message, error)
+	GetByTraceID(ctx context.Context, traceID uuid.UUID) ([]Message, error)
+	GetByTopic(ctx context.Context, topicID uuid.UUID) ([]Message, error)
+	GetByID(ctx context.Context, messageID uuid.UUID, timestamp time.Time) (*Message, error)
+	GetByPeer(ctx context.Context, userID, peerID uuid.UUID, limit int, sinceTS *time.Time, sinceID *uuid.UUID) ([]Message, error)
 }
 
 type ConnectionRequestRepository interface {
 	Create(ctx context.Context, req ConnectionRequest) (*ConnectionRequest, error)
-	GetPendingForUser(ctx context.Context, tenantID, userID uuid.UUID) ([]ConnectionRequest, error)
-	UpdateStatus(ctx context.Context, tenantID, requestID uuid.UUID, status ConnectionRequestStatus) error
-	GetByFromAndTo(ctx context.Context, tenantID, fromUserID, toUserID uuid.UUID) (*ConnectionRequest, error)
+	GetPendingForUser(ctx context.Context, userID uuid.UUID) ([]ConnectionRequest, error)
+	UpdateStatus(ctx context.Context, requestID uuid.UUID, status ConnectionRequestStatus) error
+	GetByFromAndTo(ctx context.Context, fromUserID, toUserID uuid.UUID) (*ConnectionRequest, error)
 }
 
 type BlacklistRepository interface {
 	Create(ctx context.Context, entry BlacklistEntry) (*BlacklistEntry, error)
-	Delete(ctx context.Context, tenantID, userID, blockedUserID uuid.UUID) error
-	IsBlocked(ctx context.Context, tenantID, userID, blockedUserID uuid.UUID) (bool, error)
-	ListByUser(ctx context.Context, tenantID, userID uuid.UUID) ([]BlacklistEntry, error)
+	Delete(ctx context.Context, userID, blockedUserID uuid.UUID) error
+	IsBlocked(ctx context.Context, userID, blockedUserID uuid.UUID) (bool, error)
+	ListByUser(ctx context.Context, userID uuid.UUID) ([]BlacklistEntry, error)
 }
 
 type ApprovalRepository interface {
 	Create(ctx context.Context, approval ApprovalRequest) (*ApprovalRequest, error)
-	GetPending(ctx context.Context, tenantID uuid.UUID) ([]ApprovalRequest, error)
-	Decide(ctx context.Context, tenantID, approvalID, approverID uuid.UUID, status ApprovalStatus, decidedAt time.Time) error
+	GetPending(ctx context.Context) ([]ApprovalRequest, error)
+	Decide(ctx context.Context, approvalID, approverID uuid.UUID, status ApprovalStatus, decidedAt time.Time) error
 }
 
 type AuditLogRepository interface {
 	Append(ctx context.Context, entry AuditLogEntry) (*AuditLogEntry, error)
-	QueryByTenant(ctx context.Context, tenantID uuid.UUID, limit int) ([]AuditLogEntry, error)
+	QueryRecent(ctx context.Context, limit int) ([]AuditLogEntry, error)
 }
 
 type PostgresRepositories struct {
@@ -132,13 +132,13 @@ func (r *pgAgentRepository) Create(ctx context.Context, agent Agent) (*Agent, er
 
 	row := r.db.Pool().QueryRow(ctx, `
 		INSERT INTO agents (
-			agent_id, tenant_id, display_name, owner_user_id, capabilities, version,
+			agent_id, display_name, owner_user_id, capabilities, version,
 			status, api_secret_hash, connected_at, last_heartbeat, created_at
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-		RETURNING agent_id, tenant_id, display_name, owner_user_id, capabilities, version,
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+		RETURNING agent_id, display_name, owner_user_id, capabilities, version,
 			status, api_secret_hash, connected_at, last_heartbeat, created_at
 	`,
-		agent.AgentID, agent.TenantID, agent.DisplayName, agent.OwnerUserID, capabilities,
+		agent.AgentID, agent.DisplayName, agent.OwnerUserID, capabilities,
 		agent.Version, string(agent.Status), agent.APISecretHash, agent.ConnectedAt,
 		agent.LastHeartbeat, agent.CreatedAt,
 	)
@@ -150,20 +150,20 @@ func (r *pgAgentRepository) Create(ctx context.Context, agent Agent) (*Agent, er
 	return created, nil
 }
 
-func (r *pgAgentRepository) GetByID(ctx context.Context, tenantID, agentID uuid.UUID) (*Agent, error) {
+func (r *pgAgentRepository) GetByID(ctx context.Context, agentID uuid.UUID) (*Agent, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT agent_id, tenant_id, display_name, owner_user_id, capabilities, version,
+		SELECT agent_id, display_name, owner_user_id, capabilities, version,
 			status, api_secret_hash, connected_at, last_heartbeat, created_at
 		FROM agents
-		WHERE tenant_id = $1 AND agent_id = $2
-	`, tenantID, agentID)
+		WHERE agent_id = $1
+	`, agentID)
 	return scanAgent(row)
 }
 
-func (r *pgAgentRepository) UpdateStatus(ctx context.Context, tenantID, agentID uuid.UUID, status AgentStatus) error {
+func (r *pgAgentRepository) UpdateStatus(ctx context.Context, agentID uuid.UUID, status AgentStatus) error {
 	res, err := r.db.Pool().Exec(ctx, `
-		UPDATE agents SET status = $1 WHERE tenant_id = $2 AND agent_id = $3
-	`, string(status), tenantID, agentID)
+		UPDATE agents SET status = $1 WHERE agent_id = $2
+	`, string(status), agentID)
 	if err != nil {
 		return fmt.Errorf("update agent status: %w", err)
 	}
@@ -173,8 +173,8 @@ func (r *pgAgentRepository) UpdateStatus(ctx context.Context, tenantID, agentID 
 	return nil
 }
 
-func (r *pgAgentRepository) Delete(ctx context.Context, tenantID, agentID uuid.UUID) error {
-	res, err := r.db.Pool().Exec(ctx, `DELETE FROM agents WHERE tenant_id = $1 AND agent_id = $2`, tenantID, agentID)
+func (r *pgAgentRepository) Delete(ctx context.Context, agentID uuid.UUID) error {
+	res, err := r.db.Pool().Exec(ctx, `DELETE FROM agents WHERE agent_id = $1`, agentID)
 	if err != nil {
 		return fmt.Errorf("delete agent: %w", err)
 	}
@@ -184,14 +184,13 @@ func (r *pgAgentRepository) Delete(ctx context.Context, tenantID, agentID uuid.U
 	return nil
 }
 
-func (r *pgAgentRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID) ([]Agent, error) {
+func (r *pgAgentRepository) ListAll(ctx context.Context) ([]Agent, error) {
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT agent_id, tenant_id, display_name, owner_user_id, capabilities, version,
+		SELECT agent_id, display_name, owner_user_id, capabilities, version,
 			status, api_secret_hash, connected_at, last_heartbeat, created_at
 		FROM agents
-		WHERE tenant_id = $1
 		ORDER BY created_at DESC
-	`, tenantID)
+	`)
 	if err != nil {
 		return nil, fmt.Errorf("list agents: %w", err)
 	}
@@ -213,14 +212,14 @@ func (r *pgAgentRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID
 	return results, nil
 }
 
-func (r *pgAgentRepository) ListByOwner(ctx context.Context, tenantID, ownerUserID uuid.UUID) ([]Agent, error) {
+func (r *pgAgentRepository) ListByOwner(ctx context.Context, ownerUserID uuid.UUID) ([]Agent, error) {
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT agent_id, tenant_id, display_name, owner_user_id, capabilities, version,
+		SELECT agent_id, display_name, owner_user_id, capabilities, version,
 			status, api_secret_hash, connected_at, last_heartbeat, created_at
 		FROM agents
-		WHERE tenant_id = $1 AND owner_user_id = $2
+		WHERE owner_user_id = $1
 		ORDER BY created_at DESC
-	`, tenantID, ownerUserID)
+	`, ownerUserID)
 	if err != nil {
 		return nil, fmt.Errorf("list agents by owner: %w", err)
 	}
@@ -242,7 +241,7 @@ func (r *pgAgentRepository) ListByOwner(ctx context.Context, tenantID, ownerUser
 	return results, nil
 }
 
-func (r *pgAgentRepository) DiscoverByCapability(ctx context.Context, tenantID uuid.UUID, capability string, statuses []AgentStatus, limit int) ([]Agent, error) {
+func (r *pgAgentRepository) DiscoverByCapability(ctx context.Context, capability string, statuses []AgentStatus, limit int) ([]Agent, error) {
 	if limit <= 0 {
 		limit = 10
 	}
@@ -253,18 +252,17 @@ func (r *pgAgentRepository) DiscoverByCapability(ctx context.Context, tenantID u
 	}
 
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT agent_id, tenant_id, display_name, owner_user_id, capabilities, version,
+		SELECT agent_id, display_name, owner_user_id, capabilities, version,
 			status, api_secret_hash, connected_at, last_heartbeat, created_at
 		FROM agents
-		WHERE tenant_id = $1
-			AND capabilities @> to_jsonb($2::text[])
+		WHERE capabilities @> to_jsonb($1::text[])
 			AND (
-				cardinality($3::text[]) = 0
-				OR status::text = ANY($3::text[])
+				cardinality($2::text[]) = 0
+				OR status::text = ANY($2::text[])
 			)
 		ORDER BY last_heartbeat DESC NULLS LAST, created_at DESC
-		LIMIT $4
-	`, tenantID, []string{capability}, statusValues, limit)
+		LIMIT $3
+	`, []string{capability}, statusValues, limit)
 	if err != nil {
 		return nil, fmt.Errorf("discover agents: %w", err)
 	}
@@ -299,18 +297,17 @@ func (r *pgUserRepository) Create(ctx context.Context, user User) (*User, error)
 
 	row := r.db.Pool().QueryRow(ctx, `
 		INSERT INTO users (
-			id, tenant_id, email, password_hash, role, created_at,
+			id, email, password_hash, role, created_at,
 			email_verified, verification_token, verification_token_expires_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		RETURNING id, tenant_id, email, password_hash, role, created_at,
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		RETURNING id, email, password_hash, role, created_at,
 			email_verified, verification_token, verification_token_expires_at
-	`, user.ID, user.TenantID, strings.ToLower(strings.TrimSpace(user.Email)), user.PasswordHash, user.Role, user.CreatedAt, user.EmailVerified, user.VerificationToken, user.VerificationTokenExpiresAt)
+	`, user.ID, strings.ToLower(strings.TrimSpace(user.Email)), user.PasswordHash, user.Role, user.CreatedAt, user.EmailVerified, user.VerificationToken, user.VerificationTokenExpiresAt)
 
 	created := User{}
 	err := row.Scan(
 		&created.ID,
-		&created.TenantID,
 		&created.Email,
 		&created.PasswordHash,
 		&created.Role,
@@ -325,18 +322,17 @@ func (r *pgUserRepository) Create(ctx context.Context, user User) (*User, error)
 	return &created, nil
 }
 
-func (r *pgUserRepository) GetByEmail(ctx context.Context, tenantID uuid.UUID, email string) (*User, error) {
+func (r *pgUserRepository) GetByEmail(ctx context.Context, email string) (*User, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, tenant_id, email, password_hash, role, created_at,
+		SELECT id, email, password_hash, role, created_at,
 			email_verified, verification_token, verification_token_expires_at
 		FROM users
-		WHERE tenant_id = $1 AND email = $2
-	`, tenantID, strings.ToLower(strings.TrimSpace(email)))
+		WHERE email = $1
+	`, strings.ToLower(strings.TrimSpace(email)))
 
 	u := User{}
 	err := row.Scan(
 		&u.ID,
-		&u.TenantID,
 		&u.Email,
 		&u.PasswordHash,
 		&u.Role,
@@ -354,18 +350,17 @@ func (r *pgUserRepository) GetByEmail(ctx context.Context, tenantID uuid.UUID, e
 	return &u, nil
 }
 
-func (r *pgUserRepository) GetByID(ctx context.Context, tenantID, userID uuid.UUID) (*User, error) {
+func (r *pgUserRepository) GetByID(ctx context.Context, userID uuid.UUID) (*User, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, tenant_id, email, password_hash, role, created_at,
+		SELECT id, email, password_hash, role, created_at,
 			email_verified, verification_token, verification_token_expires_at
 		FROM users
-		WHERE tenant_id = $1 AND id = $2
-	`, tenantID, userID)
+		WHERE id = $1
+	`, userID)
 
 	u := User{}
 	err := row.Scan(
 		&u.ID,
-		&u.TenantID,
 		&u.Email,
 		&u.PasswordHash,
 		&u.Role,
@@ -407,14 +402,13 @@ func (r *pgUserRepository) VerifyEmail(ctx context.Context, token string) (*User
 		WHERE verification_token = $1
 			AND verification_token IS NOT NULL
 			AND verification_token_expires_at > NOW()
-		RETURNING id, tenant_id, email, password_hash, role, created_at,
+		RETURNING id, email, password_hash, role, created_at,
 			email_verified, verification_token, verification_token_expires_at
 	`, token)
 
 	u := User{}
 	err := row.Scan(
 		&u.ID,
-		&u.TenantID,
 		&u.Email,
 		&u.PasswordHash,
 		&u.Role,
@@ -435,7 +429,7 @@ func (r *pgUserRepository) VerifyEmail(ctx context.Context, token string) (*User
 
 func (r *pgUserRepository) GetByVerificationToken(ctx context.Context, token string) (*User, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, tenant_id, email, password_hash, role, created_at,
+		SELECT id, email, password_hash, role, created_at,
 			email_verified, verification_token, verification_token_expires_at
 		FROM users
 		WHERE verification_token = $1
@@ -446,7 +440,6 @@ func (r *pgUserRepository) GetByVerificationToken(ctx context.Context, token str
 	u := User{}
 	err := row.Scan(
 		&u.ID,
-		&u.TenantID,
 		&u.Email,
 		&u.PasswordHash,
 		&u.Role,
@@ -479,14 +472,14 @@ func (r *pgChatGroupRepository) Create(ctx context.Context, group ChatGroup) (*C
 	}
 
 	row := r.db.Pool().QueryRow(ctx, `
-		INSERT INTO chat_groups (id, tenant_id, name, description, visibility, creator_id, created_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7)
-		RETURNING id, tenant_id, name, description, visibility, creator_id, created_at
-	`, group.ID, group.TenantID, group.Name, group.Description, string(group.Visibility), group.CreatorID, group.CreatedAt)
+		INSERT INTO chat_groups (id, name, description, visibility, creator_id, created_at)
+		VALUES ($1,$2,$3,$4,$5,$6)
+		RETURNING id, name, description, visibility, creator_id, created_at
+	`, group.ID, group.Name, group.Description, string(group.Visibility), group.CreatorID, group.CreatedAt)
 
 	created := ChatGroup{}
 	var visibility string
-	err := row.Scan(&created.ID, &created.TenantID, &created.Name, &created.Description, &visibility, &created.CreatorID, &created.CreatedAt)
+	err := row.Scan(&created.ID, &created.Name, &created.Description, &visibility, &created.CreatorID, &created.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("create chat group: %w", err)
 	}
@@ -494,16 +487,16 @@ func (r *pgChatGroupRepository) Create(ctx context.Context, group ChatGroup) (*C
 	return &created, nil
 }
 
-func (r *pgChatGroupRepository) GetByID(ctx context.Context, tenantID, groupID uuid.UUID) (*ChatGroup, error) {
+func (r *pgChatGroupRepository) GetByID(ctx context.Context, groupID uuid.UUID) (*ChatGroup, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, tenant_id, name, description, visibility, creator_id, created_at
+		SELECT id, name, description, visibility, creator_id, created_at
 		FROM chat_groups
-		WHERE tenant_id = $1 AND id = $2
-	`, tenantID, groupID)
+		WHERE id = $1
+	`, groupID)
 
 	g := ChatGroup{}
 	var visibility string
-	err := row.Scan(&g.ID, &g.TenantID, &g.Name, &g.Description, &visibility, &g.CreatorID, &g.CreatedAt)
+	err := row.Scan(&g.ID, &g.Name, &g.Description, &visibility, &g.CreatorID, &g.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -514,13 +507,12 @@ func (r *pgChatGroupRepository) GetByID(ctx context.Context, tenantID, groupID u
 	return &g, nil
 }
 
-func (r *pgChatGroupRepository) ListByTenant(ctx context.Context, tenantID uuid.UUID) ([]ChatGroup, error) {
+func (r *pgChatGroupRepository) ListAll(ctx context.Context) ([]ChatGroup, error) {
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT id, tenant_id, name, description, visibility, creator_id, created_at
+		SELECT id, name, description, visibility, creator_id, created_at
 		FROM chat_groups
-		WHERE tenant_id = $1
 		ORDER BY created_at DESC
-	`, tenantID)
+	`)
 	if err != nil {
 		return nil, fmt.Errorf("list chat groups: %w", err)
 	}
@@ -530,7 +522,7 @@ func (r *pgChatGroupRepository) ListByTenant(ctx context.Context, tenantID uuid.
 	for rows.Next() {
 		g := ChatGroup{}
 		var visibility string
-		if err := rows.Scan(&g.ID, &g.TenantID, &g.Name, &g.Description, &visibility, &g.CreatorID, &g.CreatedAt); err != nil {
+		if err := rows.Scan(&g.ID, &g.Name, &g.Description, &visibility, &g.CreatorID, &g.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan chat group: %w", err)
 		}
 		g.Visibility = GroupVisibility(visibility)
@@ -580,14 +572,14 @@ func (r *pgTopicRepository) Create(ctx context.Context, topic Topic) (*Topic, er
 	}
 
 	row := r.db.Pool().QueryRow(ctx, `
-		INSERT INTO topics (id, tenant_id, group_id, subject, status, parent_topic_id, created_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7)
-		RETURNING id, tenant_id, group_id, subject, status, parent_topic_id, created_at
-	`, topic.ID, topic.TenantID, topic.GroupID, topic.Subject, string(topic.Status), topic.ParentTopicID, topic.CreatedAt)
+		INSERT INTO topics (id, group_id, subject, status, parent_topic_id, created_at)
+		VALUES ($1,$2,$3,$4,$5,$6)
+		RETURNING id, group_id, subject, status, parent_topic_id, created_at
+	`, topic.ID, topic.GroupID, topic.Subject, string(topic.Status), topic.ParentTopicID, topic.CreatedAt)
 
 	out := Topic{}
 	var status string
-	err := row.Scan(&out.ID, &out.TenantID, &out.GroupID, &out.Subject, &status, &out.ParentTopicID, &out.CreatedAt)
+	err := row.Scan(&out.ID, &out.GroupID, &out.Subject, &status, &out.ParentTopicID, &out.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("create topic: %w", err)
 	}
@@ -595,16 +587,16 @@ func (r *pgTopicRepository) Create(ctx context.Context, topic Topic) (*Topic, er
 	return &out, nil
 }
 
-func (r *pgTopicRepository) GetByID(ctx context.Context, tenantID, topicID uuid.UUID) (*Topic, error) {
+func (r *pgTopicRepository) GetByID(ctx context.Context, topicID uuid.UUID) (*Topic, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, tenant_id, group_id, subject, status, parent_topic_id, created_at
+		SELECT id, group_id, subject, status, parent_topic_id, created_at
 		FROM topics
-		WHERE tenant_id = $1 AND id = $2
-	`, tenantID, topicID)
+		WHERE id = $1
+	`, topicID)
 
 	t := Topic{}
 	var status string
-	err := row.Scan(&t.ID, &t.TenantID, &t.GroupID, &t.Subject, &status, &t.ParentTopicID, &t.CreatedAt)
+	err := row.Scan(&t.ID, &t.GroupID, &t.Subject, &status, &t.ParentTopicID, &t.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -615,13 +607,13 @@ func (r *pgTopicRepository) GetByID(ctx context.Context, tenantID, topicID uuid.
 	return &t, nil
 }
 
-func (r *pgTopicRepository) ListByGroup(ctx context.Context, tenantID, groupID uuid.UUID) ([]Topic, error) {
+func (r *pgTopicRepository) ListByGroup(ctx context.Context, groupID uuid.UUID) ([]Topic, error) {
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT id, tenant_id, group_id, subject, status, parent_topic_id, created_at
+		SELECT id, group_id, subject, status, parent_topic_id, created_at
 		FROM topics
-		WHERE tenant_id = $1 AND group_id = $2
+		WHERE group_id = $1
 		ORDER BY created_at DESC
-	`, tenantID, groupID)
+	`, groupID)
 	if err != nil {
 		return nil, fmt.Errorf("list topics: %w", err)
 	}
@@ -631,7 +623,7 @@ func (r *pgTopicRepository) ListByGroup(ctx context.Context, tenantID, groupID u
 	for rows.Next() {
 		t := Topic{}
 		var status string
-		if err := rows.Scan(&t.ID, &t.TenantID, &t.GroupID, &t.Subject, &status, &t.ParentTopicID, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.GroupID, &t.Subject, &status, &t.ParentTopicID, &t.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan topic: %w", err)
 		}
 		t.Status = TopicStatus(status)
@@ -644,10 +636,10 @@ func (r *pgTopicRepository) ListByGroup(ctx context.Context, tenantID, groupID u
 	return topics, nil
 }
 
-func (r *pgTopicRepository) UpdateStatus(ctx context.Context, tenantID, topicID uuid.UUID, status TopicStatus) error {
+func (r *pgTopicRepository) UpdateStatus(ctx context.Context, topicID uuid.UUID, status TopicStatus) error {
 	res, err := r.db.Pool().Exec(ctx, `
-		UPDATE topics SET status = $1 WHERE tenant_id = $2 AND id = $3
-	`, string(status), tenantID, topicID)
+		UPDATE topics SET status = $1 WHERE id = $2
+	`, string(status), topicID)
 	if err != nil {
 		return fmt.Errorf("update topic status: %w", err)
 	}
@@ -674,10 +666,10 @@ func (r *pgMessageRepository) Save(ctx context.Context, message Message) (*Messa
 	}
 
 	row := r.db.Pool().QueryRow(ctx, `
-		INSERT INTO messages (id, tenant_id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id, topic_id)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-		RETURNING id, tenant_id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id, topic_id
-	`, message.ID, message.TenantID, message.FromID, message.ToID, message.Tag, payload, metadata, message.Timestamp, message.TraceID, message.TopicID)
+		INSERT INTO messages (id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id, topic_id)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+		RETURNING id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id, topic_id
+	`, message.ID, message.FromID, message.ToID, message.Tag, payload, metadata, message.Timestamp, message.TraceID, message.TopicID)
 
 	out, err := scanMessage(row)
 	if err != nil {
@@ -686,13 +678,13 @@ func (r *pgMessageRepository) Save(ctx context.Context, message Message) (*Messa
 	return out, nil
 }
 
-func (r *pgMessageRepository) GetByTraceID(ctx context.Context, tenantID, traceID uuid.UUID) ([]Message, error) {
+func (r *pgMessageRepository) GetByTraceID(ctx context.Context, traceID uuid.UUID) ([]Message, error) {
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT id, tenant_id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id, topic_id
+		SELECT id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id, topic_id
 		FROM messages
-		WHERE tenant_id = $1 AND trace_id = $2
+		WHERE trace_id = $1
 		ORDER BY "timestamp" ASC
-	`, tenantID, traceID)
+	`, traceID)
 	if err != nil {
 		return nil, fmt.Errorf("get messages by trace id: %w", err)
 	}
@@ -712,13 +704,13 @@ func (r *pgMessageRepository) GetByTraceID(ctx context.Context, tenantID, traceI
 	return messages, nil
 }
 
-func (r *pgMessageRepository) GetByTopic(ctx context.Context, tenantID, topicID uuid.UUID) ([]Message, error) {
+func (r *pgMessageRepository) GetByTopic(ctx context.Context, topicID uuid.UUID) ([]Message, error) {
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT id, tenant_id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id, topic_id
+		SELECT id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id, topic_id
 		FROM messages
-		WHERE tenant_id = $1 AND topic_id = $2
+		WHERE topic_id = $1
 		ORDER BY "timestamp" ASC
-	`, tenantID, topicID)
+	`, topicID)
 	if err != nil {
 		return nil, fmt.Errorf("get messages by topic: %w", err)
 	}
@@ -738,30 +730,29 @@ func (r *pgMessageRepository) GetByTopic(ctx context.Context, tenantID, topicID 
 	return messages, nil
 }
 
-func (r *pgMessageRepository) GetByID(ctx context.Context, tenantID, messageID uuid.UUID, timestamp time.Time) (*Message, error) {
+func (r *pgMessageRepository) GetByID(ctx context.Context, messageID uuid.UUID, timestamp time.Time) (*Message, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, tenant_id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id, topic_id
+		SELECT id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id, topic_id
 		FROM messages
-		WHERE tenant_id = $1 AND id = $2 AND "timestamp" = $3
-	`, tenantID, messageID, timestamp)
+		WHERE id = $1 AND "timestamp" = $2
+	`, messageID, timestamp)
 	return scanMessage(row)
 }
 
-func (r *pgMessageRepository) GetByPeer(ctx context.Context, tenantID, userID, peerID uuid.UUID, limit int, sinceTS *time.Time, sinceID *uuid.UUID) ([]Message, error) {
+func (r *pgMessageRepository) GetByPeer(ctx context.Context, userID, peerID uuid.UUID, limit int, sinceTS *time.Time, sinceID *uuid.UUID) ([]Message, error) {
 	if limit <= 0 {
 		limit = 50
 	}
 
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT id, tenant_id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id, topic_id
+		SELECT id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id, topic_id
 		FROM messages
-		WHERE tenant_id = $1
-			AND ((from_id = $2 AND to_id = $3) OR (from_id = $3 AND to_id = $2))
-			AND ($4::timestamptz IS NULL OR "timestamp" > $4)
-			AND ($5::uuid IS NULL OR id > $5)
+		WHERE ((from_id = $1 AND to_id = $2) OR (from_id = $2 AND to_id = $1))
+			AND ($3::timestamptz IS NULL OR "timestamp" > $3)
+			AND ($4::uuid IS NULL OR id > $4)
 		ORDER BY "timestamp" DESC
-		LIMIT $6
-	`, tenantID, peerID, userID, sinceTS, sinceID, limit)
+		LIMIT $5
+	`, userID, peerID, sinceTS, sinceID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("get messages by peer: %w", err)
 	}
@@ -793,13 +784,13 @@ func (r *pgApprovalRepository) Create(ctx context.Context, approval ApprovalRequ
 
 	row := r.db.Pool().QueryRow(ctx, `
 		INSERT INTO approval_requests (
-			approval_id, tenant_id, agent_id, action, justification, urgency,
+			approval_id, agent_id, action, justification, urgency,
 			status, approver_id, decided_at, timeout_ms, created_at
 		)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-		RETURNING approval_id, tenant_id, agent_id, action, justification, urgency,
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+		RETURNING approval_id, agent_id, action, justification, urgency,
 			status, approver_id, decided_at, timeout_ms, created_at
-	`, approval.ApprovalID, approval.TenantID, approval.AgentID, approval.Action,
+	`, approval.ApprovalID, approval.AgentID, approval.Action,
 		approval.Justification, string(approval.Urgency), string(approval.Status), approval.ApproverID,
 		approval.DecidedAt, approval.TimeoutMS, approval.CreatedAt)
 
@@ -810,14 +801,14 @@ func (r *pgApprovalRepository) Create(ctx context.Context, approval ApprovalRequ
 	return out, nil
 }
 
-func (r *pgApprovalRepository) GetPending(ctx context.Context, tenantID uuid.UUID) ([]ApprovalRequest, error) {
+func (r *pgApprovalRepository) GetPending(ctx context.Context) ([]ApprovalRequest, error) {
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT approval_id, tenant_id, agent_id, action, justification, urgency,
+		SELECT approval_id, agent_id, action, justification, urgency,
 			status, approver_id, decided_at, timeout_ms, created_at
 		FROM approval_requests
-		WHERE tenant_id = $1 AND status = 'PENDING'
+		WHERE status = 'PENDING'
 		ORDER BY urgency DESC, created_at ASC
-	`, tenantID)
+	`)
 	if err != nil {
 		return nil, fmt.Errorf("get pending approvals: %w", err)
 	}
@@ -837,12 +828,12 @@ func (r *pgApprovalRepository) GetPending(ctx context.Context, tenantID uuid.UUI
 	return approvals, nil
 }
 
-func (r *pgApprovalRepository) Decide(ctx context.Context, tenantID, approvalID, approverID uuid.UUID, status ApprovalStatus, decidedAt time.Time) error {
+func (r *pgApprovalRepository) Decide(ctx context.Context, approvalID, approverID uuid.UUID, status ApprovalStatus, decidedAt time.Time) error {
 	res, err := r.db.Pool().Exec(ctx, `
 		UPDATE approval_requests
 		SET status = $1, approver_id = $2, decided_at = $3
-		WHERE tenant_id = $4 AND approval_id = $5 AND status = 'PENDING'
-	`, string(status), approverID, decidedAt, tenantID, approvalID)
+		WHERE approval_id = $4 AND status = 'PENDING'
+	`, string(status), approverID, decidedAt, approvalID)
 	if err != nil {
 		return fmt.Errorf("decide approval: %w", err)
 	}
@@ -864,10 +855,10 @@ func (r *pgAuditLogRepository) Append(ctx context.Context, entry AuditLogEntry) 
 	}
 
 	row := r.db.Pool().QueryRow(ctx, `
-		INSERT INTO audit_log (event_type, actor_id, agent_id, tenant_id, details, created_at)
-		VALUES ($1,$2,$3,$4,$5,$6)
-		RETURNING id, event_type, actor_id, agent_id, tenant_id, details, created_at
-	`, entry.EventType, entry.ActorID, entry.AgentID, entry.TenantID, details, entry.CreatedAt)
+		INSERT INTO audit_log (event_type, actor_id, agent_id, details, created_at)
+		VALUES ($1,$2,$3,$4,$5)
+		RETURNING id, event_type, actor_id, agent_id, details, created_at
+	`, entry.EventType, entry.ActorID, entry.AgentID, details, entry.CreatedAt)
 
 	out, err := scanAuditLogEntry(row)
 	if err != nil {
@@ -876,20 +867,19 @@ func (r *pgAuditLogRepository) Append(ctx context.Context, entry AuditLogEntry) 
 	return out, nil
 }
 
-func (r *pgAuditLogRepository) QueryByTenant(ctx context.Context, tenantID uuid.UUID, limit int) ([]AuditLogEntry, error) {
+func (r *pgAuditLogRepository) QueryRecent(ctx context.Context, limit int) ([]AuditLogEntry, error) {
 	if limit <= 0 {
 		limit = 100
 	}
 
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT id, event_type, actor_id, agent_id, tenant_id, details, created_at
+		SELECT id, event_type, actor_id, agent_id, details, created_at
 		FROM audit_log
-		WHERE tenant_id = $1
 		ORDER BY created_at DESC
-		LIMIT $2
-	`, tenantID, limit)
+		LIMIT $1
+	`, limit)
 	if err != nil {
-		return nil, fmt.Errorf("query audit log by tenant: %w", err)
+		return nil, fmt.Errorf("query recent audit log: %w", err)
 	}
 	defer rows.Close()
 
@@ -926,10 +916,10 @@ func (r *pgConnectionRequestRepository) Create(ctx context.Context, req Connecti
 	}
 
 	row := r.db.Pool().QueryRow(ctx, `
-		INSERT INTO connection_requests (id, tenant_id, from_user_id, to_user_id, status, created_at, updated_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7)
-		RETURNING id, tenant_id, from_user_id, to_user_id, status, created_at, updated_at
-	`, req.ID, req.TenantID, req.FromUserID, req.ToUserID, string(req.Status), req.CreatedAt, req.UpdatedAt)
+		INSERT INTO connection_requests (id, from_user_id, to_user_id, status, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6)
+		RETURNING id, from_user_id, to_user_id, status, created_at, updated_at
+	`, req.ID, req.FromUserID, req.ToUserID, string(req.Status), req.CreatedAt, req.UpdatedAt)
 
 	created, err := scanConnectionRequest(row)
 	if err != nil {
@@ -938,13 +928,13 @@ func (r *pgConnectionRequestRepository) Create(ctx context.Context, req Connecti
 	return created, nil
 }
 
-func (r *pgConnectionRequestRepository) GetPendingForUser(ctx context.Context, tenantID, userID uuid.UUID) ([]ConnectionRequest, error) {
+func (r *pgConnectionRequestRepository) GetPendingForUser(ctx context.Context, userID uuid.UUID) ([]ConnectionRequest, error) {
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT id, tenant_id, from_user_id, to_user_id, status, created_at, updated_at
+		SELECT id, from_user_id, to_user_id, status, created_at, updated_at
 		FROM connection_requests
-		WHERE tenant_id = $1 AND to_user_id = $2 AND status = 'PENDING'
+		WHERE to_user_id = $1 AND status = 'PENDING'
 		ORDER BY created_at DESC
-	`, tenantID, userID)
+	`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("get pending connection requests: %w", err)
 	}
@@ -964,12 +954,12 @@ func (r *pgConnectionRequestRepository) GetPendingForUser(ctx context.Context, t
 	return requests, nil
 }
 
-func (r *pgConnectionRequestRepository) UpdateStatus(ctx context.Context, tenantID, requestID uuid.UUID, status ConnectionRequestStatus) error {
+func (r *pgConnectionRequestRepository) UpdateStatus(ctx context.Context, requestID uuid.UUID, status ConnectionRequestStatus) error {
 	res, err := r.db.Pool().Exec(ctx, `
 		UPDATE connection_requests
 		SET status = $1, updated_at = NOW()
-		WHERE tenant_id = $2 AND id = $3
-	`, string(status), tenantID, requestID)
+		WHERE id = $2
+	`, string(status), requestID)
 	if err != nil {
 		return fmt.Errorf("update connection request status: %w", err)
 	}
@@ -979,12 +969,12 @@ func (r *pgConnectionRequestRepository) UpdateStatus(ctx context.Context, tenant
 	return nil
 }
 
-func (r *pgConnectionRequestRepository) GetByFromAndTo(ctx context.Context, tenantID, fromUserID, toUserID uuid.UUID) (*ConnectionRequest, error) {
+func (r *pgConnectionRequestRepository) GetByFromAndTo(ctx context.Context, fromUserID, toUserID uuid.UUID) (*ConnectionRequest, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, tenant_id, from_user_id, to_user_id, status, created_at, updated_at
+		SELECT id, from_user_id, to_user_id, status, created_at, updated_at
 		FROM connection_requests
-		WHERE tenant_id = $1 AND from_user_id = $2 AND to_user_id = $3
-	`, tenantID, fromUserID, toUserID)
+		WHERE from_user_id = $1 AND to_user_id = $2
+	`, fromUserID, toUserID)
 	return scanConnectionRequest(row)
 }
 
@@ -999,10 +989,10 @@ func (r *pgBlacklistRepository) Create(ctx context.Context, entry BlacklistEntry
 	}
 
 	row := r.db.Pool().QueryRow(ctx, `
-		INSERT INTO blacklist_entries (id, tenant_id, user_id, blocked_user_id, created_at)
-		VALUES ($1,$2,$3,$4,$5)
-		RETURNING id, tenant_id, user_id, blocked_user_id, created_at
-	`, entry.ID, entry.TenantID, entry.UserID, entry.BlockedUserID, entry.CreatedAt)
+		INSERT INTO blacklist_entries (id, user_id, blocked_user_id, created_at)
+		VALUES ($1,$2,$3,$4)
+		RETURNING id, user_id, blocked_user_id, created_at
+	`, entry.ID, entry.UserID, entry.BlockedUserID, entry.CreatedAt)
 
 	created, err := scanBlacklistEntry(row)
 	if err != nil {
@@ -1011,39 +1001,39 @@ func (r *pgBlacklistRepository) Create(ctx context.Context, entry BlacklistEntry
 	return created, nil
 }
 
-func (r *pgBlacklistRepository) Delete(ctx context.Context, tenantID, userID, blockedUserID uuid.UUID) error {
+func (r *pgBlacklistRepository) Delete(ctx context.Context, userID, blockedUserID uuid.UUID) error {
 	_, err := r.db.Pool().Exec(ctx, `
 		DELETE FROM blacklist_entries
-		WHERE tenant_id = $1 AND user_id = $2 AND blocked_user_id = $3
-	`, tenantID, userID, blockedUserID)
+		WHERE user_id = $1 AND blocked_user_id = $2
+	`, userID, blockedUserID)
 	if err != nil {
 		return fmt.Errorf("delete blacklist entry: %w", err)
 	}
 	return nil
 }
 
-func (r *pgBlacklistRepository) IsBlocked(ctx context.Context, tenantID, userID, blockedUserID uuid.UUID) (bool, error) {
+func (r *pgBlacklistRepository) IsBlocked(ctx context.Context, userID, blockedUserID uuid.UUID) (bool, error) {
 	var exists bool
 	err := r.db.Pool().QueryRow(ctx, `
 		SELECT EXISTS(
 			SELECT 1
 			FROM blacklist_entries
-			WHERE tenant_id = $1 AND user_id = $2 AND blocked_user_id = $3
+			WHERE user_id = $1 AND blocked_user_id = $2
 		)
-	`, tenantID, userID, blockedUserID).Scan(&exists)
+	`, userID, blockedUserID).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("check blacklist entry: %w", err)
 	}
 	return exists, nil
 }
 
-func (r *pgBlacklistRepository) ListByUser(ctx context.Context, tenantID, userID uuid.UUID) ([]BlacklistEntry, error) {
+func (r *pgBlacklistRepository) ListByUser(ctx context.Context, userID uuid.UUID) ([]BlacklistEntry, error) {
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT id, tenant_id, user_id, blocked_user_id, created_at
+		SELECT id, user_id, blocked_user_id, created_at
 		FROM blacklist_entries
-		WHERE tenant_id = $1 AND user_id = $2
+		WHERE user_id = $1
 		ORDER BY created_at DESC
-	`, tenantID, userID)
+	`, userID)
 	if err != nil {
 		return nil, fmt.Errorf("list blacklist entries: %w", err)
 	}
@@ -1074,7 +1064,6 @@ func scanAgent(scanner rowScanner) (*Agent, error) {
 
 	err := scanner.Scan(
 		&out.AgentID,
-		&out.TenantID,
 		&out.DisplayName,
 		&out.OwnerUserID,
 		&capabilitiesRaw,
@@ -1111,7 +1100,6 @@ func scanMessage(scanner rowScanner) (*Message, error) {
 
 	err := scanner.Scan(
 		&out.ID,
-		&out.TenantID,
 		&out.FromID,
 		&out.ToID,
 		&out.Tag,
@@ -1151,7 +1139,6 @@ func scanApprovalRequest(scanner rowScanner) (*ApprovalRequest, error) {
 	var status string
 	err := scanner.Scan(
 		&out.ApprovalID,
-		&out.TenantID,
 		&out.AgentID,
 		&out.Action,
 		&out.Justification,
@@ -1181,7 +1168,6 @@ func scanAuditLogEntry(scanner rowScanner) (*AuditLogEntry, error) {
 		&out.EventType,
 		&out.ActorID,
 		&out.AgentID,
-		&out.TenantID,
 		&detailsRaw,
 		&out.CreatedAt,
 	)
@@ -1205,7 +1191,6 @@ func scanConnectionRequest(scanner rowScanner) (*ConnectionRequest, error) {
 	var status string
 	err := scanner.Scan(
 		&out.ID,
-		&out.TenantID,
 		&out.FromUserID,
 		&out.ToUserID,
 		&status,
@@ -1226,7 +1211,6 @@ func scanBlacklistEntry(scanner rowScanner) (*BlacklistEntry, error) {
 	out := BlacklistEntry{}
 	err := scanner.Scan(
 		&out.ID,
-		&out.TenantID,
 		&out.UserID,
 		&out.BlockedUserID,
 		&out.CreatedAt,

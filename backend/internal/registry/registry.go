@@ -42,11 +42,7 @@ func (s *Service) Deregister(ctx context.Context, agentID string) error {
 		return err
 	}
 	repos := persistence.NewPostgresRepositories(s.db)
-	a, err := s.GetAgent(ctx, agentID)
-	if err != nil {
-		return err
-	}
-	return repos.Agents.Delete(ctx, a.TenantID, id)
+	return repos.Agents.Delete(ctx, id)
 }
 
 func (s *Service) UpdateStatus(ctx context.Context, agentID string, status persistence.AgentStatus) error {
@@ -58,11 +54,7 @@ func (s *Service) UpdateStatus(ctx context.Context, agentID string, status persi
 		return err
 	}
 	repos := persistence.NewPostgresRepositories(s.db)
-	a, err := s.GetAgent(ctx, agentID)
-	if err != nil {
-		return err
-	}
-	return repos.Agents.UpdateStatus(ctx, a.TenantID, id, status)
+	return repos.Agents.UpdateStatus(ctx, id, status)
 }
 
 func (s *Service) Heartbeat(ctx context.Context, agentID string, status persistence.AgentStatus) error {
@@ -73,28 +65,24 @@ func (s *Service) Heartbeat(ctx context.Context, agentID string, status persiste
 	if err != nil {
 		return err
 	}
-	a, err := s.GetAgent(ctx, agentID)
-	if err != nil {
-		return err
-	}
 	if status == "" {
+		a, err := s.GetAgent(ctx, agentID)
+		if err != nil {
+			return err
+		}
 		status = a.Status
 	}
 	_, err = s.db.Pool().Exec(ctx, `
 		UPDATE agents
-		SET status = $3, last_heartbeat = $4
-		WHERE tenant_id = $1 AND agent_id = $2
-	`, a.TenantID, id, string(status), time.Now().UTC())
+		SET status = $2, last_heartbeat = $3
+		WHERE agent_id = $1
+	`, id, string(status), time.Now().UTC())
 	return err
 }
 
-func (s *Service) Discover(ctx context.Context, tenantID string, query DiscoveryQuery) ([]persistence.Agent, error) {
-	if s == nil || s.db == nil || tenantID == "" {
+func (s *Service) Discover(ctx context.Context, query DiscoveryQuery) ([]persistence.Agent, error) {
+	if s == nil || s.db == nil {
 		return nil, persistence.ErrInvalidInput
-	}
-	tid, err := uuid.Parse(tenantID)
-	if err != nil {
-		return nil, err
 	}
 	repos := persistence.NewPostgresRepositories(s.db)
 
@@ -109,7 +97,7 @@ func (s *Service) Discover(ctx context.Context, tenantID string, query Discovery
 		query.Limit = 10
 	}
 
-	agents, err := repos.Agents.DiscoverByCapability(ctx, tid, query.Capability, statuses, query.Limit)
+	agents, err := repos.Agents.DiscoverByCapability(ctx, query.Capability, statuses, query.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -134,28 +122,24 @@ func (s *Service) GetAgent(ctx context.Context, agentID string) (*persistence.Ag
 		return nil, err
 	}
 	row := s.db.Pool().QueryRow(ctx, `
-		SELECT agent_id, tenant_id, display_name, owner_user_id, capabilities, version,
+		SELECT agent_id, display_name, owner_user_id, capabilities, version,
 			status, api_secret_hash, connected_at, last_heartbeat, created_at
 		FROM agents WHERE agent_id = $1
 	`, id)
 
 	a := persistence.Agent{}
 	var status string
-	if err := row.Scan(&a.AgentID, &a.TenantID, &a.DisplayName, &a.OwnerUserID, &a.Capabilities, &a.Version, &status, &a.APISecretHash, &a.ConnectedAt, &a.LastHeartbeat, &a.CreatedAt); err != nil {
+	if err := row.Scan(&a.AgentID, &a.DisplayName, &a.OwnerUserID, &a.Capabilities, &a.Version, &status, &a.APISecretHash, &a.ConnectedAt, &a.LastHeartbeat, &a.CreatedAt); err != nil {
 		return nil, err
 	}
 	a.Status = persistence.AgentStatus(status)
 	return &a, nil
 }
 
-func (s *Service) ListAgents(ctx context.Context, tenantID string) ([]persistence.Agent, error) {
-	if s == nil || s.db == nil || tenantID == "" {
+func (s *Service) ListAgents(ctx context.Context) ([]persistence.Agent, error) {
+	if s == nil || s.db == nil {
 		return nil, persistence.ErrInvalidInput
 	}
-	tid, err := uuid.Parse(tenantID)
-	if err != nil {
-		return nil, err
-	}
 	repos := persistence.NewPostgresRepositories(s.db)
-	return repos.Agents.ListByTenant(ctx, tid)
+	return repos.Agents.ListAll(ctx)
 }

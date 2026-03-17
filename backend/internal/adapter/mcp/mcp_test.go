@@ -93,7 +93,6 @@ func TestMCPAdapterIngestToolCall(t *testing.T) {
 
 	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{
 		ConnectionID: "conn-1",
-		TenantID:     "tenant-1",
 	})
 	if err != nil {
 		t.Fatalf("Ingest() error = %v, want nil", err)
@@ -157,7 +156,7 @@ func TestMCPAdapterIngestResult(t *testing.T) {
 	a := NewMCPAdapter()
 	raw := []byte(`{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"found 3 results"}]}}`)
 
-	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-2", TenantID: "tenant-2"})
+	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-2"})
 	if err != nil {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
@@ -177,7 +176,7 @@ func TestMCPAdapterIngestErrorResult(t *testing.T) {
 	a := NewMCPAdapter()
 	raw := []byte(`{"jsonrpc":"2.0","id":1,"error":{"code":-32600,"message":"Invalid Request"}}`)
 
-	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-3", TenantID: "tenant-3"})
+	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-3"})
 	if err != nil {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
@@ -197,7 +196,7 @@ func TestMCPAdapterIngestNotification(t *testing.T) {
 	a := NewMCPAdapter()
 	raw := []byte(`{"jsonrpc":"2.0","method":"notifications/resources/updated","params":{"uri":"file:///data.csv"}}`)
 
-	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-4", TenantID: "tenant-4"})
+	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-4"})
 	if err != nil {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
@@ -220,7 +219,6 @@ func TestMCPAdapterIngestUsesProvidedAgentID(t *testing.T) {
 
 	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{
 		ConnectionID: "conn-5",
-		TenantID:     "tenant-5",
 		AgentID:      "agent-123",
 	})
 	if err != nil {
@@ -238,7 +236,6 @@ func TestMCPAdapterIngestUsesTargetAgentHeader(t *testing.T) {
 
 	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{
 		ConnectionID: "conn-6",
-		TenantID:     "tenant-6",
 		Headers: map[string]string{
 			"X-Target-Agent": "agent-target",
 		},
