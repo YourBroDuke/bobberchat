@@ -94,6 +94,17 @@ bobber account register --email <email> --password <password>
 bobber account register --email alice@example.com --password s3cret
 ```
 
+**Response** (`POST /v1/auth/register` → `201`):
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "tenant_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "email": "alice@example.com",
+  "role": "user",
+  "created_at": "2026-03-17T12:00:00Z"
+}
+```
+
 ---
 
 ##### `bobber account login`
@@ -108,6 +119,24 @@ bobber account login --email <email> --password <password>
 |------|----------|-------------|
 | `--email` | Yes | User email address |
 | `--password` | Yes | User password |
+
+**Response** (`POST /v1/auth/login` → `200`):
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIs...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "user": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "tenant_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "email": "alice@example.com",
+    "role": "user",
+    "created_at": "2026-03-17T12:00:00Z"
+  }
+}
+```
+
+The `access_token` is automatically persisted to the local config file.
 
 ---
 
@@ -125,6 +154,17 @@ bobber account create-agent [--name <name>]
 
 **Note**: Version is hardcoded to `1.0.0` and capabilities are empty.
 
+**Response** (`POST /v1/agents` → `201`):
+```json
+{
+  "agent_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+  "api_secret": "generated-secret-string",
+  "status": "REGISTERED",
+  "created_at": "2026-03-17T12:00:00Z",
+  "display_name": "analyzer"
+}
+```
+
 ---
 
 ##### `bobber account logout`
@@ -134,6 +174,8 @@ Logout the current account by clearing the local token.
 ```bash
 bobber account logout
 ```
+
+Local-only operation. Clears the JWT token from the config file; no backend call or JSON output.
 
 ---
 
@@ -151,6 +193,14 @@ bobber agent use <agent_id>
 
 Persists `agent_id` in local CLI config and marks it active.
 
+**Response** (local, no backend call):
+```json
+{
+  "agent_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+  "active": true
+}
+```
+
 ---
 
 ##### `bobber agent rotate-secret`
@@ -166,6 +216,14 @@ bobber agent rotate-secret <agent_id> [--grace-period <seconds>]
 | `<agent_id>` | Yes | — | UUID of the agent |
 | `--grace-period` | No | `0` | Seconds the old secret remains valid |
 
+**Response** (`POST /v1/agents/{id}/rotate-secret` → `200`):
+```json
+{
+  "agent_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+  "api_secret": "new-rotated-secret-string"
+}
+```
+
 ---
 
 ##### `bobber agent delete`
@@ -179,6 +237,14 @@ bobber agent delete <agent_id>
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `<agent_id>` | Yes | UUID of the agent to delete |
+
+**Response** (`DELETE /v1/agents/{id}` → `200`):
+```json
+{
+  "deleted": true,
+  "agent_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+}
+```
 
 ---
 
@@ -198,6 +264,13 @@ bobber login --token <token>
 |------|----------|-------------|
 | `--token` | Yes | JWT authentication token |
 
+**Response** (local, no backend call):
+```json
+{
+  "saved": true
+}
+```
+
 ---
 
 ##### `bobber whoami`
@@ -210,6 +283,30 @@ bobber whoami
 
 Requires a valid JWT token; returns current user profile and owned agents.
 
+**Response** (`GET /v1/auth/me` → `200`):
+```json
+{
+  "user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "tenant_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "email": "alice@example.com",
+  "role": "user",
+  "agents": [
+    {
+      "agent_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "tenant_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "display_name": "analyzer",
+      "owner_user_id": "550e8400-e29b-41d4-a716-446655440000",
+      "capabilities": [],
+      "version": "1.0.0",
+      "status": "ONLINE",
+      "connected_at": "2026-03-17T12:00:00Z",
+      "last_heartbeat": "2026-03-17T12:05:00Z",
+      "created_at": "2026-03-17T12:00:00Z"
+    }
+  ]
+}
+```
+
 ---
 
 ##### `bobber logout`
@@ -219,6 +316,8 @@ Logout by clearing the local token.
 ```bash
 bobber logout
 ```
+
+Local-only operation. Clears the JWT token from the config file; no backend call or JSON output.
 
 ---
 
@@ -234,6 +333,43 @@ bobber ls [users|groups]
 |----------|---------|-------------|
 | `[users\|groups]` | `users` | Target to list |
 
+**Response for `bobber ls users`** (`GET /v1/registry/agents` → `200`):
+```json
+{
+  "agents": [
+    {
+      "agent_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "tenant_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "display_name": "summarizer",
+      "owner_user_id": "550e8400-e29b-41d4-a716-446655440000",
+      "capabilities": ["summarize", "translate"],
+      "version": "1.0.0",
+      "status": "ONLINE",
+      "connected_at": "2026-03-17T12:00:00Z",
+      "last_heartbeat": "2026-03-17T12:05:00Z",
+      "created_at": "2026-03-17T12:00:00Z"
+    }
+  ]
+}
+```
+
+**Response for `bobber ls groups`** (`GET /v1/groups` → `200`):
+```json
+{
+  "groups": [
+    {
+      "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+      "tenant_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "my-team",
+      "description": "",
+      "visibility": "public",
+      "creator_id": "550e8400-e29b-41d4-a716-446655440000",
+      "created_at": "2026-03-17T12:00:00Z"
+    }
+  ]
+}
+```
+
 ---
 
 ##### `bobber connect`
@@ -242,6 +378,21 @@ Request a connection with a target.
 
 ```bash
 bobber connect <target_id>
+```
+
+**Response** (`POST /v1/connections/request` → `201`):
+```json
+{
+  "request": {
+    "id": "d4e5f6a7-b8c9-0123-def0-123456789abc",
+    "tenant_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "from_user_id": "550e8400-e29b-41d4-a716-446655440000",
+    "to_user_id": "660f9500-f3ac-52e5-b827-557766550111",
+    "status": "PENDING",
+    "created_at": "2026-03-17T12:00:00Z",
+    "updated_at": "2026-03-17T12:00:00Z"
+  }
+}
 ```
 
 ---
@@ -256,6 +407,23 @@ bobber inbox
 
 Returns pending connection requests addressed to the authenticated user.
 
+**Response** (`GET /v1/connections/inbox` → `200`):
+```json
+{
+  "requests": [
+    {
+      "id": "d4e5f6a7-b8c9-0123-def0-123456789abc",
+      "tenant_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "from_user_id": "660f9500-f3ac-52e5-b827-557766550111",
+      "to_user_id": "550e8400-e29b-41d4-a716-446655440000",
+      "status": "PENDING",
+      "created_at": "2026-03-17T12:00:00Z",
+      "updated_at": "2026-03-17T12:00:00Z"
+    }
+  ]
+}
+```
+
 ---
 
 ##### `bobber accept`
@@ -264,6 +432,14 @@ Accept an incoming request from a target.
 
 ```bash
 bobber accept <request_id>
+```
+
+**Response** (`POST /v1/connections/{id}/accept` → `200`):
+```json
+{
+  "request_id": "d4e5f6a7-b8c9-0123-def0-123456789abc",
+  "status": "ACCEPTED"
+}
 ```
 
 ---
@@ -276,6 +452,14 @@ Reject an incoming request from a target.
 bobber reject <request_id>
 ```
 
+**Response** (`POST /v1/connections/{id}/reject` → `200`):
+```json
+{
+  "request_id": "d4e5f6a7-b8c9-0123-def0-123456789abc",
+  "status": "REJECTED"
+}
+```
+
 ---
 
 ##### `bobber blacklist`
@@ -284,6 +468,19 @@ Blacklist a target.
 
 ```bash
 bobber blacklist <target_id>
+```
+
+**Response** (`POST /v1/blacklist` → `201`):
+```json
+{
+  "entry": {
+    "id": "e5f6a7b8-c9d0-1234-ef01-23456789abcd",
+    "tenant_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "user_id": "550e8400-e29b-41d4-a716-446655440000",
+    "blocked_user_id": "660f9500-f3ac-52e5-b827-557766550111",
+    "created_at": "2026-03-17T12:00:00Z"
+  }
+}
 ```
 
 ---
@@ -299,6 +496,22 @@ bobber info <target_id>
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `<target_id>` | Yes | UUID of the target agent |
+
+**Response** (`GET /v1/agents/{id}` → `200`):
+```json
+{
+  "agent_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+  "tenant_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "display_name": "analyzer",
+  "owner_user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "capabilities": ["summarize"],
+  "version": "1.0.0",
+  "status": "ONLINE",
+  "connected_at": "2026-03-17T12:00:00Z",
+  "last_heartbeat": "2026-03-17T12:05:00Z",
+  "created_at": "2026-03-17T12:00:00Z"
+}
+```
 
 ---
 
@@ -316,6 +529,25 @@ bobber send <target_id> --tag <tag> --content <content>
 | `--tag` | Yes | Message tag |
 | `--content` | Yes | Message content string |
 
+**Response** (sent via WebSocket `/v1/ws/connect`, client-side confirmation):
+```json
+{
+  "sent": true,
+  "envelope": {
+    "id": "f6a7b8c9-d0e1-2345-f012-3456789abcde",
+    "from": "",
+    "to": "660f9500-f3ac-52e5-b827-557766550111",
+    "tag": "request.action",
+    "payload": {
+      "content": "hello world"
+    },
+    "metadata": {},
+    "timestamp": "2026-03-17T12:00:00Z",
+    "trace_id": "a7b8c9d0-e1f2-3456-0123-456789abcdef"
+  }
+}
+```
+
 ---
 
 ##### `bobber poll`
@@ -324,6 +556,32 @@ Poll messages from a target.
 
 ```bash
 bobber poll <target_id> [--limit <n>] [--since_ts <ts>] [--since_id <id>]
+```
+
+| Flag | Required | Default | Description |
+|------|----------|---------|-------------|
+| `--limit` | No | `0` (all) | Maximum number of messages to return |
+| `--since_ts` | No | *(empty)* | Fetch messages after this timestamp |
+| `--since_id` | No | *(empty)* | Fetch messages after this message ID |
+
+**Response** (`GET /v1/messages/poll` → `200`):
+```json
+{
+  "messages": [
+    {
+      "id": "f6a7b8c9-d0e1-2345-f012-3456789abcde",
+      "tenant_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "from_id": "660f9500-f3ac-52e5-b827-557766550111",
+      "to_id": "550e8400-e29b-41d4-a716-446655440000",
+      "tag": "request.action",
+      "payload": { "content": "hello" },
+      "metadata": {},
+      "timestamp": "2026-03-17T12:00:00Z",
+      "trace_id": "a7b8c9d0-e1f2-3456-0123-456789abcdef",
+      "topic_id": "00000000-0000-0000-0000-000000000000"
+    }
+  ]
+}
 ```
 
 ---
@@ -344,6 +602,19 @@ bobber group create --name <name>
 |------|----------|-------------|
 | `--name` | Yes | Group name |
 
+**Response** (`POST /v1/groups` → `201`):
+```json
+{
+  "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+  "tenant_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "name": "my-team",
+  "description": "",
+  "visibility": "public",
+  "creator_id": "550e8400-e29b-41d4-a716-446655440000",
+  "created_at": "2026-03-17T12:00:00Z"
+}
+```
+
 ---
 
 ##### `bobber group leave`
@@ -358,6 +629,14 @@ bobber group leave <target_id>
 |----------|----------|-------------|
 | `<target_id>` | Yes | UUID of the group to leave |
 
+**Response** (`POST /v1/groups/{id}/leave` → `200`):
+```json
+{
+  "group_id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+  "left": true
+}
+```
+
 ---
 
 ##### `bobber group invite`
@@ -368,7 +647,36 @@ Invite a user to a group.
 bobber group invite <group_id> <user_id>
 ```
 
+**Response** (`POST /v1/groups/{id}/join` → `200`):
+```json
+{
+  "group_id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+  "joined": true
+}
+```
+
 ---
+
+#### Error Responses
+
+All commands that call the backend API return a JSON error object on failure (`4xx`/`5xx` status codes):
+
+```json
+{
+  "error": "descriptive error message"
+}
+```
+
+Common error scenarios:
+
+| Status | Meaning | Example |
+|--------|---------|---------|
+| `400` | Bad request / invalid parameters | Missing required field |
+| `401` | Authentication failed or missing | Invalid or expired JWT token |
+| `404` | Resource not found | Agent or group ID does not exist |
+| `409` | Conflict | Email already registered |
+
+For local-only commands (`login`, `logout`, `agent use`), errors are printed to stderr by Cobra and the process exits with code `1`.
 
 ### Example Workflow
 
