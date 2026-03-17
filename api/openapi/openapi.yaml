@@ -46,13 +46,9 @@ paths:
             schema:
               type: object
               required:
-                - tenant_id
                 - email
                 - password
               properties:
-                tenant_id:
-                  type: string
-                  format: uuid
                 email:
                   type: string
                   format: email
@@ -67,9 +63,6 @@ paths:
                 type: object
                 properties:
                   id:
-                    type: string
-                    format: uuid
-                  tenant_id:
                     type: string
                     format: uuid
                   email:
@@ -123,9 +116,6 @@ paths:
                     type: object
                     properties:
                       id:
-                        type: string
-                        format: uuid
-                      tenant_id:
                         type: string
                         format: uuid
                       email:
@@ -187,14 +177,10 @@ paths:
               type: object
               required:
                 - email
-                - tenant_id
               properties:
                 email:
                   type: string
                   format: email
-                tenant_id:
-                  type: string
-                  format: uuid
       responses:
         '200':
           description: Verification email sent
@@ -225,9 +211,6 @@ paths:
                 type: object
                 properties:
                   user_id:
-                    type: string
-                    format: uuid
-                  tenant_id:
                     type: string
                     format: uuid
                   email:
@@ -1106,7 +1089,6 @@ components:
       type: object
       required:
         - agent_id
-        - tenant_id
         - display_name
         - capabilities
         - version
@@ -1114,9 +1096,6 @@ components:
         - created_at
       properties:
         agent_id:
-          type: string
-          format: uuid
-        tenant_id:
           type: string
           format: uuid
         display_name:
@@ -1149,16 +1128,12 @@ components:
       type: object
       required:
         - id
-        - tenant_id
         - name
         - visibility
         - creator_id
         - created_at
       properties:
         id:
-          type: string
-          format: uuid
-        tenant_id:
           type: string
           format: uuid
         name:
@@ -1179,16 +1154,12 @@ components:
       type: object
       required:
         - id
-        - tenant_id
         - group_id
         - subject
         - status
         - created_at
       properties:
         id:
-          type: string
-          format: uuid
-        tenant_id:
           type: string
           format: uuid
         group_id:
@@ -1211,7 +1182,6 @@ components:
       type: object
       required:
         - id
-        - tenant_id
         - from_id
         - to_id
         - tag
@@ -1222,9 +1192,6 @@ components:
         - topic_id
       properties:
         id:
-          type: string
-          format: uuid
-        tenant_id:
           type: string
           format: uuid
         from_id:
@@ -1253,7 +1220,6 @@ components:
       type: object
       required:
         - approval_id
-        - tenant_id
         - agent_id
         - action
         - justification
@@ -1262,9 +1228,6 @@ components:
         - created_at
       properties:
         approval_id:
-          type: string
-          format: uuid
-        tenant_id:
           type: string
           format: uuid
         agent_id:
@@ -1298,7 +1261,6 @@ components:
       type: object
       required:
         - id
-        - tenant_id
         - from_user_id
         - to_user_id
         - status
@@ -1306,9 +1268,6 @@ components:
         - updated_at
       properties:
         id:
-          type: string
-          format: uuid
-        tenant_id:
           type: string
           format: uuid
         from_user_id:
@@ -1331,15 +1290,11 @@ components:
       type: object
       required:
         - id
-        - tenant_id
         - user_id
         - blocked_user_id
         - created_at
       properties:
         id:
-          type: string
-          format: uuid
-        tenant_id:
           type: string
           format: uuid
         user_id:
