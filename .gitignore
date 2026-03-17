@@ -41,4 +41,5 @@ go.work.sum
 *.tfstate
 *.tfstate.*
 *.lock.hcl
+*.tfplan
 tfplan
