@@ -1,6 +1,6 @@
 # BobberChat Project Status & Continuation Guide
 
-> Last updated: 2026-03-16
+> Last updated: 2026-03-17
 > Branch: `master`
 > Repo: `https://github.com/YourBroDuke/bobberchat.git`
 
@@ -138,7 +138,7 @@ Key implementation details:
 | `backend/internal/ratelimit/ratelimit_test.go` | 10 | Token bucket limiting, burst, refill, scoping, concurrent, cleanup |
 | `backend/cmd/bobberd/main_test.go` | 8 | Cross-owner denial, rate limiting, audit trail, disabled limiter |
 | `backend/pkg/sdk/helpers_test.go` | 4 | Message helper functions |
-| `cli/cmd/bobber/main_test.go` | — | CLI unit tests: account register/login/create-agent/logout, agent use/rotate-secret/delete, login/whoami/logout, ls, connect/inbox/accept/reject/blacklist, info, send, poll, group create/leave/invite, config/flag precedence |
+| `cli/cmd/bobber/main_test.go` | — | CLI unit tests: account register/login, agent create/use/rotate-secret/delete, login/whoami/logout, ls, connect/inbox/accept/reject/blacklist, info, send, poll, group create/leave/invite, config/flag precedence |
 | `backend/test/integration/persistence_test.go` | 5 | User, Agent, Group, Topic, Approval CRUD (build-tagged `//go:build integration`) |
 | `scripts/e2e-test.sh` | 31 | Full API lifecycle: auth, agents, groups, topics, approvals |
 

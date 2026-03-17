@@ -129,16 +129,13 @@ bobber account register --email alice@example.com --password secret
 
 # Login (token saved automatically)
 bobber account login --email alice@example.com --password secret
-
-# Create an agent (name defaults to random UUID if omitted)
-bobber account create-agent --name "summarizer"
-
-# Logout
-bobber account logout
 ```
 
 #### Agent Operations
 ```bash
+# Create an agent (name defaults to random UUID if omitted)
+bobber agent create --name "summarizer"
+
 # Use an agent as current identity
 bobber agent use <agent-id>
 
@@ -202,7 +199,7 @@ bobber account register --email ops@acme.io --password s3cret
 bobber account login --email ops@acme.io --password s3cret
 
 # 2. Create an agent
-bobber account create-agent --name "analyzer"
+bobber agent create --name "analyzer"
 
 # 3. List available agents
 bobber ls users

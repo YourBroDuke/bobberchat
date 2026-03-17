@@ -548,7 +548,7 @@ func TestAccountLogin(t *testing.T) {
 	})
 }
 
-func TestAccountCreateAgent(t *testing.T) {
+func TestAgentCreate(t *testing.T) {
 	t.Run("Success with explicit name", func(t *testing.T) {
 		var got map[string]any
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -561,7 +561,7 @@ func TestAccountCreateAgent(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		cmd := accountCreateAgentCmd(testConfig(srv.URL, "tok"))
+		cmd := agentCreateCmd(testConfig(srv.URL, "tok"))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
 		cmd.SetArgs([]string{"--name", "agent-x"})
@@ -587,7 +587,7 @@ func TestAccountCreateAgent(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		cmd := accountCreateAgentCmd(testConfig(srv.URL, "tok"))
+		cmd := agentCreateCmd(testConfig(srv.URL, "tok"))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
 		if err := cmd.Execute(); err != nil {
@@ -601,7 +601,7 @@ func TestAccountCreateAgent(t *testing.T) {
 	})
 
 	t.Run("No token", func(t *testing.T) {
-		cmd := accountCreateAgentCmd(testConfig("http://localhost:8080", ""))
+		cmd := agentCreateCmd(testConfig("http://localhost:8080", ""))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
 		err := cmd.Execute()
@@ -611,23 +611,31 @@ func TestAccountCreateAgent(t *testing.T) {
 	})
 }
 
-func TestAccountLogout(t *testing.T) {
-	tmp := t.TempDir()
-	cfg := testConfig("http://localhost:8080", "tok")
-	cfg.v.SetConfigFile(filepath.Join(tmp, "config.yaml"))
-
-	cmd := accountLogoutCmd(cfg)
-	cmd.SetOut(io.Discard)
-	cmd.SetErr(io.Discard)
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("execute failed: %v", err)
-	}
-	if got := cfg.token(); got != "" {
-		t.Fatalf("expected token cleared, got %q", got)
-	}
-}
-
 func TestAgentSubcommands(t *testing.T) {
+	t.Run("agent create via parent command", func(t *testing.T) {
+		var got map[string]any
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost || r.URL.Path != "/v1/agents" {
+				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+			}
+			b, _ := io.ReadAll(r.Body)
+			got = mustJSONMap(t, string(b))
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "a1"})
+		}))
+		defer srv.Close()
+
+		cmd := agentCmd(testConfig(srv.URL, "tok"))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"create", "--name", "agent-x"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("execute failed: %v", err)
+		}
+		if got["display_name"] != "agent-x" {
+			t.Fatalf("unexpected payload: %v", got)
+		}
+	})
+
 	t.Run("agent rotate-secret: success", func(t *testing.T) {
 		var got map[string]any
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1545,7 +1553,7 @@ func TestEdgeCases(t *testing.T) {
 		}
 	})
 
-	t.Run("Account subcommand help lists register/login/create-agent/logout", func(t *testing.T) {
+	t.Run("Account subcommand help lists register/login", func(t *testing.T) {
 		cfg := testConfig("http://localhost:8080", "tok")
 		root := buildRootCmdForTest(cfg)
 		var out bytes.Buffer
@@ -1556,14 +1564,19 @@ func TestEdgeCases(t *testing.T) {
 			t.Fatalf("account help should not error, got %v", err)
 		}
 		s := out.String()
-		for _, sub := range []string{"register", "login", "create-agent", "logout"} {
+		for _, sub := range []string{"register", "login"} {
 			if !strings.Contains(s, sub) {
 				t.Fatalf("expected help output to contain %q, got: %s", sub, s)
 			}
 		}
+		for _, removed := range []string{"create-agent", "logout"} {
+			if strings.Contains(s, removed) {
+				t.Fatalf("expected help output NOT to contain %q, got: %s", removed, s)
+			}
+		}
 	})
 
-	t.Run("Agent subcommand help lists use/rotate-secret/delete", func(t *testing.T) {
+	t.Run("Agent subcommand help lists create/use/rotate-secret/delete", func(t *testing.T) {
 		cfg := testConfig("http://localhost:8080", "tok")
 		root := buildRootCmdForTest(cfg)
 		var out bytes.Buffer
@@ -1574,7 +1587,7 @@ func TestEdgeCases(t *testing.T) {
 			t.Fatalf("agent help should not error, got %v", err)
 		}
 		s := out.String()
-		for _, sub := range []string{"use", "rotate-secret", "delete"} {
+		for _, sub := range []string{"create", "use", "rotate-secret", "delete"} {
 			if !strings.Contains(s, sub) {
 				t.Fatalf("expected help output to contain %q, got: %s", sub, s)
 			}

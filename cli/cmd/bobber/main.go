@@ -72,7 +72,7 @@ func main() {
 
 func accountCmd(cfg *cliConfig) *cobra.Command {
 	account := &cobra.Command{Use: "account", Short: "Account management commands"}
-	account.AddCommand(accountRegisterCmd(cfg), accountLoginCmd(cfg), accountCreateAgentCmd(cfg), accountLogoutCmd(cfg))
+	account.AddCommand(accountRegisterCmd(cfg), accountLoginCmd(cfg))
 	return account
 }
 
@@ -138,10 +138,10 @@ func accountLoginCmd(cfg *cliConfig) *cobra.Command {
 	return cmd
 }
 
-func accountCreateAgentCmd(cfg *cliConfig) *cobra.Command {
+func agentCreateCmd(cfg *cliConfig) *cobra.Command {
 	var name string
 	cmd := &cobra.Command{
-		Use:   "create-agent",
+		Use:   "create",
 		Short: "Create agent",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			if cfg.token() == "" {
@@ -167,19 +167,9 @@ func accountCreateAgentCmd(cfg *cliConfig) *cobra.Command {
 	return cmd
 }
 
-func accountLogoutCmd(cfg *cliConfig) *cobra.Command {
-	return &cobra.Command{
-		Use:   "logout",
-		Short: "Logout account by clearing local token",
-		RunE: func(_ *cobra.Command, _ []string) error {
-			return clearToken(cfg)
-		},
-	}
-}
-
 func agentCmd(cfg *cliConfig) *cobra.Command {
 	agent := &cobra.Command{Use: "agent", Short: "Agent management commands"}
-	agent.AddCommand(agentUseCmd(cfg), agentRotateSecretCmd(cfg), agentDeleteCmd(cfg))
+	agent.AddCommand(agentCreateCmd(cfg), agentUseCmd(cfg), agentRotateSecretCmd(cfg), agentDeleteCmd(cfg))
 	return agent
 }
 

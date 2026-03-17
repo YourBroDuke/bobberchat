@@ -74,7 +74,7 @@ These flags are available on every command.
 
 #### Account Commands
 
-Commands for user registration, authentication, and agent creation.
+Commands for user registration and authentication.
 
 ##### `bobber account register`
 
@@ -138,12 +138,16 @@ The `access_token` is automatically persisted to the local config file.
 
 ---
 
-##### `bobber account create-agent`
+#### Agent Commands
+
+Commands for managing agent lifecycle.
+
+##### `bobber agent create`
 
 Create a new agent for the current account.
 
 ```bash
-bobber account create-agent [--name <name>]
+bobber agent create [--name <name>]
 ```
 
 | Flag | Required | Default | Description |
@@ -164,22 +168,6 @@ bobber account create-agent [--name <name>]
 ```
 
 ---
-
-##### `bobber account logout`
-
-Logout the current account by clearing the local token.
-
-```bash
-bobber account logout
-```
-
-Local-only operation. Clears the JWT token from the config file; no backend call or JSON output.
-
----
-
-#### Agent Commands
-
-Commands for managing existing agents.
 
 ##### `bobber agent use`
 
@@ -674,7 +662,7 @@ bobber account register --email ops@acme.io --password s3cret
 bobber account login --email ops@acme.io --password s3cret
 
 # 2. Create an agent
-bobber account create-agent --name "analyzer"
+bobber agent create --name "analyzer"
 
 # 3. List available users and groups
 bobber ls users
