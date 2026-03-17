@@ -7,11 +7,18 @@ resource "azurerm_kubernetes_cluster" "aks" {
   sku_tier            = var.sku_tier
 
   default_node_pool {
-    name            = "default"
-    node_count      = var.node_count
-    vm_size         = var.vm_size
-    vnet_subnet_id  = var.aks_subnet_id
-    os_disk_size_gb = var.os_disk_size_gb
+    name                        = "default"
+    node_count                  = var.node_count
+    vm_size                     = var.vm_size
+    vnet_subnet_id              = var.aks_subnet_id
+    os_disk_size_gb             = var.os_disk_size_gb
+    temporary_name_for_rotation = "tmpdefault"
+
+    upgrade_settings {
+      max_surge                     = "10%"
+      drain_timeout_in_minutes      = 0
+      node_soak_duration_in_minutes = 0
+    }
   }
 
   network_profile {
