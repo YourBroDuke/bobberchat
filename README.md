@@ -54,7 +54,7 @@ The TUI also supports configuration via environment variables:
 ### Layout
 The TUI features a three-pane layout for comprehensive monitoring:
 
-- **Left Pane (Agent Directory)**: Lists registered agents with status indicators (● online green, ◐ busy yellow, ○ offline red) and their capabilities. A "───Groups───" separator below the agents shows joined groups and their member counts.
+- **Left Pane (Agent Directory)**: Lists registered agents with their capabilities. A "───Groups───" separator below the agents shows joined groups and their member counts.
 - **Center Pane (Messages / Topic Board)**: Displays a live WebSocket feed of messages with tag badges, sender information, payloads, and timestamps. Selecting a group and pressing Enter switches this view to the Topic Board.
 - **Right Pane (Context Panel)**: Shows detailed metadata for the currently selected agent, group, topic, or approval request.
 

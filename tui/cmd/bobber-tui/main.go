@@ -66,9 +66,9 @@ type model struct {
 }
 
 type agentEntry struct {
-	ID, Name, Status string
-	Capabilities     []string
-	LastHeartbeat    string
+	ID, Name      string
+	Capabilities  []string
+	LastHeartbeat string
 }
 
 type messageEntry struct {
@@ -120,10 +120,6 @@ var (
 
 	activeBorder   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("14")).Padding(0, 1)
 	inactiveBorder = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("8")).Padding(0, 1)
-
-	statusOnline  = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
-	statusOffline = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-	statusBusy    = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
 
 	tagBadge       = lipgloss.NewStyle().Foreground(lipgloss.Color("0")).Background(lipgloss.Color("14")).Padding(0, 1)
 	timestampStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
@@ -424,13 +420,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case agentsMsg:
 		m.agents = msg
 		m.adjustAgentCursorToFilter()
-		online := 0
-		for _, a := range m.agents {
-			if strings.EqualFold(a.Status, "ONLINE") {
-				online++
-			}
-		}
-		m.statusMsg = fmt.Sprintf("Agent list refreshed (%d total, %d online)", len(m.agents), online)
+		m.statusMsg = fmt.Sprintf("Agent list refreshed (%d total)", len(m.agents))
 		m.rebuildContext()
 
 	case groupsMsg:
@@ -529,13 +519,7 @@ func (m model) View() string {
 	if m.connected {
 		connStatus = "connected"
 	}
-	online := 0
-	for _, a := range m.agents {
-		if strings.EqualFold(a.Status, "ONLINE") {
-			online++
-		}
-	}
-	status := fmt.Sprintf("%s | %d agents online | active pane: %d | Tab:switch i:input /:msg-filter f:agent-filter Esc:clear a:approvals r:refresh q:quit", connStatus, online, m.activePane+1)
+	status := fmt.Sprintf("%s | %d agents | active pane: %d | Tab:switch i:input /:msg-filter f:agent-filter Esc:clear a:approvals r:refresh q:quit", connStatus, len(m.agents), m.activePane+1)
 	if m.filterMode {
 		status = fmt.Sprintf("filter: %q | Enter:apply Esc:clear | %s", m.filterText, status)
 	}
@@ -588,8 +572,7 @@ func (m *model) renderLeftPane() string {
 			if m.leftSection == 0 && idx == m.agentCursor {
 				marker = "▸"
 			}
-			statusIcon, statusText := statusGlyph(a.Status)
-			line := fmt.Sprintf("%s %s %s [%s]", marker, statusIcon, safeName(a.Name, a.ID), statusText)
+			line := fmt.Sprintf("%s %s [%s]", marker, safeName(a.Name, a.ID), strings.Join(a.Capabilities, ","))
 			if m.leftSection == 0 && idx == m.agentCursor {
 				line = selectedStyle.Render(line)
 			}
@@ -711,7 +694,6 @@ func (m *model) renderContext() string {
 		a := m.agents[m.agentCursor]
 		return strings.Join([]string{
 			fmt.Sprintf("Agent: %s", safeName(a.Name, a.ID)),
-			fmt.Sprintf("Status: %s", strings.ToUpper(a.Status)),
 			fmt.Sprintf("Caps: %s", strings.Join(a.Capabilities, ", ")),
 			fmt.Sprintf("Last HB: %s", prettyTime(a.LastHeartbeat)),
 			fmt.Sprintf("ID: %s", a.ID),
@@ -1043,7 +1025,6 @@ func fetchAgentsCmd(backendURL, token string) tea.Cmd {
 				AgentID       string   `json:"agent_id"`
 				DisplayName   string   `json:"display_name"`
 				Name          string   `json:"name"`
-				Status        string   `json:"status"`
 				Capabilities  []string `json:"capabilities"`
 				LastHeartbeat string   `json:"last_heartbeat"`
 			} `json:"agents"`
@@ -1061,18 +1042,12 @@ func fetchAgentsCmd(backendURL, token string) tea.Cmd {
 			agents = append(agents, agentEntry{
 				ID:            a.AgentID,
 				Name:          name,
-				Status:        strings.ToUpper(strings.TrimSpace(a.Status)),
 				Capabilities:  a.Capabilities,
 				LastHeartbeat: a.LastHeartbeat,
 			})
 		}
 
 		sort.SliceStable(agents, func(i, j int) bool {
-			ri := statusRank(agents[i].Status)
-			rj := statusRank(agents[j].Status)
-			if ri != rj {
-				return ri < rj
-			}
 			return safeName(agents[i].Name, agents[i].ID) < safeName(agents[j].Name, agents[j].ID)
 		})
 
@@ -1359,18 +1334,6 @@ func toWebsocketURL(raw string) (string, error) {
 	return u.String(), nil
 }
 
-func statusGlyph(status string) (string, string) {
-	s := strings.ToUpper(strings.TrimSpace(status))
-	switch s {
-	case "ONLINE", "IDLE":
-		return statusOnline.Render("●"), s
-	case "BUSY":
-		return statusBusy.Render("◐"), s
-	default:
-		return statusOffline.Render("○"), firstNonEmpty(s, "OFFLINE")
-	}
-}
-
 func paneWidths(total int) (left, center, right int) {
 	if total < 30 {
 		return maxInt(10, total/3), maxInt(10, total/3), maxInt(10, total-total*2/3)
@@ -1442,19 +1405,6 @@ func wrap(s string, width int) string {
 		lines = append(lines, cur)
 	}
 	return strings.Join(lines, "\n")
-}
-
-func statusRank(s string) int {
-	switch strings.ToUpper(strings.TrimSpace(s)) {
-	case "ONLINE":
-		return 0
-	case "BUSY":
-		return 1
-	case "IDLE":
-		return 2
-	default:
-		return 3
-	}
 }
 
 func safeName(name, fallback string) string {

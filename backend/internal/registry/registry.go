@@ -2,7 +2,6 @@ package registry
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/bobberchat/bobberchat/backend/internal/persistence"
@@ -16,7 +15,6 @@ type Service struct {
 type DiscoveryQuery struct {
 	Capability    string
 	SupportedTags []string
-	Status        []string
 	Limit         int
 }
 
@@ -45,38 +43,19 @@ func (s *Service) Deregister(ctx context.Context, agentID string) error {
 	return repos.Agents.Delete(ctx, id)
 }
 
-func (s *Service) UpdateStatus(ctx context.Context, agentID string, status persistence.AgentStatus) error {
+func (s *Service) Heartbeat(ctx context.Context, agentID string) error {
 	if s == nil || s.db == nil || agentID == "" {
 		return persistence.ErrInvalidInput
 	}
 	id, err := uuid.Parse(agentID)
 	if err != nil {
 		return err
-	}
-	repos := persistence.NewPostgresRepositories(s.db)
-	return repos.Agents.UpdateStatus(ctx, id, status)
-}
-
-func (s *Service) Heartbeat(ctx context.Context, agentID string, status persistence.AgentStatus) error {
-	if s == nil || s.db == nil || agentID == "" {
-		return persistence.ErrInvalidInput
-	}
-	id, err := uuid.Parse(agentID)
-	if err != nil {
-		return err
-	}
-	if status == "" {
-		a, err := s.GetAgent(ctx, agentID)
-		if err != nil {
-			return err
-		}
-		status = a.Status
 	}
 	_, err = s.db.Pool().Exec(ctx, `
 		UPDATE agents
-		SET status = $2, last_heartbeat = $3
+		SET last_heartbeat = $2
 		WHERE agent_id = $1
-	`, id, string(status), time.Now().UTC())
+	`, id, time.Now().UTC())
 	return err
 }
 
@@ -86,18 +65,11 @@ func (s *Service) Discover(ctx context.Context, query DiscoveryQuery) ([]persist
 	}
 	repos := persistence.NewPostgresRepositories(s.db)
 
-	statuses := make([]persistence.AgentStatus, 0, len(query.Status))
-	for _, st := range query.Status {
-		if trimmed := strings.TrimSpace(st); trimmed != "" {
-			statuses = append(statuses, persistence.AgentStatus(strings.ToUpper(trimmed)))
-		}
-	}
-
 	if query.Limit <= 0 {
 		query.Limit = 10
 	}
 
-	agents, err := repos.Agents.DiscoverByCapability(ctx, query.Capability, statuses, query.Limit)
+	agents, err := repos.Agents.DiscoverByCapability(ctx, query.Capability, query.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -123,16 +95,14 @@ func (s *Service) GetAgent(ctx context.Context, agentID string) (*persistence.Ag
 	}
 	row := s.db.Pool().QueryRow(ctx, `
 		SELECT agent_id, display_name, owner_user_id, capabilities, version,
-			status, api_secret_hash, connected_at, last_heartbeat, created_at
+			api_secret_hash, connected_at, last_heartbeat, created_at
 		FROM agents WHERE agent_id = $1
 	`, id)
 
 	a := persistence.Agent{}
-	var status string
-	if err := row.Scan(&a.AgentID, &a.DisplayName, &a.OwnerUserID, &a.Capabilities, &a.Version, &status, &a.APISecretHash, &a.ConnectedAt, &a.LastHeartbeat, &a.CreatedAt); err != nil {
+	if err := row.Scan(&a.AgentID, &a.DisplayName, &a.OwnerUserID, &a.Capabilities, &a.Version, &a.APISecretHash, &a.ConnectedAt, &a.LastHeartbeat, &a.CreatedAt); err != nil {
 		return nil, err
 	}
-	a.Status = persistence.AgentStatus(status)
 	return &a, nil
 }
 

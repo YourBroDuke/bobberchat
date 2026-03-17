@@ -2,13 +2,6 @@ CREATE EXTENSION IF NOT EXISTS citext;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 DO $$ BEGIN
-  CREATE TYPE agent_status AS ENUM (
-    'REGISTERED', 'CONNECTING', 'ONLINE', 'BUSY', 'IDLE', 'OFFLINE', 'DEREGISTERED', 'DEGRADED'
-  );
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
-
-DO $$ BEGIN
   CREATE TYPE group_visibility AS ENUM ('public', 'private');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
@@ -47,7 +40,6 @@ CREATE TABLE IF NOT EXISTS agents (
   owner_user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   capabilities JSONB NOT NULL DEFAULT '[]'::jsonb,
   version TEXT NOT NULL,
-  status agent_status NOT NULL DEFAULT 'REGISTERED',
   api_secret_hash TEXT NOT NULL,
   connected_at TIMESTAMPTZ,
   last_heartbeat TIMESTAMPTZ,
@@ -114,7 +106,6 @@ CREATE TABLE IF NOT EXISTS audit_log (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_agents_status ON agents (status);
 CREATE INDEX IF NOT EXISTS idx_agents_owner ON agents (owner_user_id);
 CREATE INDEX IF NOT EXISTS idx_agents_capabilities_gin ON agents USING GIN (capabilities jsonb_path_ops);
 

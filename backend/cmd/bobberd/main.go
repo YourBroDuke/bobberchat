@@ -482,7 +482,6 @@ func (a *app) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"agent_id":     agent.AgentID,
 		"api_secret":   secret,
-		"status":       agent.Status,
 		"created_at":   agent.CreatedAt,
 		"display_name": agent.DisplayName,
 	})
@@ -501,7 +500,6 @@ func (a *app) handleGetAgent(w http.ResponseWriter, r *http.Request) {
 		"owner_user_id":  agent.OwnerUserID,
 		"capabilities":   agent.Capabilities,
 		"version":        agent.Version,
-		"status":         agent.Status,
 		"connected_at":   agent.ConnectedAt,
 		"last_heartbeat": agent.LastHeartbeat,
 		"created_at":     agent.CreatedAt,
@@ -548,7 +546,6 @@ func (a *app) handleDiscover(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Capability    string   `json:"capability"`
 		SupportedTags []string `json:"supported_tags"`
-		Status        []string `json:"status"`
 		Limit         int      `json:"limit"`
 	}
 	if err := readJSON(r, &req); err != nil {
@@ -559,7 +556,6 @@ func (a *app) handleDiscover(w http.ResponseWriter, r *http.Request) {
 	agents, err := a.registrySvc.Discover(r.Context(), registry.DiscoveryQuery{
 		Capability:    req.Capability,
 		SupportedTags: req.SupportedTags,
-		Status:        req.Status,
 		Limit:         req.Limit,
 	})
 	if err != nil {

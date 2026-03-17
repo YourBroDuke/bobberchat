@@ -61,12 +61,8 @@ func TestRegistryMethods_InvalidInput(t *testing.T) {
 			err:  (&Service{}).Deregister(context.Background(), ""),
 		},
 		{
-			name: "UpdateStatus with empty agentID",
-			err:  (&Service{}).UpdateStatus(context.Background(), "", persistence.AgentStatusOnline),
-		},
-		{
 			name: "Heartbeat with empty agentID",
-			err:  (&Service{}).Heartbeat(context.Background(), "", persistence.AgentStatusOnline),
+			err:  (&Service{}).Heartbeat(context.Background(), ""),
 		},
 		{
 			name: "Discover nil db",
@@ -97,17 +93,10 @@ func TestRegistryMethods_InvalidInput(t *testing.T) {
 			}(),
 		},
 		{
-			name: "nil service UpdateStatus",
-			err: func() error {
-				var s *Service
-				return s.UpdateStatus(context.Background(), "agent", persistence.AgentStatusOnline)
-			}(),
-		},
-		{
 			name: "nil service Heartbeat",
 			err: func() error {
 				var s *Service
-				return s.Heartbeat(context.Background(), "agent", persistence.AgentStatusOnline)
+				return s.Heartbeat(context.Background(), "agent")
 			}(),
 		},
 		{

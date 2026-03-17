@@ -120,10 +120,6 @@ Schema follows Design Spec §4, §5, §6, §7, §10, §11 and PRD acceptance cri
 ### 3.1 Enum types
 
 ```sql
-CREATE TYPE agent_status AS ENUM (
-  'REGISTERED', 'CONNECTING', 'ONLINE', 'BUSY', 'IDLE', 'OFFLINE', 'DEREGISTERED', 'DEGRADED'
-);
-
 CREATE TYPE group_visibility AS ENUM ('public', 'private');
 
 CREATE TYPE topic_status AS ENUM ('OPEN', 'IN_PROGRESS', 'RESOLVED', 'ARCHIVED');
@@ -152,7 +148,6 @@ CREATE TABLE agents (
   owner_user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   capabilities JSONB NOT NULL DEFAULT '[]'::jsonb,
   version TEXT NOT NULL,
-  status agent_status NOT NULL DEFAULT 'REGISTERED',
   api_secret_hash TEXT NOT NULL,
   connected_at TIMESTAMPTZ,
   last_heartbeat TIMESTAMPTZ,
@@ -236,7 +231,6 @@ FOR VALUES FROM ('2026-03-01T00:00:00Z') TO ('2026-04-01T00:00:00Z');
 ### 3.4 Index strategy
 
 ```sql
-CREATE INDEX idx_agents_status ON agents (status);
 CREATE INDEX idx_agents_owner ON agents (owner_user_id);
 CREATE INDEX idx_agents_capabilities_gin ON agents USING GIN (capabilities jsonb_path_ops);
 

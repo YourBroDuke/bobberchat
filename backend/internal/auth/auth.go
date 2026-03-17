@@ -251,7 +251,6 @@ func (s *Service) CreateAgent(ctx context.Context, ownerUserID, displayName stri
 		DisplayName:   displayName,
 		Capabilities:  capabilities,
 		Version:       version,
-		Status:        persistence.AgentStatusRegistered,
 		APISecretHash: hash,
 	})
 	if err != nil {
@@ -357,17 +356,15 @@ func (s *Service) getAgentByID(ctx context.Context, agentID string) (*persistenc
 	}
 
 	row := s.db.Pool().QueryRow(ctx, `
-		SELECT agent_id, display_name, owner_user_id, capabilities, version, status, api_secret_hash, connected_at, last_heartbeat, created_at
+		SELECT agent_id, display_name, owner_user_id, capabilities, version, api_secret_hash, connected_at, last_heartbeat, created_at
 		FROM agents
 		WHERE agent_id = $1
 	`, id)
 
 	a := persistence.Agent{}
-	var status string
-	if err := row.Scan(&a.AgentID, &a.DisplayName, &a.OwnerUserID, &a.Capabilities, &a.Version, &status, &a.APISecretHash, &a.ConnectedAt, &a.LastHeartbeat, &a.CreatedAt); err != nil {
+	if err := row.Scan(&a.AgentID, &a.DisplayName, &a.OwnerUserID, &a.Capabilities, &a.Version, &a.APISecretHash, &a.ConnectedAt, &a.LastHeartbeat, &a.CreatedAt); err != nil {
 		return nil, err
 	}
-	a.Status = persistence.AgentStatus(status)
 	return &a, nil
 }
 

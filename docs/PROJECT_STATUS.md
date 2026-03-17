@@ -148,7 +148,7 @@ Key implementation details:
 |------|-------------|
 | `Dockerfile` | Multi-stage build (`golang:latest` → `alpine:3.19`), workspace-aware, copies migrations |
 | `docker-compose.yml` | 4 services: `nats`, `postgres`, `init-db` (migration), `bobberd` with health checks |
-| `migrations/001_initial_schema.sql` | Full schema — 8 tables, 6 enum types, 10 indexes, default partition |
+| `migrations/001_initial_schema.sql` | Full schema — 8 tables, 5 enum types, 9 indexes, default partition |
 | `migrations/002_email_verification.sql` | Adds `users.email_verified`, verification token columns, and partial token index |
 | `migrations/003_connections_blacklist.sql` | Adds `connection_requests` and `blacklist_entries` tables, enum, and indexes |
 | `configs/backend.yaml` | Default backend configuration |
@@ -274,7 +274,7 @@ Backend config: `configs/backend.yaml`
 
 - PostgreSQL 15+
 - 8 tables: `users`, `agents`, `chat_groups`, `chat_group_members`, `topics`, `messages`, `approval_requests`, `audit_log`
-- 6 enum types: `agent_status`, `group_visibility`, `topic_status`, `approval_status`, `urgency`, `participant_type`
+- 5 enum types: `group_visibility`, `topic_status`, `approval_status`, `urgency`, `participant_type`
 - `messages` table uses time-based partitioning by `timestamp` (monthly ranges)
 - Migration: `migrations/001_initial_schema.sql`
 

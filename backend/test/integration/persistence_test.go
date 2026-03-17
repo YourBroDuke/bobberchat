@@ -34,7 +34,7 @@ func setupDB(t *testing.T) (*persistence.DB, func()) {
 	// Drop existing schema before re-applying migration (handles pre-populated databases)
 	_, _ = db.Pool().Exec(ctx, `
 		DROP TABLE IF EXISTS blacklist_entries, connection_requests, audit_log, approval_requests, messages_default, messages, topics, chat_group_members, chat_groups, agents, users CASCADE;
-		DROP TYPE IF EXISTS connection_request_status, participant_type, urgency, approval_status, topic_status, group_visibility, agent_status CASCADE;
+		DROP TYPE IF EXISTS connection_request_status, participant_type, urgency, approval_status, topic_status, group_visibility CASCADE;
 	`)
 
 	migrationFiles, err := filepath.Glob("../../../migrations/*.sql")
@@ -61,7 +61,7 @@ func setupDB(t *testing.T) (*persistence.DB, func()) {
 		cleanupCtx := context.Background()
 		_, _ = db.Pool().Exec(cleanupCtx, `
 			DROP TABLE IF EXISTS blacklist_entries, connection_requests, audit_log, approval_requests, messages_default, messages, topics, chat_group_members, chat_groups, agents, users CASCADE;
-			DROP TYPE IF EXISTS connection_request_status, participant_type, urgency, approval_status, topic_status, group_visibility, agent_status CASCADE;
+			DROP TYPE IF EXISTS connection_request_status, participant_type, urgency, approval_status, topic_status, group_visibility CASCADE;
 		`)
 		db.Close()
 	}
@@ -122,7 +122,6 @@ func TestAgentRepository_CRUD(t *testing.T) {
 		OwnerUserID:   owner.ID,
 		Capabilities:  []string{"test"},
 		Version:       "1.0.0",
-		Status:        persistence.AgentStatusRegistered,
 		APISecretHash: "secret-hash",
 	}
 
@@ -140,18 +139,6 @@ func TestAgentRepository_CRUD(t *testing.T) {
 	}
 	if got.OwnerUserID != owner.ID {
 		t.Errorf("owner mismatch: got %s want %s", got.OwnerUserID, owner.ID)
-	}
-
-	if err := repos.Agents.UpdateStatus(ctx, created.AgentID, persistence.AgentStatusOnline); err != nil {
-		t.Fatal(err)
-	}
-
-	updated, err := repos.Agents.GetByID(ctx, created.AgentID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if updated.Status != persistence.AgentStatusOnline {
-		t.Errorf("status mismatch: got %s want %s", updated.Status, persistence.AgentStatusOnline)
 	}
 
 	list, err := repos.Agents.ListAll(ctx)
@@ -319,7 +306,6 @@ func TestApprovalRepository_CreateDecide(t *testing.T) {
 		OwnerUserID:   owner.ID,
 		Capabilities:  []string{"approval"},
 		Version:       "1.0.0",
-		Status:        persistence.AgentStatusRegistered,
 		APISecretHash: "secret-hash",
 	})
 	if err != nil {

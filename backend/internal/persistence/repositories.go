@@ -22,11 +22,10 @@ var (
 type AgentRepository interface {
 	Create(ctx context.Context, agent Agent) (*Agent, error)
 	GetByID(ctx context.Context, agentID uuid.UUID) (*Agent, error)
-	UpdateStatus(ctx context.Context, agentID uuid.UUID, status AgentStatus) error
 	Delete(ctx context.Context, agentID uuid.UUID) error
 	ListAll(ctx context.Context) ([]Agent, error)
 	ListByOwner(ctx context.Context, ownerUserID uuid.UUID) ([]Agent, error)
-	DiscoverByCapability(ctx context.Context, capability string, statuses []AgentStatus, limit int) ([]Agent, error)
+	DiscoverByCapability(ctx context.Context, capability string, limit int) ([]Agent, error)
 }
 
 type UserRepository interface {
@@ -121,10 +120,6 @@ func (r *pgAgentRepository) Create(ctx context.Context, agent Agent) (*Agent, er
 	if agent.CreatedAt.IsZero() {
 		agent.CreatedAt = time.Now().UTC()
 	}
-	if agent.Status == "" {
-		agent.Status = AgentStatusRegistered
-	}
-
 	capabilities, err := json.Marshal(agent.Capabilities)
 	if err != nil {
 		return nil, fmt.Errorf("marshal capabilities: %w", err)
@@ -133,13 +128,13 @@ func (r *pgAgentRepository) Create(ctx context.Context, agent Agent) (*Agent, er
 	row := r.db.Pool().QueryRow(ctx, `
 		INSERT INTO agents (
 			agent_id, display_name, owner_user_id, capabilities, version,
-			status, api_secret_hash, connected_at, last_heartbeat, created_at
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+			api_secret_hash, connected_at, last_heartbeat, created_at
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
 		RETURNING agent_id, display_name, owner_user_id, capabilities, version,
-			status, api_secret_hash, connected_at, last_heartbeat, created_at
+			api_secret_hash, connected_at, last_heartbeat, created_at
 	`,
 		agent.AgentID, agent.DisplayName, agent.OwnerUserID, capabilities,
-		agent.Version, string(agent.Status), agent.APISecretHash, agent.ConnectedAt,
+		agent.Version, agent.APISecretHash, agent.ConnectedAt,
 		agent.LastHeartbeat, agent.CreatedAt,
 	)
 
@@ -153,24 +148,11 @@ func (r *pgAgentRepository) Create(ctx context.Context, agent Agent) (*Agent, er
 func (r *pgAgentRepository) GetByID(ctx context.Context, agentID uuid.UUID) (*Agent, error) {
 	row := r.db.Pool().QueryRow(ctx, `
 		SELECT agent_id, display_name, owner_user_id, capabilities, version,
-			status, api_secret_hash, connected_at, last_heartbeat, created_at
+			api_secret_hash, connected_at, last_heartbeat, created_at
 		FROM agents
 		WHERE agent_id = $1
 	`, agentID)
 	return scanAgent(row)
-}
-
-func (r *pgAgentRepository) UpdateStatus(ctx context.Context, agentID uuid.UUID, status AgentStatus) error {
-	res, err := r.db.Pool().Exec(ctx, `
-		UPDATE agents SET status = $1 WHERE agent_id = $2
-	`, string(status), agentID)
-	if err != nil {
-		return fmt.Errorf("update agent status: %w", err)
-	}
-	if res.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
 }
 
 func (r *pgAgentRepository) Delete(ctx context.Context, agentID uuid.UUID) error {
@@ -187,7 +169,7 @@ func (r *pgAgentRepository) Delete(ctx context.Context, agentID uuid.UUID) error
 func (r *pgAgentRepository) ListAll(ctx context.Context) ([]Agent, error) {
 	rows, err := r.db.Pool().Query(ctx, `
 		SELECT agent_id, display_name, owner_user_id, capabilities, version,
-			status, api_secret_hash, connected_at, last_heartbeat, created_at
+			api_secret_hash, connected_at, last_heartbeat, created_at
 		FROM agents
 		ORDER BY created_at DESC
 	`)
@@ -215,7 +197,7 @@ func (r *pgAgentRepository) ListAll(ctx context.Context) ([]Agent, error) {
 func (r *pgAgentRepository) ListByOwner(ctx context.Context, ownerUserID uuid.UUID) ([]Agent, error) {
 	rows, err := r.db.Pool().Query(ctx, `
 		SELECT agent_id, display_name, owner_user_id, capabilities, version,
-			status, api_secret_hash, connected_at, last_heartbeat, created_at
+			api_secret_hash, connected_at, last_heartbeat, created_at
 		FROM agents
 		WHERE owner_user_id = $1
 		ORDER BY created_at DESC
@@ -241,28 +223,19 @@ func (r *pgAgentRepository) ListByOwner(ctx context.Context, ownerUserID uuid.UU
 	return results, nil
 }
 
-func (r *pgAgentRepository) DiscoverByCapability(ctx context.Context, capability string, statuses []AgentStatus, limit int) ([]Agent, error) {
+func (r *pgAgentRepository) DiscoverByCapability(ctx context.Context, capability string, limit int) ([]Agent, error) {
 	if limit <= 0 {
 		limit = 10
 	}
 
-	statusValues := make([]string, 0, len(statuses))
-	for _, status := range statuses {
-		statusValues = append(statusValues, string(status))
-	}
-
 	rows, err := r.db.Pool().Query(ctx, `
 		SELECT agent_id, display_name, owner_user_id, capabilities, version,
-			status, api_secret_hash, connected_at, last_heartbeat, created_at
+			api_secret_hash, connected_at, last_heartbeat, created_at
 		FROM agents
 		WHERE capabilities @> to_jsonb($1::text[])
-			AND (
-				cardinality($2::text[]) = 0
-				OR status::text = ANY($2::text[])
-			)
 		ORDER BY last_heartbeat DESC NULLS LAST, created_at DESC
-		LIMIT $3
-	`, []string{capability}, statusValues, limit)
+		LIMIT $2
+	`, []string{capability}, limit)
 	if err != nil {
 		return nil, fmt.Errorf("discover agents: %w", err)
 	}
@@ -1059,7 +1032,6 @@ type rowScanner interface {
 
 func scanAgent(scanner rowScanner) (*Agent, error) {
 	out := Agent{}
-	var status string
 	var capabilitiesRaw []byte
 
 	err := scanner.Scan(
@@ -1068,7 +1040,6 @@ func scanAgent(scanner rowScanner) (*Agent, error) {
 		&out.OwnerUserID,
 		&capabilitiesRaw,
 		&out.Version,
-		&status,
 		&out.APISecretHash,
 		&out.ConnectedAt,
 		&out.LastHeartbeat,
@@ -1081,7 +1052,6 @@ func scanAgent(scanner rowScanner) (*Agent, error) {
 		return nil, fmt.Errorf("scan agent: %w", err)
 	}
 
-	out.Status = AgentStatus(status)
 	if len(capabilitiesRaw) > 0 {
 		if err := json.Unmarshal(capabilitiesRaw, &out.Capabilities); err != nil {
 			return nil, fmt.Errorf("unmarshal agent capabilities: %w", err)

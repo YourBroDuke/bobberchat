@@ -6,19 +6,6 @@ import (
 	"github.com/google/uuid"
 )
 
-type AgentStatus string
-
-const (
-	AgentStatusRegistered   AgentStatus = "REGISTERED"
-	AgentStatusConnecting   AgentStatus = "CONNECTING"
-	AgentStatusOnline       AgentStatus = "ONLINE"
-	AgentStatusBusy         AgentStatus = "BUSY"
-	AgentStatusIdle         AgentStatus = "IDLE"
-	AgentStatusOffline      AgentStatus = "OFFLINE"
-	AgentStatusDeregistered AgentStatus = "DEREGISTERED"
-	AgentStatusDegraded     AgentStatus = "DEGRADED"
-)
-
 type GroupVisibility string
 
 const (
@@ -73,16 +60,15 @@ type User struct {
 }
 
 type Agent struct {
-	AgentID       uuid.UUID   `json:"agent_id"`
-	DisplayName   string      `json:"display_name"`
-	OwnerUserID   uuid.UUID   `json:"owner_user_id"`
-	Capabilities  []string    `json:"capabilities"`
-	Version       string      `json:"version"`
-	Status        AgentStatus `json:"status"`
-	APISecretHash string      `json:"-"`
-	ConnectedAt   *time.Time  `json:"connected_at,omitempty"`
-	LastHeartbeat *time.Time  `json:"last_heartbeat,omitempty"`
-	CreatedAt     time.Time   `json:"created_at"`
+	AgentID       uuid.UUID  `json:"agent_id"`
+	DisplayName   string     `json:"display_name"`
+	OwnerUserID   uuid.UUID  `json:"owner_user_id"`
+	Capabilities  []string   `json:"capabilities"`
+	Version       string     `json:"version"`
+	APISecretHash string     `json:"-"`
+	ConnectedAt   *time.Time `json:"connected_at,omitempty"`
+	LastHeartbeat *time.Time `json:"last_heartbeat,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
 }
 
 type ChatGroup struct {

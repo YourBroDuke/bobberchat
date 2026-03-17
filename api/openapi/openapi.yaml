@@ -264,8 +264,6 @@ paths:
                     format: uuid
                   api_secret:
                     type: string
-                  status:
-                    type: string
                   created_at:
                     type: string
                     format: date-time
@@ -380,10 +378,6 @@ paths:
                 capability:
                   type: string
                 supported_tags:
-                  type: array
-                  items:
-                    type: string
-                status:
                   type: array
                   items:
                     type: string
@@ -1092,7 +1086,6 @@ components:
         - display_name
         - capabilities
         - version
-        - status
         - created_at
       properties:
         agent_id:
@@ -1109,9 +1102,6 @@ components:
             type: string
         version:
           type: string
-        status:
-          type: string
-          enum: [REGISTERED, CONNECTING, ONLINE, BUSY, IDLE, OFFLINE, DEREGISTERED, DEGRADED]
         connected_at:
           type: string
           format: date-time
