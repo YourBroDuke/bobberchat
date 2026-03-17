@@ -30,8 +30,8 @@ BobberChat aims to provide a reliable, transparent, and scalable environment for
 *   Bridge disparate agent protocols (MCP, A2A, gRPC) into a single communication plane.
 
 ### 2.2 Success Metrics (per §12.1)
-*   **System Capacity**: Support at least 500 concurrent agents per tenant.
-*   **Throughput**: Maintain stable performance at 10,000 messages per second per tenant.
+*   **System Capacity**: Support at least 500 concurrent agents per deployment.
+*   **Throughput**: Maintain stable performance at 10,000 messages per second per deployment.
 *   **Latency**:
     *   Broker Latency: < 50ms (p99).
     *   Discovery Latency: < 200ms for capability-based queries.
@@ -53,7 +53,7 @@ BobberChat aims to provide a reliable, transparent, and scalable environment for
 ### 3.3 Enterprise Evaluator
 *   **Goal**: Ensure AI systems comply with security, audit, and safety standards.
 *   **Pain Point**: Unauthenticated agent communication and lack of immutable audit trails.
-*   **Key Need**: Strong identity/auth (API secrets), tenant isolation, and exactly-once approval workflows.
+*   **Key Need**: Strong identity/auth (API secrets), access control, and exactly-once approval workflows.
 
 ## 4. User Stories & Acceptance Criteria
 
@@ -102,9 +102,9 @@ Organized by the seven validated production pain points defined in §1.
     *   **AC1**: Registry handles high-churn registration/deregistration with < 100ms latency per §12.1.
 
 ### 4.7 Security & Trust
-*   **User Story 1**: As an Operator, I want to ensure only authorized agents can join my tenant's mesh, so that I can protect sensitive data.
+*   **User Story 1**: As an Operator, I want to ensure only authorized agents can join my deployment's mesh, so that I can protect sensitive data.
     *   **AC1**: Agents must present an API secret for WebSocket/gRPC upgrade per §5.2.
-    *   **AC2**: Tenant isolation is enforced by default in the message broker.
+    *   **AC2**: Access control is enforced by default in the message broker.
 *   **User Story 2**: As an Evaluator, I want a complete audit trail of all cross-agent messages, so that I can comply with regulatory requirements.
     *   **AC1**: Backend logs all messages with `sender_id`, `receiver_id`, `tag`, and `timestamp` per §11.4.
 
@@ -172,18 +172,18 @@ Organized by the seven validated production pain points defined in §1.
 ### M5: Integration & Hardening (Weeks 13-15)
 *   Implement end-to-end integration tests for all 7 pain point scenarios.
 *   Conduct performance benchmarking to hit §12.1 targets.
-*   Security audit of tenant isolation and secret management.
+*   Security audit of access control and secret management.
 *   **Deliverable**: Production-ready BobberChat v1.0.
 
 ## 8. Non-Functional Requirements
 
 ### 8.1 Performance (per §12.1)
-*   **Throughput**: Aggregate peak of 10,000 messages/second per tenant.
+*   **Throughput**: Aggregate peak of 10,000 messages/second per deployment.
 *   **Latency**: Internal broker processing < 50ms (p99).
-*   **Concurrency**: 500 active agent connections per tenant.
+*   **Concurrency**: 500 active agent connections per deployment.
 
 ### 8.2 Security (per §11)
-*   **Isolation**: Strict logical partitioning between tenant namespaces.
+*   **Isolation**: Strict logical partitioning between agent namespaces.
 *   **Authentication**: Multi-factor for humans, unique secrets for machines.
 *   **Auditability**: Immutable logs for all `request.*` and `approval.*` events.
 
@@ -206,7 +206,7 @@ Organized by the seven validated production pain points defined in §1.
 
 ## 10. Open Questions (from §13.2)
 
-*   **Federation**: Should cross-tenant communication use explicit tokens or implicit capability-based auth?
+*   **Federation**: Should cross-system communication use explicit tokens or implicit capability-based auth?
 *   **Tag Governance**: What is the formal process for approving new `core.*` tags?
 *   **Retention**: Should "Zero Retention" be a client-side request or server-enforced policy?
 *   **Pruning**: What is the ideal threshold for auto-deregistering idle agents from the registry?

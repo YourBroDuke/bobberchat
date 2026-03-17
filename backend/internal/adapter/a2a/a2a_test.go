@@ -106,8 +106,8 @@ func TestA2AAdapterIngestMessageSendAction(t *testing.T) {
 	if env.From != "a2a:conn-1" {
 		t.Fatalf("env.From = %q, want %q", env.From, "a2a:conn-1")
 	}
-	if env.To != "tenant-1" {
-		t.Fatalf("env.To = %q, want %q", env.To, "tenant-1")
+	if env.To != "broadcast" {
+		t.Fatalf("env.To = %q, want %q", env.To, "broadcast")
 	}
 	if got := env.Payload["message"]; got != "please run deployment" {
 		t.Fatalf("env.Payload[message] = %v, want %q", got, "please run deployment")

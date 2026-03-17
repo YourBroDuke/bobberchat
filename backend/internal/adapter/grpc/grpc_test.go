@@ -133,8 +133,8 @@ func TestGRPCAdapterIngestUnaryRequest(t *testing.T) {
 	if env.From != "grpc:conn-1" {
 		t.Fatalf("env.From = %q, want %q", env.From, "grpc:conn-1")
 	}
-	if env.To != "tenant-1" {
-		t.Fatalf("env.To = %q, want %q", env.To, "tenant-1")
+	if env.To != "broadcast" {
+		t.Fatalf("env.To = %q, want %q", env.To, "broadcast")
 	}
 	if got := env.Payload["action"]; got != "agent.AgentService/Execute" {
 		t.Fatalf("env.Payload[action] = %v, want %q", got, "agent.AgentService/Execute")

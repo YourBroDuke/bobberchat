@@ -104,8 +104,8 @@ func TestMCPAdapterIngestToolCall(t *testing.T) {
 	if env.From != "mcp:conn-1" {
 		t.Fatalf("env.From = %q, want %q", env.From, "mcp:conn-1")
 	}
-	if env.To != "tenant-1" {
-		t.Fatalf("env.To = %q, want %q", env.To, "tenant-1")
+	if env.To != "broadcast" {
+		t.Fatalf("env.To = %q, want %q", env.To, "broadcast")
 	}
 	if got := env.Payload["action"]; got != "search" {
 		t.Fatalf("env.Payload[action] = %v, want %q", got, "search")

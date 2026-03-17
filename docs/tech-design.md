@@ -595,9 +595,9 @@ services:
 ### 9.3 Test strategy
 
 - **Unit tests**: per package in `backend/internal/*`, `backend/pkg/sdk`, and `cli/cmd/bobber`.
-- **Integration tests**: under `backend/test/`, covering discovery, routing, approval, replay, and tenant isolation.
+- **Integration tests**: under `backend/test/`, covering discovery, routing, approval, replay, and access control.
 - **Contract tests**: OpenAPI schema validation for REST, envelope validation for WebSocket frames.
-- **Performance tests**: load profile for 10k msg/sec per tenant and p99 latency assertions (Design Spec §12.1).
+- **Performance tests**: load profile for 10k msg/sec per deployment and p99 latency assertions (Design Spec §12.1).
 
 ### 9.4 CI pipeline outline
 

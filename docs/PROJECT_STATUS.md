@@ -92,7 +92,7 @@ Server endpoints for adapters:
 | `backend/internal/ratelimit/ratelimit.go` | ~160 | Token bucket rate limiter with per-agent, per-group, per-tag dimensions. Configurable rates, burst factor, auto-cleanup |
 | `backend/internal/ratelimit/ratelimit_test.go` | ~230 | 10 tests: basic limit, burst, refill, agent/group/tag scoping, concurrent, cleanup, disabled |
 | `backend/cmd/bobberd/main.go` (additions) | ~140 | `publishAndAudit` method: ownership-based access control (§11.3), rate limiting (§11.2.3), audit trail (§11.4). Enhanced graceful shutdown with `activeConns` drain-wait |
-| `backend/cmd/bobberd/main_test.go` | ~230 | 8 tests: cross-tenant denial, rate limiting (agent/group/tag), audit details, disabled limiter, no-audit-repo, empty caller tenant |
+| `backend/cmd/bobberd/main_test.go` | ~230 | 8 tests: cross-owner denial, rate limiting (agent/group/tag), audit details, disabled limiter, no-audit-repo, empty caller owner |
 | `backend/internal/observability/observability.go` (additions) | ~20 | `RateLimited` counter vec, `AuditLogged` counter, `ActiveWSConns` gauge |
 | `configs/backend.yaml` (additions) | ~10 | `rate_limits` config section with per-agent/group/tag rates and burst factor |
 
@@ -136,7 +136,7 @@ Key implementation details:
 | `backend/internal/adapter/a2a/a2a_test.go` | 20 | A2A ingest/emit, intent inference, error cases |
 | `backend/internal/adapter/grpc/grpc_test.go` | 22 | gRPC ingest/emit, stream frames, error cases |
 | `backend/internal/ratelimit/ratelimit_test.go` | 10 | Token bucket limiting, burst, refill, scoping, concurrent, cleanup |
-| `backend/cmd/bobberd/main_test.go` | 8 | Cross-tenant denial, rate limiting, audit trail, disabled limiter |
+| `backend/cmd/bobberd/main_test.go` | 8 | Cross-owner denial, rate limiting, audit trail, disabled limiter |
 | `backend/pkg/sdk/helpers_test.go` | 4 | Message helper functions |
 | `cli/cmd/bobber/main_test.go` | — | CLI unit tests: account register/login/create-agent/logout, agent use/rotate-secret/delete, login/whoami/logout, ls, connect/inbox/accept/reject/blacklist, info, send, poll, group create/leave/invite, config/flag precedence |
 | `backend/test/integration/persistence_test.go` | 5 | User, Agent, Group, Topic, Approval CRUD (build-tagged `//go:build integration`) |

@@ -260,7 +260,7 @@ Field definitions:
 | `to` | string (`agent_id` or `group_id`) | Yes | Destination principal (single recipient or Chat Group). |
 | `tag` | string | Yes | Semantic intent key (e.g., `request.data`, `progress.percentage`). |
 | `payload` | object | Yes | Tag-specific body validated by broker schema map. |
-| `metadata` | object | No | Transport and policy hints (`context-budget`, `timeout_ms`, tenant, adapter hints). |
+| `metadata` | object | No | Transport and policy hints (`context-budget`, `timeout_ms`, adapter hints). |
 | `timestamp` | string (ISO8601 UTC) | Yes | Producer event time used for ordering and timeout windows. |
 | `trace_id` | string (UUID) | Yes | Distributed trace correlation across parent/child agent workflows. |
 
@@ -434,7 +434,7 @@ Payload size caps (post-JSON serialization, pre-compression):
 
 `metadata.context-budget` (integer token budget hint):
 - Indicates maximum context budget receiver SHOULD spend incorporating this message.
-- Broker MAY enforce tenant policy ceilings and annotate dropped/trimmed messages with `error.recoverable`.
+- Broker MAY enforce deployment policy ceilings and annotate dropped/trimmed messages with `error.recoverable`.
 
 ### 3.8 Protocol State Machine
 
@@ -558,7 +558,7 @@ BobberChat treats human users and software agents as distinct identities connect
 
 - **Registration root**: Email-based account creation (`email -> user account`).
 - **Account role in system**: A user account is the ownership boundary for agents, conversations, and API secrets.
-- **Agent creation policy**: Configurable per tenant (may include per-user agent limits).
+- **Agent creation policy**: Configurable per deployment (may include per-user agent limits).
 - **Normative requirements**:
   - A user **MUST** verify account ownership before creating internet-reachable agents.
   - Every agent **MUST** have exactly one owner `user_id` at any point in time.
@@ -606,7 +606,7 @@ BobberChat supports two authentication paths: agent runtime authentication and h
 1. Human user logs in via email-based account flow.
 2. Backend issues JWT (short-lived access token, optional refresh token).
 3. TUI presents `Authorization: Bearer <jwt>` on API calls and WebSocket upgrade.
-4. Backend authorizes operations using JWT claims (`user_id`, tenant/account scope, role claims).
+4. Backend authorizes operations using JWT claims (`user_id`, account scope, role claims).
 
 #### Authentication Sequence Diagram
 
@@ -914,7 +914,7 @@ When multiple agents interact in a shared environment, BobberChat provides four 
 
 BobberChat addresses common multi-agent failure modes through protocol-level enforcement.
 
-*   **Token Cost Budgeting**: Every `request.action` or `approval.request` includes a `max_cost` field. The Backend tracks cumulative spending against tenant-level limits and rejects requests that would exceed the budget.
+*   **Token Cost Budgeting**: Every `request.action` or `approval.request` includes a `max_cost` field. The Backend tracks cumulative spending against deployment-level limits and rejects requests that would exceed the budget.
 *   **Circuit Breaker (Infinite Retry Prevention)**: If an agent fails a specific action N times consecutively, the Backend opens a circuit breaker. Subsequent retries are blocked, and the task is automatically escalated to a human for review.
 
 ### 7.5 Scenario Flowcharts
@@ -1241,8 +1241,8 @@ The Backend monitors system telemetry and triggers alerts based on specific coor
 
 ## § 11. Security Considerations
 
-**Problem Statement:** Multi-agent messaging fabrics are exposed to impersonation, injection, exfiltration, and tenant-isolation failures.
-**Design Decision:** Enforce layered controls across authentication, optional signing, rate limiting, tenant boundaries, and audit trails.
+**Problem Statement:** Multi-agent messaging fabrics are exposed to impersonation, injection, exfiltration, and access-control failures.
+**Design Decision:** Enforce layered controls across authentication, optional signing, rate limiting, ownership boundaries, and audit trails.
 **Rationale:** Defense-in-depth reduces blast radius and improves compliance readiness in shared environments.
 
 ### 11.1 Threat Model
@@ -1308,7 +1308,7 @@ Each message MAY include data residency annotations in its metadata. This allows
 
 **Problem Statement:** Coordination layers degrade quickly under high concurrency, large fan-out, and discovery-heavy workloads.
 **Design Decision:** Set explicit performance targets and scale via stateless Backend Services, distributed brokering, and partitioned storage.
-**Rationale:** Quantified targets and scaling mechanisms provide predictable behavior as tenant and agent volume grows.
+**Rationale:** Quantified targets and scaling mechanisms provide predictable behavior as deployment and agent volume grows.
 
 BobberChat is designed for high-concurrency agent messaging with sub-millisecond internal broker latency. The system prioritizes message throughput and discovery speed to support large-scale autonomous swarms.
 
@@ -1389,17 +1389,17 @@ The following items are explicitly deferred from the initial specification and M
 
 The following architectural decisions remain unresolved and require community feedback or experimental validation during the prototyping phase:
 
-> **OPEN QUESTION**: Should cross-tenant communication use explicit federation tokens or implicit capability-based authorization? (Ref: §1)
+> **OPEN QUESTION**: Should cross-system communication use explicit federation tokens or implicit capability-based authorization? (Ref: §1)
 
 > **OPEN QUESTION**: Tag namespace governance: Who approves new core tags? Should there be a formal RFC process for `core.*` tag additions to prevent taxonomy fragmentation?
 
 > **OPEN QUESTION**: Conflict resolution policy defaults: When multiple coordination primitives are active (e.g., Voting vs. Arbiter), what is the system-wide default precedence?
 
-> **OPEN QUESTION**: Agent lifecycle: At what threshold of inactivity should the Registry auto-deregister idle agents? Should this be a global setting or per-tenant?
+> **OPEN QUESTION**: Agent lifecycle: At what threshold of inactivity should the Registry auto-deregister idle agents? Should this be a global setting or per-deployment?
 
-> **OPEN QUESTION**: Cross-tenant routing: Should agents be discoverable by `capability` across tenant boundaries by default, or only via explicit `agent_id` sharing?
+> **OPEN QUESTION**: Cross-system routing: Should agents be discoverable by `capability` across system boundaries by default, or only via explicit `agent_id` sharing?
 
-> **OPEN QUESTION**: Message retention vs. Privacy: In high-compliance environments, should "Zero Retention" be a client-side request or a server-enforced tenant policy?
+> **OPEN QUESTION**: Message retention vs. Privacy: In high-compliance environments, should "Zero Retention" be a client-side request or a server-enforced deployment policy?
 
 ### 13.3 Assumptions & Constraints
 
@@ -1481,8 +1481,8 @@ A globally unique correlation identifier propagated across related messages to r
 ### **Span**
 A timed unit of trace work representing one logical operation (for example, handling a tagged message by a specific agent).
 
-### **Tenant**
-An isolated account namespace that scopes identities, routing policy, and data retention boundaries.
+### **Deployment**
+An isolated deployment namespace that scopes identities, routing policy, and data retention boundaries.
 
 ### **Lifecycle**
 The defined sequence of runtime states an agent transitions through (for example REGISTERED, ONLINE, OFFLINE).
@@ -1549,7 +1549,7 @@ This matrix traces the seven validated pain points identified in §1 to their co
 | 4. Coordination Failures & Race Conditions | §1.4 | §3.4 Loop Prevention, §7 Approval Workflows, §12.4 Message Ordering | Circuit breaker policy, four conflict primitives (priority, voting, arbiter, escalation), causal ordering guarantees |
 | 5. Protocol Fragmentation | §1.5 | §8 Protocol Adapters | Deterministic MCP/A2A/gRPC adapter contracts with tag auto-mapping, unified protocol envelope |
 | 6. Scalability Bottlenecks | §1.6 | §12 Scalability & Performance | Explicit targets (500 agents, 10K msg/sec), horizontal scaling via stateless API tier, distributed NATS, caching & read replicas |
-| 7. Security & Trust in Multi-Agent Systems | §1.7 | §5 Identity/Authentication, §11 Security | API secrets & JWT sessions, message signing, rate limiting, tenant isolation, comprehensive audit trail |
+| 7. Security & Trust in Multi-Agent Systems | §1.7 | §5 Identity/Authentication, §11 Security | API secrets & JWT sessions, message signing, rate limiting, access control, comprehensive audit trail |
 
 **Synthesis**: All seven pain points have traceable, concrete solutions embedded in the architectural design. Each solution is specified at the appropriate level of abstraction (architectural patterns, not implementation details).
 
