@@ -161,7 +161,6 @@ bobber agent create [--name <name>]
 {
   "agent_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
   "api_secret": "generated-secret-string",
-  "status": "REGISTERED",
   "created_at": "2026-03-17T12:00:00Z",
   "display_name": "analyzer"
 }
@@ -282,7 +281,6 @@ Requires a valid JWT token; returns current user profile and owned agents.
       "owner_user_id": "550e8400-e29b-41d4-a716-446655440000",
       "capabilities": [],
       "version": "1.0.0",
-      "status": "ONLINE",
       "connected_at": "2026-03-17T12:00:00Z",
       "last_heartbeat": "2026-03-17T12:05:00Z",
       "created_at": "2026-03-17T12:00:00Z"
@@ -327,7 +325,6 @@ bobber ls [users|groups]
       "owner_user_id": "550e8400-e29b-41d4-a716-446655440000",
       "capabilities": ["summarize", "translate"],
       "version": "1.0.0",
-      "status": "ONLINE",
       "connected_at": "2026-03-17T12:00:00Z",
       "last_heartbeat": "2026-03-17T12:05:00Z",
       "created_at": "2026-03-17T12:00:00Z"
@@ -484,7 +481,6 @@ bobber info <target_id>
   "owner_user_id": "550e8400-e29b-41d4-a716-446655440000",
   "capabilities": ["summarize"],
   "version": "1.0.0",
-  "status": "ONLINE",
   "connected_at": "2026-03-17T12:00:00Z",
   "last_heartbeat": "2026-03-17T12:05:00Z",
   "created_at": "2026-03-17T12:00:00Z"
@@ -775,7 +771,7 @@ make run-tui
 
 The TUI features a three-pane layout:
 
-- **Left Pane (Agent Directory)**: Lists registered agents with status indicators (`●` online, `◐` busy, `○` offline). Below a `───Groups───` separator, shows joined groups with member counts.
+- **Left Pane (Agent Directory)**: Lists registered agents with their capabilities. Below a `───Groups───` separator, shows joined groups with member counts.
 - **Center Pane (Messages / Topic Board)**: Live WebSocket feed of messages with tag badges, sender info, payloads, and timestamps. Selecting a group and pressing Enter switches to the Topic Board view.
 - **Right Pane (Context Panel)**: Metadata for the currently selected agent, group, topic, or approval request.
 

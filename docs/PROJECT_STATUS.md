@@ -52,10 +52,10 @@ BOBBERCHAT_TEST_DSN="postgres://bobberchat:bobberchat@localhost:5432/bobberchat?
 | Package | File | Lines | Description |
 |---------|------|-------|-------------|
 | `backend/internal/protocol` | `envelope.go`, `tags.go`, `version.go` | ~350 | Wire envelope, 8-family tag taxonomy, version negotiation |
-| `backend/internal/persistence` | `postgres.go`, `models.go`, `repositories.go` | ~1,250 | 9 repository interfaces with PostgreSQL implementations, including connection requests and blacklist persistence |
-| `backend/internal/auth` | `auth.go` | ~527 | Argon2id hashing, JWT (HS256, 1hr TTL), bcrypt for passwords, email verification and resend flows |
+| `backend/internal/persistence` | `postgres.go`, `models.go`, `repositories.go` | ~1,195 | 9 repository interfaces with PostgreSQL implementations, including connection requests and blacklist persistence |
+| `backend/internal/auth` | `auth.go` | ~503 | Argon2id hashing, JWT (HS256, 1hr TTL), bcrypt for passwords, email verification and resend flows |
 | `backend/internal/email` | `email.go`, `azurecs/azurecs.go`, `console/console.go` | ~214 | Provider-agnostic email sender interface with console and Azure Communication Services (ACS) sender implementations. ACS sender uses HMAC-SHA256 signed REST API calls (`/emails:send`) with connection-string auth |
-| `backend/internal/registry` | `registry.go` | ~161 | Agent discovery, capability-based lookup, status management |
+| `backend/internal/registry` | `registry.go` | ~115 | Agent discovery, capability-based lookup |
 | `backend/internal/broker` | `broker.go` | ~232 | NATS JetStream message routing, 3 streams, subject mapping |
 | `backend/internal/approval` | `approval.go` | ~123 | Human-in-the-loop approval workflows with escalation |
 | `backend/internal/conversation` | `conversation.go` | ~202 | Chat groups, topics, membership, message history |
@@ -107,9 +107,9 @@ Key implementation details:
 
 | Binary | Source | Lines | Description |
 |--------|--------|-------|-------------|
-| `bobberd` | `backend/cmd/bobberd/main.go` | ~1,250 | Backend server — 33 REST endpoints + WebSocket + message replay + adapter ingest + production hardening |
+| `bobberd` | `backend/cmd/bobberd/main.go` | ~1,322 | Backend server — 33 REST endpoints + WebSocket + message replay + adapter ingest + production hardening |
 | `bobber` | `cli/cmd/bobber/main.go` | ~700 | CLI tool — account, agent, session, connection, messaging, and group management commands. Tests in `main_test.go` |
-| `bobber-tui` | `tui/cmd/bobber-tui/main.go` | ~1520 | TUI client — Bubble Tea terminal UI with groups, topics, filtering |
+| `bobber-tui` | `tui/cmd/bobber-tui/main.go` | ~1,471 | TUI client — Bubble Tea terminal UI with groups, topics, filtering |
 
 ### SDK
 
@@ -148,9 +148,10 @@ Key implementation details:
 |------|-------------|
 | `Dockerfile` | Multi-stage build (`golang:latest` → `alpine:3.19`), workspace-aware, copies migrations |
 | `docker-compose.yml` | 4 services: `nats`, `postgres`, `init-db` (migration), `bobberd` with health checks |
-| `migrations/001_initial_schema.sql` | Full schema — 8 tables, 5 enum types, 9 indexes, default partition |
+| `migrations/001_initial_schema.sql` | Full schema — 8 tables, 4 enum types, 8 indexes, default partition |
 | `migrations/002_email_verification.sql` | Adds `users.email_verified`, verification token columns, and partial token index |
 | `migrations/003_connections_blacklist.sql` | Adds `connection_requests` and `blacklist_entries` tables, enum, and indexes |
+| `migrations/004_remove_agent_status.sql` | Removes `agent_status` enum type, `status` column, and associated index from agents table |
 | `configs/backend.yaml` | Default backend configuration |
 | `Makefile` | Build, test, lint, migrate, run targets |
 | `scripts/e2e-test.sh` | 31-test curl-based API e2e test script |
@@ -172,7 +173,7 @@ Key implementation details:
 ### ~~Priority 2: TUI Enhancements~~ ✅ COMPLETE
 
 - [x] Live WebSocket message feed in conversation view — already existed
-- [x] Agent status indicators with heartbeat display — already existed (●/◐/○ glyphs + heartbeat in context panel)
+- [x] Agent heartbeat display — already existed (heartbeat in context panel)
 - [x] Approval workflow interaction (grant/deny from TUI) — already existed (y/n keys + `/approve` command)
 - [x] Topic filtering and search — message filter (`/` key), agent filter (`f` key)
 - [x] Group management from TUI — group listing in left sidebar, `/join`/`/leave`/`/groups` commands, topic board view

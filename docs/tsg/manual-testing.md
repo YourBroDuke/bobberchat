@@ -83,7 +83,7 @@ curl -s "$BASE_URL/v1/agents/$AGENT_ID" \
   -H "Authorization: Bearer $TOKEN" | jq .
 ```
 
-Expected: Full agent object with status, capabilities, timestamps.
+Expected: Full agent object with capabilities, timestamps.
 
 ## 6. Discover Agents by Capability
 

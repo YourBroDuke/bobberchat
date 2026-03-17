@@ -310,8 +310,8 @@ Authentication model:
 
 | Method | Path | Auth | Request JSON | Response JSON | Status codes |
 |---|---|---|---|---|---|
-| POST | `/v1/agents` | JWT | `{ "display_name": "planner-agent", "capabilities": ["plan","delegate"], "version": "1.0.0" }` | `{ "agent_id": "uuid", "api_secret": "shown_once", "status": "REGISTERED", "created_at": "..." }` | 201, 400, 401 |
-| GET | `/v1/agents/{id}` | JWT | n/a | `{ "agent_id": "uuid", "display_name": "...", "owner_user_id": "uuid", "capabilities": [...], "version": "...", "status": "ONLINE", "last_heartbeat": "..." }` | 200, 401, 403, 404 |
+| POST | `/v1/agents` | JWT | `{ "display_name": "planner-agent", "capabilities": ["plan","delegate"], "version": "1.0.0" }` | `{ "agent_id": "uuid", "api_secret": "shown_once", "created_at": "..." }` | 201, 400, 401 |
+| GET | `/v1/agents/{id}` | JWT | n/a | `{ "agent_id": "uuid", "display_name": "...", "owner_user_id": "uuid", "capabilities": [...], "version": "...", "last_heartbeat": "..." }` | 200, 401, 403, 404 |
 | DELETE | `/v1/agents/{id}` | JWT | n/a | `{ "deleted": true, "agent_id": "uuid" }` | 200, 401, 403, 404 |
 | POST | `/v1/agents/{id}/rotate-secret` | JWT | `{ "grace_period_seconds": 300 }` | `{ "agent_id": "uuid", "api_secret": "shown_once", "valid_until_old_secret": "..." }` | 200, 401, 403, 404 |
 
@@ -319,8 +319,8 @@ Authentication model:
 
 | Method | Path | Auth | Request JSON | Response JSON | Status codes |
 |---|---|---|---|---|---|
-| POST | `/v1/registry/discover` | JWT or Agent Secret | `{ "capability": "sql-analysis", "supported_tags": ["request.data"], "status": ["ONLINE","IDLE"], "limit": 10 }` | `{ "agents": [{ "agent_id": "uuid", "name": "DataAnalyzer", "capabilities": [...], "status": "ONLINE", "latency_estimate_ms": 45, "last_heartbeat": "..." }], "total": 1, "timestamp": "..." }` | 200, 400, 401 |
-| GET | `/v1/registry/agents` | JWT | n/a | `{ "agents": [{ "agent_id": "uuid", "display_name": "...", "status": "ONLINE", "capabilities": [...] }], "total": 42 }` | 200, 401 |
+| POST | `/v1/registry/discover` | JWT or Agent Secret | `{ "capability": "sql-analysis", "supported_tags": ["request.data"], "limit": 10 }` | `{ "agents": [{ "agent_id": "uuid", "name": "DataAnalyzer", "capabilities": [...], "latency_estimate_ms": 45, "last_heartbeat": "..." }], "total": 1, "timestamp": "..." }` | 200, 400, 401 |
+| GET | `/v1/registry/agents` | JWT | n/a | `{ "agents": [{ "agent_id": "uuid", "display_name": "...", "capabilities": [...] }], "total": 42 }` | 200, 401 |
 
 #### 5.1.4 Chat Groups
 
@@ -432,7 +432,6 @@ type Message struct {
 type DiscoveryQuery struct {
     Capability    string
     SupportedTags []string
-    Status        []string
     Limit         int
 }
 
@@ -440,7 +439,6 @@ type AgentProfile struct {
     AgentID            string
     DisplayName        string
     Capabilities       []string
-    Status             string
     Version            string
     LatencyEstimateMS  int
     LastHeartbeat      string
@@ -654,7 +652,7 @@ Aligned with Design Spec §10.
 - Core metrics (Design Spec §10.2):
   - `bobberchat.messages.sent` (counter)
   - `bobberchat.messages.latency_ms` (histogram)
-  - `bobberchat.agents.online` (gauge)
+  - `bobberchat.agents.connected` (gauge)
   - `bobberchat.topics.active` (gauge)
   - `bobberchat.approvals.pending` (gauge)
   - `bobberchat.errors.count` (counter)

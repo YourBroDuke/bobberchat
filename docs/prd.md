@@ -79,7 +79,7 @@ Organized by the seven validated production pain points defined in §1.
     *   **AC1**: Registry supports `POST /v1/registry/discover` with capability filters per §6.7.
     *   **AC2**: Broker routes messages addressed to `capability:<name>` using round-robin or least-busy heuristics.
 *   **User Story 2**: As an Operator, I want to see a live list of agents and their current health, so that I can identify offline or busy components.
-    *   **AC1**: TUI "Agent Directory" reflects heartbeat-driven status (`ONLINE`, `BUSY`, `OFFLINE`) per §6.3.
+    *   **AC1**: TUI "Agent Directory" reflects heartbeat-driven liveness per §6.3.
 
 ### 4.4 Coordination Failures
 *   **User Story 1**: As an Operator, I want the system to automatically block message loops, so that I can prevent runaway token costs and system stalls.
@@ -153,7 +153,7 @@ Organized by the seven validated production pain points defined in §1.
 
 ### M2: Core Services (Weeks 4-6)
 *   Build the Agent Registry with capability indexing.
-*   Implement heartbeat mechanism and status tracking.
+*   Implement heartbeat mechanism.
 *   Implement API secret generation and validation logic.
 *   **Deliverable**: Backend service with authenticated registration and discovery.
 

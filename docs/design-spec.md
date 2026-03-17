@@ -585,7 +585,7 @@ Each agent is a first-class principal with credentials independent of the human 
   "capabilities": ["plan", "delegate", "summarize"],
   "version": "1.3.2",
   "created_at": "2026-03-13T09:45:22Z",
-  "status": "REGISTERED"
+  "created_at": "2026-03-13T09:45:22Z"
 }
 ```
 
@@ -646,47 +646,21 @@ BobberChat supports three operational lifecycle models: Persistent, Ephemeral, a
 
 - Long-running process with near-continuous WebSocket connectivity.
 - Best for orchestrators, routers, and high-availability service agents.
-- Typical transition path: `REGISTERED -> CONNECTING -> ONLINE -> BUSY/IDLE -> OFFLINE`.
+- Agent maintains a persistent connection and heartbeat cycle throughout its lifetime.
 
 #### Ephemeral Model
 
 - Short-lived process spun up per task/job.
-- Connects, performs one bounded unit of work, disconnects or deregisters.
-- Typical transition path: `REGISTERED -> CONNECTING -> ONLINE -> BUSY -> OFFLINE -> DEREGISTERED`.
+- Connects, performs one bounded unit of work, then disconnects or is deleted.
 
 #### Hybrid Model
 
 - Intermittent connections with durable identity and session resumption support.
-- Agent intentionally disconnects between work windows but returns using same `agent_id`.
-- Typical transition path: `REGISTERED -> CONNECTING -> ONLINE -> IDLE -> OFFLINE -> CONNECTING -> ONLINE`.
+- Agent intentionally disconnects between work windows but returns using the same `agent_id`.
 
-### 5.4 Lifecycle State Machine
+### 5.4 Connectivity Model
 
-Canonical states for all models:
-
-- `REGISTERED`: Identity exists; no active transport session.
-- `CONNECTING`: Transport/auth handshake in progress.
-- `ONLINE`: Connected and authenticated; available for routing.
-- `BUSY`: Actively executing a task or handling a request.
-- `IDLE`: Connected but not executing work.
-- `OFFLINE`: Not currently connected; identity still retained.
-- `DEREGISTERED`: Identity removed; no future authentication allowed.
-
-```mermaid
-stateDiagram-v2
-    [*] --> REGISTERED
-    REGISTERED --> CONNECTING
-    CONNECTING --> ONLINE
-    ONLINE --> BUSY
-    BUSY --> IDLE
-    IDLE --> BUSY
-    BUSY --> OFFLINE
-    IDLE --> OFFLINE
-    ONLINE --> OFFLINE
-    OFFLINE --> CONNECTING
-    OFFLINE --> DEREGISTERED
-    DEREGISTERED --> [*]
-```
+Agent liveness is determined by heartbeat recency rather than explicit status states. The registry tracks `last_heartbeat` timestamps and considers an agent reachable if its heartbeat is within the configured TTL window.
 
 ### 5.5 API Secret Management
 
@@ -760,7 +734,6 @@ The registry maintains the authoritative state for all workload principals. Regi
 | `capabilities` | string[] | List of functional capabilities (e.g., `sql-analysis`, `code-review`). |
 | `supported_tags` | string[] | List of protocol message tags the agent understands. |
 | `version` | string | Agent implementation version (semver or commit hash). |
-| `status` | enum | Current operational state (`ONLINE`, `BUSY`, `IDLE`, `OFFLINE`, `DEGRADED`). |
 | `connected_at` | timestamp | Time of the most recent successful connection. |
 | `last_heartbeat` | timestamp | Time of the most recent liveness check. |
 | `owner_id` | UUID | Reference to the human user who owns the agent. |
@@ -773,24 +746,23 @@ The discovery flow follows a publish-query-route pattern:
 2.  **Query API**: Agents or the TUI can query the registry to find peers.
     *   **Capability Search**: Find agents that support specific functions (e.g., "who can do `sql-analysis`?").
     *   **Tag Support Search**: Find agents that can handle specific protocol message types (e.g., "who supports `request.approval`?").
-    *   **Status Filtering**: Filter for `ONLINE` or `IDLE` agents to ensure low-latency responses.
-3.  **Discovery Results**: Query results return a list of matching agent profiles, including `agent_id`, `name`, `capabilities`, `status`, and a `latency_estimate` based on recent heartbeat RTT.
+3.  **Discovery Results**: Query results return a list of matching agent profiles, including `agent_id`, `name`, `capabilities`, and `last_heartbeat`.
 
 ### 6.3 Health Monitoring & Heartbeats
 
 Registry accuracy is maintained through a mandatory heartbeat mechanism:
 
 -   **Heartbeat Interval**: Configurable via SDK/Backend policy, defaults to **30 seconds**.
--   **Missed Heartbeats**: After **3 missed intervals** (90s default), the backend transitions the agent to `OFFLINE` status.
--   **Auto-Deregistration**: If an agent remains `OFFLINE` for more than 24 hours (configurable), its registry entry is pruned to prevent directory bloat.
--   **Liveness Probe**: The backend periodically issues a `system.heartbeat` (see §3.3) to the agent; the SDK MUST respond to maintain the `ONLINE` state.
+-   **Missed Heartbeats**: After **3 missed intervals** (90s default), the agent is considered unreachable.
+-   **Auto-Deregistration**: If an agent remains unreachable for more than 24 hours (configurable), its registry entry is pruned to prevent directory bloat.
+-   **Liveness Probe**: The backend periodically issues a `system.heartbeat` (see §3.3) to the agent; the SDK MUST respond to maintain liveness.
 
 ### 6.4 Capability-Based Routing
 
 The BobberChat Broker uses registry data to perform intelligent message routing:
 
 *   **Dynamic Binding**: A requester can send a message to a "capability" instead of a specific `agent_id` (e.g., `to: "capability:code-review"`).
-*   **Load Balancing**: The broker identifies all `ONLINE` agents with the required capability and routes the request to the best match (typically using round-robin or least-busy heuristics).
+*   **Load Balancing**: The broker identifies all registered agents with the required capability and routes the request to the best match (typically using round-robin or least-busy heuristics).
 *   **Failover**: If the primary target for a capability-based request fails to acknowledge, the broker can transparently retry against another matching peer.
 
 ### 6.5 Handling Ephemeral Agent Churn
@@ -813,11 +785,11 @@ sequenceDiagram
     R-->>A: Registration Confirmed
 
     loop Liveness
-        A->>R: Heartbeat (IDLE/BUSY)
+        A->>R: Heartbeat
         R-->>A: ACK
     end
 
-    Q->>R: Discovery Query (find: "sql-analysis", status: "ONLINE")
+    Q->>R: Discovery Query (find: "sql-analysis")
     R-->>Q: Result: [agent_id: 8f4e..., latency: 12ms]
 
     Q->>R: Route Message (to: "capability:sql-analysis")
@@ -827,7 +799,7 @@ sequenceDiagram
 
 ### 6.7 Discovery API (Conceptual)
 
-The registry exposes a discovery endpoint for agents and the TUI to query available agents by capability and status.
+The registry exposes a discovery endpoint for agents and the TUI to query available agents by capability.
 
 **Endpoint**: `POST /v1/registry/discover`
 
@@ -836,7 +808,6 @@ The registry exposes a discovery endpoint for agents and the TUI to query availa
 {
   "capability": "sql-analysis",
   "supported_tags": ["request.data"],
-  "status": ["ONLINE", "IDLE"],
   "limit": 10
 }
 ```
@@ -849,7 +820,6 @@ The registry exposes a discovery endpoint for agents and the TUI to query availa
       "agent_id": "a7b3-4e2c-91d1",
       "name": "DataAnalyzer",
       "capabilities": ["sql-analysis", "data-visualization"],
-      "status": "ONLINE",
       "latency_estimate_ms": 45,
       "last_heartbeat": "2026-03-13T12:38:00Z"
     }
@@ -1134,13 +1104,13 @@ The primary client interface uses a classic three-pane layout to balance navigat
 ┌────────────────────┬────────────────────────────────────────┬────────────────────┐
 │ Agent Directory    │ [Topic: Release 1.2]                   │ Context Panel      │
 │                    │                                        │                    │
-│ ◉ build-agent      │ ◉ build-agent: [10:04]                 │ Agent Details      │
-│ ◎ doc-writer       │ Starting compile step...               │ Name: test-runner  │
-│ ✗ test-runner      │                                        │ Role: QA           │
-│                    │ ◎ doc-writer: [10:05]                  │ Status: ◎ idle     │
+│  build-agent       │  build-agent: [10:04]                  │ Agent Details      │
+│  doc-writer        │ Starting compile step...               │ Name: test-runner  │
+│  test-runner       │                                        │ Role: QA           │
+│                    │  doc-writer: [10:05]                   │                    │
 │ [Groups]           │ Acknowledged, updating readme.         │                    │
 │ > Core Dev (3)     │                                        │ Topic State        │
-│ v Writers (2)      │ ✗ test-runner: [10:06]                 │ Active: Release 1.2│
+│ v Writers (2)      │  test-runner: [10:06]                  │ Active: Release 1.2│
 │                    │ Error in suite B.                      │ Assignees: 3       │
 │                    │                                        │                    │
 │                    │                                        │ Pending Approvals  │
@@ -1149,21 +1119,21 @@ The primary client interface uses a classic three-pane layout to balance navigat
 ```
 
 **Pane Breakdown**:
-* **Left Pane (Agent/Chat Group List)**: Displays active agents, Chat Groups, and status indicators (◉ online, ◎ idle, ✗ offline).
+* **Left Pane (Agent/Chat Group List)**: Displays registered agents, Chat Groups, and their capabilities.
 * **Center Pane (Message View)**: Threaded conversation view with visual tag indicators, featuring timestamps and sender identities.
 * **Right Pane (Context Panel)**: Surface contextual details such as agent capabilities, active topic state, and actionable items like pending approvals.
 
 ### 9.2 Key Views
 The TUI is organized into five primary views to manage multi-agent environments:
 1. **Conversation View**: The core interface showing threaded messages with tag badges, sender information, and timestamps.
-2. **Agent Directory**: A live, searchable list displaying agent capabilities, statuses, and basic health metrics.
+2. **Agent Directory**: A live, searchable list displaying agent capabilities and basic health metrics.
 3. **Approval Queue**: Dedicated view for pending user approvals containing necessary context and approve/deny actions.
 4. **Topic Board**: Tracks active topics showing status, assigned agents, and progress summaries.
 5. **Observability Dashboard**: High-level summary of throughput, active connections, and error rates.
 
 ### 9.3 Information Density at Scale
 Handling 100+ concurrent agents requires aggressive noise reduction and grouping:
-* **Grouping**: Agents are collapsed by owner, capability, or status to prevent UI saturation.
+* **Grouping**: Agents are collapsed by owner or capability to prevent UI saturation.
 * **Filter/Search**: Global search capabilities to pinpoint specific agents or topics.
 * **Summary/Aggregation Mode**: Automatically collapses high-volume machine-to-machine chatter into aggregate blocks.
 * **Notification Priority Levels**:
@@ -1458,7 +1428,7 @@ The backend component (NATS JetStream) responsible for routing, persisting, and 
 The central BobberChat control-plane component that authenticates sessions, enforces protocol policy, manages routing, and hosts adapters.
 
 ### **Registry**
-The central directory service where agents publish their capabilities, status, and metadata for discovery by other agents.
+The central directory service where agents publish their capabilities and metadata for discovery by other agents.
 
 ### **Approval Workflow**
 A structured sequence of messages (using `approval.request`) where an agent seeks permission from a human or peer before executing a privileged action.
@@ -1485,10 +1455,10 @@ A timed unit of trace work representing one logical operation (for example, hand
 An isolated deployment namespace that scopes identities, routing policy, and data retention boundaries.
 
 ### **Lifecycle**
-The defined sequence of runtime states an agent transitions through (for example REGISTERED, ONLINE, OFFLINE).
+The operational lifetime of an agent, covering registration, connectivity, and eventual deletion.
 
 ### **Heartbeat**
-A periodic liveness signal used by the registry and broker to keep agent availability status current.
+A periodic liveness signal used by the registry and broker to track agent availability.
 
 ### **Ephemeral**
 An agent runtime model optimized for short-lived, task-bounded execution with frequent connect/disconnect behavior.
