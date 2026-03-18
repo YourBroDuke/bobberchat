@@ -120,8 +120,7 @@ func TestRotateSecret_GracePeriod(t *testing.T) {
 	agentID, oldSecret := env.createAgent(t, token, "agent-rotate-grace")
 
 	groupResp := env.doRequest(t, http.MethodPost, "/v1/groups", map[string]any{
-		"name":       "group-for-agent-grace",
-		"visibility": "private",
+		"name": "group-for-agent-grace",
 	}, token)
 	assertStatus(t, groupResp, http.StatusCreated)
 	groupID, _ := env.readJSON(t, groupResp)["id"].(string)

@@ -1562,7 +1562,7 @@ func TestSendCommand(t *testing.T) {
 }
 
 func TestGroupCreate(t *testing.T) {
-	t.Run("Success: POST /v1/groups with name and visibility public", func(t *testing.T) {
+	t.Run("Success: POST /v1/groups with name", func(t *testing.T) {
 		var got map[string]any
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost || r.URL.Path != "/v1/groups" {
@@ -1581,7 +1581,7 @@ func TestGroupCreate(t *testing.T) {
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("execute failed: %v", err)
 		}
-		if got["name"] != "dev-group" || got["visibility"] != "public" {
+		if got["name"] != "dev-group" {
 			t.Fatalf("unexpected payload: %v", got)
 		}
 	})

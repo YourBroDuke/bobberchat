@@ -6,13 +6,6 @@ import (
 	"github.com/google/uuid"
 )
 
-type GroupVisibility string
-
-const (
-	GroupVisibilityPublic  GroupVisibility = "public"
-	GroupVisibilityPrivate GroupVisibility = "private"
-)
-
 type ConversationType string
 
 const (
@@ -83,13 +76,12 @@ type ConversationParticipant struct {
 }
 
 type ChatGroup struct {
-	ID             uuid.UUID       `json:"id"`
-	Name           string          `json:"name"`
-	Description    *string         `json:"description,omitempty"`
-	Visibility     GroupVisibility `json:"visibility"`
-	CreatorID      uuid.UUID       `json:"creator_id"`
-	ConversationID *uuid.UUID      `json:"conversation_id,omitempty"`
-	CreatedAt      time.Time       `json:"created_at"`
+	ID             uuid.UUID  `json:"id"`
+	Name           string     `json:"name"`
+	Description    *string    `json:"description,omitempty"`
+	CreatorID      uuid.UUID  `json:"creator_id"`
+	ConversationID *uuid.UUID `json:"conversation_id,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
 }
 
 type Message struct {

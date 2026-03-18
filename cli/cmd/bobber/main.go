@@ -565,8 +565,7 @@ func groupCreateCmd(cfg *cliConfig) *cobra.Command {
 				return errors.New("--name is required")
 			}
 			resp, err := doJSON(http.MethodPost, cfg.backendURL()+"/v1/groups", cfg.token(), map[string]any{
-				"name":       name,
-				"visibility": "public",
+				"name": name,
 			})
 			if err != nil {
 				return err

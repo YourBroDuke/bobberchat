@@ -16,14 +16,12 @@ func TestCreateGroup_Success(t *testing.T) {
 	resp := env.doRequest(t, http.MethodPost, "/v1/groups", map[string]any{
 		"name":        "group-create-success",
 		"description": "desc",
-		"visibility":  "private",
 	}, token)
 	assertStatus(t, resp, http.StatusCreated)
 	body := env.readJSON(t, resp)
 
 	assertJSONField(t, body, "id")
 	assertJSONFieldEquals(t, body, "name", "group-create-success")
-	assertJSONFieldEquals(t, body, "visibility", "private")
 }
 
 func TestCreateGroup_MissingName(t *testing.T) {
@@ -32,7 +30,6 @@ func TestCreateGroup_MissingName(t *testing.T) {
 
 	resp := env.doRequest(t, http.MethodPost, "/v1/groups", map[string]any{
 		"description": "desc",
-		"visibility":  "private",
 	}, token)
 	assertStatus(t, resp, http.StatusBadRequest)
 }
@@ -51,8 +48,7 @@ func TestListGroups_Success(t *testing.T) {
 
 	for i := 0; i < 2; i++ {
 		resp := env.doRequest(t, http.MethodPost, "/v1/groups", map[string]any{
-			"name":       "group-list-success-" + uuid.NewString(),
-			"visibility": "private",
+			"name": "group-list-success-" + uuid.NewString(),
 		}, token)
 		assertStatus(t, resp, http.StatusCreated)
 		_ = env.readJSON(t, resp)
@@ -72,8 +68,7 @@ func TestJoinGroup_Success(t *testing.T) {
 	token, _ := registerAndLogin(t, env, "group-join-success")
 
 	createResp := env.doRequest(t, http.MethodPost, "/v1/groups", map[string]any{
-		"name":       "group-join-success",
-		"visibility": "private",
+		"name": "group-join-success",
 	}, token)
 	assertStatus(t, createResp, http.StatusCreated)
 	groupID, _ := env.readJSON(t, createResp)["id"].(string)
@@ -89,8 +84,7 @@ func TestLeaveGroup_Success(t *testing.T) {
 	token, _ := registerAndLogin(t, env, "group-leave-success")
 
 	createResp := env.doRequest(t, http.MethodPost, "/v1/groups", map[string]any{
-		"name":       "group-leave-success",
-		"visibility": "private",
+		"name": "group-leave-success",
 	}, token)
 	assertStatus(t, createResp, http.StatusCreated)
 	groupID, _ := env.readJSON(t, createResp)["id"].(string)

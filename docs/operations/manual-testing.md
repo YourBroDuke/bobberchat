@@ -104,8 +104,7 @@ GROUP_RESPONSE=$(curl -s -X POST "$BASE_URL/v1/groups" \
   -H "Authorization: Bearer $TOKEN" \
   -d "{
     \"name\": \"test-group\",
-    \"description\": \"A test group for manual testing\",
-    \"visibility\": \"public\"
+    \"description\": \"A test group for manual testing\"
   }")
 
 echo "$GROUP_RESPONSE" | jq .

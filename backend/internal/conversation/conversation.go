@@ -16,7 +16,7 @@ func NewService(db *persistence.DB) *Service {
 	return &Service{db: db}
 }
 
-func (s *Service) CreateGroup(ctx context.Context, name, description, visibility, creatorID string) (*persistence.ChatGroup, error) {
+func (s *Service) CreateGroup(ctx context.Context, name, description, creatorID string) (*persistence.ChatGroup, error) {
 	if s == nil || s.db == nil || name == "" || creatorID == "" {
 		return nil, persistence.ErrInvalidInput
 	}
@@ -25,10 +25,6 @@ func (s *Service) CreateGroup(ctx context.Context, name, description, visibility
 		return nil, err
 	}
 
-	v := persistence.GroupVisibility(visibility)
-	if v == "" {
-		v = persistence.GroupVisibilityPrivate
-	}
 	var desc *string
 	if description != "" {
 		desc = &description
@@ -46,7 +42,6 @@ func (s *Service) CreateGroup(ctx context.Context, name, description, visibility
 	group, err := repos.Groups.Create(ctx, persistence.ChatGroup{
 		Name:           name,
 		Description:    desc,
-		Visibility:     v,
 		CreatorID:      cid,
 		ConversationID: &conv.ID,
 	})

@@ -460,7 +460,6 @@ Chat Groups (legacy alias: Channels) are named, multi-participant rooms designed
     *   `name`: Unique alphanumeric identifier (e.g., `#dev-ops`, `#research-swarm`).
     *   `description`: Optional metadata explaining the group's purpose.
     *   `members`: A dynamic list of participant IDs.
-    *   `visibility`: Either `public` (discoverable by all) or `private` (invite-only).
     *   `creator`: ID of the participant who initialized the group.
     *   `created_at`: Unix timestamp of creation.
 *   **Membership Rules**: Participants join via explicit `join` commands or invitations. Membership is tracked by the Backend Registry.

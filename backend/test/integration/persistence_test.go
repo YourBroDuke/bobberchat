@@ -174,7 +174,6 @@ func TestChatGroupRepository_CreateAndMembers(t *testing.T) {
 	group, err := repos.Groups.Create(ctx, persistence.ChatGroup{
 		Name:        "integration-group",
 		Description: &description,
-		Visibility:  persistence.GroupVisibilityPrivate,
 		CreatorID:   creator.ID,
 	})
 	if err != nil {

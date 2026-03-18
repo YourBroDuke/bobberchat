@@ -375,8 +375,6 @@ paths:
                       description:
                         type: string
                         nullable: true
-                      visibility:
-                        type: string
                       creator_id:
                         type: string
                         format: uuid
@@ -536,15 +534,11 @@ paths:
               type: object
               required:
                 - name
-                - visibility
               properties:
                 name:
                   type: string
                 description:
                   type: string
-                visibility:
-                  type: string
-                  enum: [public, private]
       responses:
         '201':
           description: Group created
@@ -1141,7 +1135,6 @@ components:
       required:
         - id
         - name
-        - visibility
         - creator_id
         - created_at
       properties:
@@ -1152,9 +1145,6 @@ components:
           type: string
         description:
           type: string
-        visibility:
-          type: string
-          enum: [public, private]
         creator_id:
           type: string
           format: uuid

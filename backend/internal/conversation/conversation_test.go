@@ -19,21 +19,21 @@ func TestCreateGroup_InvalidInput(t *testing.T) {
 			name: "nil service",
 			err: func() error {
 				var s *Service
-				_, err := s.CreateGroup(context.Background(), "name", "desc", "private", "creator")
+				_, err := s.CreateGroup(context.Background(), "name", "desc", "creator")
 				return err
 			}(),
 		},
 		{
 			name: "empty name",
 			err: func() error {
-				_, err := (&Service{}).CreateGroup(context.Background(), "", "desc", "private", "creator")
+				_, err := (&Service{}).CreateGroup(context.Background(), "", "desc", "creator")
 				return err
 			}(),
 		},
 		{
 			name: "empty creatorID",
 			err: func() error {
-				_, err := (&Service{}).CreateGroup(context.Background(), "name", "desc", "private", "")
+				_, err := (&Service{}).CreateGroup(context.Background(), "name", "desc", "")
 				return err
 			}(),
 		},
