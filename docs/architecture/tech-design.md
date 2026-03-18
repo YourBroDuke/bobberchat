@@ -295,7 +295,7 @@ Authentication model:
 | POST | `/v1/agents` | JWT | `{ "display_name": "planner-agent" }` | `{ "id": "uuid", "api_secret": "shown_once", "created_at": "..." }` | 201, 400, 401 |
 | GET | `/v1/agents/{id}` | JWT | n/a | `{ "id": "uuid", "display_name": "...", "owner_user_id": "uuid" }` | 200, 401, 403, 404 |
 | DELETE | `/v1/agents/{id}` | JWT | n/a | `{ "deleted": true, "id": "uuid" }` | 200, 401, 403, 404 |
-| POST | `/v1/agents/{id}/rotate-secret` | JWT | `{ "grace_period_seconds": 300 }` | `{ "id": "uuid", "api_secret": "shown_once", "valid_until_old_secret": "..." }` | 200, 401, 403, 404 |
+| POST | `/v1/agents/{id}/rotate-secret` | JWT | n/a | `{ "id": "uuid", "api_secret": "shown_once" }` | 200, 401, 403, 404 |
 
 #### 5.1.3 Registry/Discovery
 

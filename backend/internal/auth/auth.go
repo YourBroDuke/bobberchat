@@ -11,7 +11,6 @@ import (
 	"log"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/bobberchat/bobberchat/backend/internal/email"
@@ -39,20 +38,6 @@ type JWTClaims struct {
 type jwtTokenClaims struct {
 	UserID string `json:"user_id"`
 	jwt.RegisteredClaims
-}
-
-type oldSecretEntry struct {
-	Hash      string
-	ValidTill time.Time
-}
-
-var rotatedSecrets struct {
-	mu      sync.RWMutex
-	entries map[string][]oldSecretEntry
-}
-
-func init() {
-	rotatedSecrets.entries = make(map[string][]oldSecretEntry)
 }
 
 func NewService(db *persistence.DB, jwtSecret string, emailSender email.Sender, verificationTTL time.Duration) *Service {
@@ -267,14 +252,10 @@ func (s *Service) ValidateAPISecret(ctx context.Context, agentID, secret string)
 		return agent, nil
 	}
 
-	if s.validateAgainstGraceSecrets(agentID, secret) {
-		return agent, nil
-	}
-
 	return nil, errors.New("invalid api secret")
 }
 
-func (s *Service) RotateSecret(ctx context.Context, agentID string, gracePeriodSec int) (newSecret string, err error) {
+func (s *Service) RotateSecret(ctx context.Context, agentID string) (newSecret string, err error) {
 	if s == nil || s.db == nil || agentID == "" {
 		return "", persistence.ErrInvalidInput
 	}
@@ -296,10 +277,6 @@ func (s *Service) RotateSecret(ctx context.Context, agentID string, gracePeriodS
 	_, err = s.db.Pool().Exec(ctx, `UPDATE agents SET api_secret_hash = $2 WHERE agent_id = $1`, a.ID, newHash)
 	if err != nil {
 		return "", err
-	}
-
-	if gracePeriodSec > 0 {
-		s.storeOldSecret(agentID, a.APISecretHash, time.Now().UTC().Add(time.Duration(gracePeriodSec)*time.Second))
 	}
 
 	return secret, nil
@@ -359,47 +336,6 @@ func (s *Service) getAgentByID(ctx context.Context, agentID string) (*persistenc
 		return nil, err
 	}
 	return &a, nil
-}
-
-func (s *Service) storeOldSecret(agentID, hash string, validTill time.Time) {
-	rotatedSecrets.mu.Lock()
-	defer rotatedSecrets.mu.Unlock()
-
-	entries := rotatedSecrets.entries[agentID]
-	now := time.Now().UTC()
-	filtered := make([]oldSecretEntry, 0, len(entries)+1)
-	for _, e := range entries {
-		if e.ValidTill.After(now) {
-			filtered = append(filtered, e)
-		}
-	}
-	filtered = append(filtered, oldSecretEntry{Hash: hash, ValidTill: validTill})
-	rotatedSecrets.entries[agentID] = filtered
-}
-
-func (s *Service) validateAgainstGraceSecrets(agentID, secret string) bool {
-	rotatedSecrets.mu.Lock()
-	defer rotatedSecrets.mu.Unlock()
-
-	now := time.Now().UTC()
-	entries := rotatedSecrets.entries[agentID]
-	kept := make([]oldSecretEntry, 0, len(entries))
-	matched := false
-	for _, e := range entries {
-		if !e.ValidTill.After(now) {
-			continue
-		}
-		if verifySecretArgon2id(e.Hash, secret) {
-			matched = true
-		}
-		kept = append(kept, e)
-	}
-	if len(kept) == 0 {
-		delete(rotatedSecrets.entries, agentID)
-	} else {
-		rotatedSecrets.entries[agentID] = kept
-	}
-	return matched
 }
 
 func generateSecret(n int) (string, error) {

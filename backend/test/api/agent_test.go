@@ -102,9 +102,7 @@ func TestRotateSecret_Success(t *testing.T) {
 	token, _ := registerAndLogin(t, env, "agent-rotate-success")
 	agentID, oldSecret := env.createAgent(t, token, "agent-rotate-success")
 
-	resp := env.doRequest(t, http.MethodPost, "/v1/agents/"+agentID+"/rotate-secret", map[string]any{
-		"grace_period_seconds": 0,
-	}, token)
+	resp := env.doRequest(t, http.MethodPost, "/v1/agents/"+agentID+"/rotate-secret", nil, token)
 	assertStatus(t, resp, http.StatusOK)
 	body := env.readJSON(t, resp)
 	assertJSONFieldEquals(t, body, "id", agentID)
@@ -112,32 +110,4 @@ func TestRotateSecret_Success(t *testing.T) {
 	if newSecret == "" || newSecret == oldSecret {
 		t.Fatalf("expected new api secret different from old")
 	}
-}
-
-func TestRotateSecret_GracePeriod(t *testing.T) {
-	env := setupTestEnv(t)
-	token, _ := registerAndLogin(t, env, "agent-rotate-grace")
-	agentID, oldSecret := env.createAgent(t, token, "agent-rotate-grace")
-
-	groupResp := env.doRequest(t, http.MethodPost, "/v1/groups", map[string]any{
-		"name": "group-for-agent-grace",
-	}, token)
-	assertStatus(t, groupResp, http.StatusCreated)
-	groupID, _ := env.readJSON(t, groupResp)["id"].(string)
-	if groupID == "" {
-		t.Fatalf("expected group id")
-	}
-
-	rotateResp := env.doRequest(t, http.MethodPost, "/v1/agents/"+agentID+"/rotate-secret", map[string]any{
-		"grace_period_seconds": 60,
-	}, token)
-	assertStatus(t, rotateResp, http.StatusOK)
-
-	joinResp := env.doRequestWithHeaders(t, http.MethodPost, "/v1/groups/"+groupID+"/join", map[string]any{}, "", map[string]string{
-		"X-Agent-ID":   agentID,
-		"X-API-Secret": oldSecret,
-	})
-	assertStatus(t, joinResp, http.StatusOK)
-	body := env.readJSON(t, joinResp)
-	assertJSONFieldEquals(t, body, "joined", true)
 }

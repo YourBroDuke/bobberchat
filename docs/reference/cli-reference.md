@@ -183,13 +183,12 @@ Persists `agent_id` in local CLI config and marks it active.
 Rotate an agent's API secret.
 
 ```bash
-bobber agent rotate-secret <agent_id> [--grace-period <seconds>]
+bobber agent rotate-secret <agent_id>
 ```
 
 | Argument/Flag | Required | Default | Description |
 |---------------|----------|---------|-------------|
 | `<agent_id>` | Yes | — | UUID of the agent |
-| `--grace-period` | No | `0` | Seconds the old secret remains valid |
 
 **Response** (`POST /v1/agents/{id}/rotate-secret` → `200`):
 ```json

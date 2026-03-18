@@ -73,7 +73,7 @@ bobber agent create --name "summarizer"
 bobber agent use <agent-id>
 
 # Rotate an agent's API secret
-bobber agent rotate-secret <agent-id> --grace-period 3600
+bobber agent rotate-secret <agent-id>
 
 # Delete an agent
 bobber agent delete <agent-id>

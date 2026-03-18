@@ -396,16 +396,11 @@ paths:
             type: string
             format: uuid
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema:
               type: object
-              required:
-                - grace_period_seconds
-              properties:
-                grace_period_seconds:
-                  type: integer
       responses:
         '200':
           description: Secret rotated

@@ -561,15 +561,8 @@ func (a *app) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) handleRotateSecret(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	var req struct {
-		GracePeriodSeconds int `json:"grace_period_seconds"`
-	}
-	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
 
-	secret, err := a.authSvc.RotateSecret(r.Context(), id, req.GracePeriodSeconds)
+	secret, err := a.authSvc.RotateSecret(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return

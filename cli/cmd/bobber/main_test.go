@@ -801,34 +801,10 @@ func TestAgentSubcommands(t *testing.T) {
 	})
 
 	t.Run("agent rotate-secret: success", func(t *testing.T) {
-		var got map[string]any
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost || r.URL.Path != "/v1/agents/a1/rotate-secret" {
 				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 			}
-			b, _ := io.ReadAll(r.Body)
-			got = mustJSONMap(t, string(b))
-			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
-		}))
-		defer srv.Close()
-
-		cmd := agentCmd(testConfig(srv.URL, "tok"))
-		cmd.SetOut(io.Discard)
-		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"rotate-secret", "a1", "--grace-period", "30"})
-		if err := cmd.Execute(); err != nil {
-			t.Fatalf("execute failed: %v", err)
-		}
-		if got["grace_period_seconds"].(float64) != 30 {
-			t.Fatalf("unexpected payload: %v", got)
-		}
-	})
-
-	t.Run("agent rotate-secret: grace period default is 0", func(t *testing.T) {
-		var got map[string]any
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			b, _ := io.ReadAll(r.Body)
-			got = mustJSONMap(t, string(b))
 			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
 		}))
 		defer srv.Close()
@@ -839,9 +815,6 @@ func TestAgentSubcommands(t *testing.T) {
 		cmd.SetArgs([]string{"rotate-secret", "a1"})
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("execute failed: %v", err)
-		}
-		if got["grace_period_seconds"].(float64) != 0 {
-			t.Fatalf("unexpected payload: %v", got)
 		}
 	})
 

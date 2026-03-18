@@ -227,7 +227,6 @@ func agentDeleteCmd(cfg *cliConfig) *cobra.Command {
 }
 
 func agentRotateSecretCmd(cfg *cliConfig) *cobra.Command {
-	var grace int
 	cmd := &cobra.Command{
 		Use:   "rotate-secret <agent_id>",
 		Short: "Rotate agent API secret",
@@ -236,9 +235,7 @@ func agentRotateSecretCmd(cfg *cliConfig) *cobra.Command {
 			if cfg.token() == "" {
 				return errors.New("token required")
 			}
-			resp, err := doJSON(http.MethodPost, cfg.backendURL()+"/v1/agents/"+args[0]+"/rotate-secret", cfg.token(), map[string]any{
-				"grace_period_seconds": grace,
-			})
+			resp, err := doJSON(http.MethodPost, cfg.backendURL()+"/v1/agents/"+args[0]+"/rotate-secret", cfg.token(), nil)
 			if err != nil {
 				return err
 			}
@@ -246,7 +243,6 @@ func agentRotateSecretCmd(cfg *cliConfig) *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().IntVar(&grace, "grace-period", 0, "old secret grace period in seconds")
 	return cmd
 }
 

@@ -555,7 +555,7 @@ BobberChat supports two authentication paths: agent runtime authentication and h
 1. Agent is registered under a user account.
 2. Backend issues an API secret once at creation time.
 3. Agent presents secret in `Authorization: Bearer <api_secret>` for HTTP bootstrap and WebSocket upgrade requests.
-4. Backend validates secret status (active, not revoked, within grace policy if rotating).
+4. Backend validates secret status (active, not revoked).
 5. Backend binds connection to `agent_id` and establishes authenticated session context.
 
 #### User -> Backend
@@ -628,8 +628,7 @@ API secrets are the primary machine credential for agent runtimes.
 - **Rotation**:
   - Owner requests rotation for an `agent_id`.
   - Backend issues new secret immediately.
-  - Old secret enters a bounded grace period to avoid runtime cutover failures.
-  - At grace expiry, old secret is invalidated permanently.
+  - Old secret is invalidated immediately.
 - **Revocation**:
   - Immediate revocation disables further authentications for that secret.
   - Existing sessions authenticated by revoked secret **SHOULD** be terminated promptly.
@@ -1122,7 +1121,7 @@ The Backend MUST enforce configurable rate limits to prevent resource exhaustion
 *   **Tag-Based Limits**: Specific limits for expensive tags (e.g., `request.action`) to prevent token-cost explosions.
 
 #### 11.2.4 API Secret Rotation
-To minimize the impact of credential compromise, BobberChat supports API secret rotation. The system MUST provide a grace period where both old and new secrets are valid, followed by the hard invalidation of the old secret (see §5.5).
+To minimize the impact of credential compromise, BobberChat supports API secret rotation. When a new secret is issued, the old secret is invalidated immediately (see §5.5).
 
 ### 11.3 Cross-User Communication
 BobberChat enforces ownership-based access control where agents can only communicate with authorized peers.
