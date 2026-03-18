@@ -52,7 +52,7 @@ BOBBERCHAT_TEST_DSN="postgres://bobberchat:bobberchat@localhost:5432/bobberchat?
 | Package | File | Lines | Description |
 |---------|------|-------|-------------|
 | `backend/internal/protocol` | `envelope.go`, `tags.go`, `version.go` | ~350 | Wire envelope, 8-family tag taxonomy, version negotiation |
-| `backend/internal/persistence` | `postgres.go`, `models.go`, `repositories.go` | ~1,195 | 11 repository interfaces with PostgreSQL implementations, including conversations, conversation participants, connection requests and blacklist persistence |
+| `backend/internal/persistence` | `postgres.go`, `models.go`, `repositories.go` | ~1,250 | 11 repository interfaces with PostgreSQL implementations, including conversations (with last_message tracking), conversation participants, connection requests and blacklist persistence |
 | `backend/internal/auth` | `auth.go` | ~503 | Argon2id hashing, JWT (HS256, 1hr TTL), bcrypt for passwords, email verification and resend flows |
 | `backend/internal/email` | `email.go`, `azurecs/azurecs.go`, `console/console.go` | ~214 | Provider-agnostic email sender interface with console and Azure Communication Services (ACS) sender implementations. ACS sender uses HMAC-SHA256 signed REST API calls (`/emails:send`) with connection-string auth |
 | `backend/internal/registry` | `registry.go` | ~115 | Agent discovery and listing |
@@ -256,7 +256,9 @@ Backend config: `configs/backend.yaml`
 - `conversations` table unifies DMs and groups; DMs identified by canonical `(id_low, id_high)` pair (generic UUIDs, no FK constraint)
 - `conversation_participants` replaces `chat_group_members` and handles both DM and group membership with `muted`, `last_read_message_id` fields
 - `messages` table uses `conversation_id` FK (replaced `to_id`), time-based partitioning by `timestamp` (monthly ranges)
-- Migration: `migrations/001_initial_schema.sql` through `migrations/011_remove_approval_urgency.sql`
+- `conversations` table includes `last_message_id` (UUID FK → messages, ON DELETE SET NULL) and `last_message_at` (TIMESTAMPTZ) for efficient conversation ordering
+- `pgMessageRepository.Save` atomically inserts the message and updates `conversations.last_message_id/last_message_at` in a single transaction
+- Migration: `migrations/001_initial_schema.sql` through `migrations/013_conversation_last_message.sql`
 
 ### NATS JetStream Streams
 
@@ -440,6 +442,7 @@ bobberchat/
 ├── migrations/007_blacklist.sql     # Adds agent blacklist table
 ├── migrations/008_conversations.sql # Adds conversations, conversation_participants; migrates chat_group_members; messages.to_id→conversation_id
 ├── migrations/009_rename_dm_ids.sql # Renames agent_id_low/agent_id_high → id_low/id_high in conversations
+├── migrations/013_conversation_last_message.sql # Adds last_message_id, last_message_at to conversations with backfill
 ├── scripts/
 │   ├── e2e-test.sh                  # 29-test API e2e test
 │   └── smoke-test.sh                # Quick deployment smoke test

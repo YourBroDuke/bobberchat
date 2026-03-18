@@ -406,7 +406,7 @@ func (r *pgConversationRepository) Create(ctx context.Context, conv Conversation
 	row := r.db.Pool().QueryRow(ctx, `
 		INSERT INTO conversations (id, type, id_low, id_high, created_at)
 		VALUES ($1,$2,$3,$4,$5)
-		RETURNING id, type, id_low, id_high, created_at
+		RETURNING id, type, id_low, id_high, created_at, last_message_id, last_message_at
 	`, conv.ID, string(conv.Type), conv.IDLow, conv.IDHigh, conv.CreatedAt)
 
 	return scanConversation(row)
@@ -414,7 +414,7 @@ func (r *pgConversationRepository) Create(ctx context.Context, conv Conversation
 
 func (r *pgConversationRepository) GetByID(ctx context.Context, id uuid.UUID) (*Conversation, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, type, id_low, id_high, created_at
+		SELECT id, type, id_low, id_high, created_at, last_message_id, last_message_at
 		FROM conversations
 		WHERE id = $1
 	`, id)
@@ -423,7 +423,7 @@ func (r *pgConversationRepository) GetByID(ctx context.Context, id uuid.UUID) (*
 
 func (r *pgConversationRepository) GetDirectByPair(ctx context.Context, idLow, idHigh uuid.UUID) (*Conversation, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, type, id_low, id_high, created_at
+		SELECT id, type, id_low, id_high, created_at, last_message_id, last_message_at
 		FROM conversations
 		WHERE id_low = $1 AND id_high = $2
 	`, idLow, idHigh)
@@ -432,7 +432,7 @@ func (r *pgConversationRepository) GetDirectByPair(ctx context.Context, idLow, i
 
 func (r *pgConversationRepository) ListByParticipant(ctx context.Context, participantID uuid.UUID, kind ParticipantType) ([]Conversation, error) {
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT c.id, c.type, c.id_low, c.id_high, c.created_at
+		SELECT c.id, c.type, c.id_low, c.id_high, c.created_at, c.last_message_id, c.last_message_at
 		FROM conversations c
 		JOIN conversation_participants cp ON cp.conversation_id = c.id
 		WHERE cp.participant_id = $1 AND cp.participant_kind = $2
@@ -460,7 +460,7 @@ func (r *pgConversationRepository) ListByParticipant(ctx context.Context, partic
 
 func (r *pgConversationRepository) ListByParticipantAndType(ctx context.Context, participantID uuid.UUID, kind ParticipantType, convType ConversationType) ([]Conversation, error) {
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT c.id, c.type, c.id_low, c.id_high, c.created_at
+		SELECT c.id, c.type, c.id_low, c.id_high, c.created_at, c.last_message_id, c.last_message_at
 		FROM conversations c
 		JOIN conversation_participants cp ON cp.conversation_id = c.id
 		WHERE cp.participant_id = $1 AND cp.participant_kind = $2 AND c.type = $3
@@ -677,7 +677,13 @@ func (r *pgMessageRepository) Save(ctx context.Context, message Message) (*Messa
 		return nil, fmt.Errorf("marshal message metadata: %w", err)
 	}
 
-	row := r.db.Pool().QueryRow(ctx, `
+	tx, err := r.db.Pool().Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	row := tx.QueryRow(ctx, `
 		INSERT INTO messages (id, from_id, conversation_id, tag, payload, metadata, "timestamp", trace_id)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
 		RETURNING id, from_id, conversation_id, tag, payload, metadata, "timestamp", trace_id
@@ -687,6 +693,20 @@ func (r *pgMessageRepository) Save(ctx context.Context, message Message) (*Messa
 	if err != nil {
 		return nil, err
 	}
+
+	_, err = tx.Exec(ctx, `
+		UPDATE conversations
+		SET last_message_id = $1, last_message_at = $2
+		WHERE id = $3
+	`, out.ID, out.Timestamp, out.ConversationID)
+	if err != nil {
+		return nil, fmt.Errorf("update conversation last message: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("commit tx: %w", err)
+	}
+
 	return out, nil
 }
 
@@ -1112,6 +1132,8 @@ func scanConversation(scanner rowScanner) (*Conversation, error) {
 		&out.IDLow,
 		&out.IDHigh,
 		&out.CreatedAt,
+		&out.LastMessageID,
+		&out.LastMessageAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
