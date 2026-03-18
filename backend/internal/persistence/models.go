@@ -54,7 +54,6 @@ type Agent struct {
 	AgentID       uuid.UUID `json:"agent_id"`
 	DisplayName   string    `json:"display_name"`
 	OwnerUserID   uuid.UUID `json:"owner_user_id"`
-	Capabilities  []string  `json:"capabilities"`
 	APISecretHash string    `json:"-"`
 	CreatedAt     time.Time `json:"created_at"`
 }

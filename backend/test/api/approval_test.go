@@ -27,9 +27,9 @@ func seedPendingApproval(t *testing.T, env *testEnv, approverUserID string) stri
 	}
 
 	_, err = env.db.Pool().Exec(context.Background(), `
-		INSERT INTO agents (agent_id, display_name, owner_user_id, capabilities, version, status, api_secret_hash, created_at)
-		VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7,NOW())
-	`, agentID, "approval-agent", ownerID, `[]`, "1.0.0", "REGISTERED", "hash")
+		INSERT INTO agents (agent_id, display_name, owner_user_id, api_secret_hash, created_at)
+		VALUES ($1,$2,$3,$4,NOW())
+	`, agentID, "approval-agent", ownerID, "hash")
 	if err != nil {
 		t.Fatalf("insert agent: %v", err)
 	}

@@ -173,7 +173,6 @@ func agentCreateCmd(cfg *cliConfig) *cobra.Command {
 			}
 			resp, err := doJSON(http.MethodPost, cfg.backendURL()+"/v1/agents", cfg.token(), map[string]any{
 				"display_name": displayName,
-				"capabilities": []string{},
 			})
 			if err != nil {
 				return err

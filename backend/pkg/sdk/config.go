@@ -32,11 +32,10 @@ func LoadConfig(path string) (Config, error) {
 	}
 
 	cfg := Config{
-		BackendURL:   strings.TrimSpace(v.GetString("backend_url")),
-		AgentID:      strings.TrimSpace(v.GetString("agent_id")),
-		APISecret:    strings.TrimSpace(v.GetString("api_secret")),
-		DisplayName:  strings.TrimSpace(v.GetString("display_name")),
-		Capabilities: v.GetStringSlice("capabilities"),
+		BackendURL:  strings.TrimSpace(v.GetString("backend_url")),
+		AgentID:     strings.TrimSpace(v.GetString("agent_id")),
+		APISecret:   strings.TrimSpace(v.GetString("api_secret")),
+		DisplayName: strings.TrimSpace(v.GetString("display_name")),
 
 		HeartbeatInterval: defaultHeartbeatInterval,
 		RequestTimeout:    defaultRequestTimeout,
@@ -65,7 +64,6 @@ func LoadConfigFromEnv() Config {
 		AgentID:           strings.TrimSpace(os.Getenv("BOBBERCHAT_AGENT_ID")),
 		APISecret:         strings.TrimSpace(os.Getenv("BOBBERCHAT_API_SECRET")),
 		DisplayName:       strings.TrimSpace(os.Getenv("BOBBERCHAT_DISPLAY_NAME")),
-		Capabilities:      csvListEnv("BOBBERCHAT_CAPABILITIES"),
 		HeartbeatInterval: defaultHeartbeatInterval,
 		RequestTimeout:    defaultRequestTimeout,
 	}
@@ -117,26 +115,4 @@ func envPositiveInt(key string) (int, bool) {
 	}
 
 	return v, true
-}
-
-func csvListEnv(key string) []string {
-	raw := strings.TrimSpace(os.Getenv(key))
-	if raw == "" {
-		return nil
-	}
-
-	parts := strings.Split(raw, ",")
-	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		item := strings.TrimSpace(part)
-		if item != "" {
-			out = append(out, item)
-		}
-	}
-
-	if len(out) == 0 {
-		return nil
-	}
-
-	return out
 }

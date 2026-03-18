@@ -12,7 +12,6 @@ type Service struct {
 }
 
 type DiscoveryQuery struct {
-	Capability    string
 	SupportedTags []string
 	Limit         int
 }
@@ -56,20 +55,16 @@ func (s *Service) Discover(ctx context.Context, query DiscoveryQuery) ([]persist
 		query.Limit = 10
 	}
 
-	agents, err := repos.Agents.DiscoverByCapability(ctx, query.Capability, query.Limit)
+	agents, err := repos.Agents.ListAll(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(query.SupportedTags) == 0 {
-		return agents, nil
+	if len(agents) > query.Limit {
+		agents = agents[:query.Limit]
 	}
 
-	filtered := make([]persistence.Agent, 0, len(agents))
-	for _, a := range agents {
-		filtered = append(filtered, a)
-	}
-	return filtered, nil
+	return agents, nil
 }
 
 func (s *Service) GetAgent(ctx context.Context, agentID string) (*persistence.Agent, error) {
@@ -80,17 +75,8 @@ func (s *Service) GetAgent(ctx context.Context, agentID string) (*persistence.Ag
 	if err != nil {
 		return nil, err
 	}
-	row := s.db.Pool().QueryRow(ctx, `
-		SELECT agent_id, display_name, owner_user_id, capabilities,
-			api_secret_hash, created_at
-		FROM agents WHERE agent_id = $1
-	`, id)
-
-	a := persistence.Agent{}
-	if err := row.Scan(&a.AgentID, &a.DisplayName, &a.OwnerUserID, &a.Capabilities, &a.APISecretHash, &a.CreatedAt); err != nil {
-		return nil, err
-	}
-	return &a, nil
+	repos := persistence.NewPostgresRepositories(s.db)
+	return repos.Agents.GetByID(ctx, id)
 }
 
 func (s *Service) ListAgents(ctx context.Context) ([]persistence.Agent, error) {

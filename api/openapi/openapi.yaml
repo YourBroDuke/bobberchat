@@ -235,14 +235,9 @@ paths:
               type: object
               required:
                 - display_name
-                - capabilities
               properties:
                 display_name:
                   type: string
-                capabilities:
-                  type: array
-                  items:
-                    type: string
       responses:
         '201':
           description: Agent registered
@@ -345,10 +340,6 @@ paths:
                       owner_user_id:
                         type: string
                         format: uuid
-                      capabilities:
-                        type: array
-                        items:
-                          type: string
                       created_at:
                         type: string
                         format: date-time
@@ -442,7 +433,7 @@ paths:
     post:
       tags:
         - Registry
-      summary: Discover available agents by capability
+      summary: Discover available agents
       operationId: discoverAgents
       security:
         - BearerAuth: []
@@ -454,8 +445,6 @@ paths:
             schema:
               type: object
               properties:
-                capability:
-                  type: string
                 supported_tags:
                   type: array
                   items:
@@ -1098,7 +1087,6 @@ components:
       required:
         - agent_id
         - display_name
-        - capabilities
         - created_at
       properties:
         agent_id:
@@ -1109,10 +1097,6 @@ components:
         owner_user_id:
           type: string
           format: uuid
-        capabilities:
-          type: array
-          items:
-            type: string
         created_at:
           type: string
           format: date-time

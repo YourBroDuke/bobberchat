@@ -55,7 +55,7 @@ BOBBERCHAT_TEST_DSN="postgres://bobberchat:bobberchat@localhost:5432/bobberchat?
 | `backend/internal/persistence` | `postgres.go`, `models.go`, `repositories.go` | ~1,195 | 9 repository interfaces with PostgreSQL implementations, including connection requests and blacklist persistence |
 | `backend/internal/auth` | `auth.go` | ~503 | Argon2id hashing, JWT (HS256, 1hr TTL), bcrypt for passwords, email verification and resend flows |
 | `backend/internal/email` | `email.go`, `azurecs/azurecs.go`, `console/console.go` | ~214 | Provider-agnostic email sender interface with console and Azure Communication Services (ACS) sender implementations. ACS sender uses HMAC-SHA256 signed REST API calls (`/emails:send`) with connection-string auth |
-| `backend/internal/registry` | `registry.go` | ~115 | Agent discovery, capability-based lookup |
+| `backend/internal/registry` | `registry.go` | ~115 | Agent discovery and listing |
 | `backend/internal/broker` | `broker.go` | ~232 | NATS JetStream message routing, 3 streams, subject mapping |
 | `backend/internal/approval` | `approval.go` | ~123 | Human-in-the-loop approval workflows with escalation |
 | `backend/internal/conversation` | `conversation.go` | ~202 | Chat groups, membership, message history |
@@ -183,7 +183,7 @@ TUI enhancements added (~590 lines):
 - **Left pane redesign**: Agents + Groups split with `───Groups───` separator, cursor navigation across sections
 - **Group data**: `fetchGroupsCmd`, group entries with name + member count, periodic refresh
 - **Message filtering**: `/` enters filter mode, filters by tag/agent/payload substring, shows `(N of M)` count
-- **Agent filtering**: `f` toggles agent filter by name/capability
+- **Agent filtering**: `f` toggles agent filter by name
 - **Group commands**: `/join <id>`, `/leave <id>`, `/groups` in input mode
 - **Updated status bar**: Shows new keybindings
 

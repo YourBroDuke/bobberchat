@@ -57,7 +57,7 @@ Refer to [RFC 2119](https://datatracker.ietf.org/doc/html/rfc2119) for formal de
 Sections containing unresolved design decisions are marked with **OPEN QUESTION** callouts. These represent decisions deferred to later design phases or community input.
 
 Example:
-> **OPEN QUESTION**: Should cross-system communication use explicit federation tokens or implicit capability-based authorization?
+> **OPEN QUESTION**: Should cross-system communication use explicit federation tokens or implicit authorization?
 
 ### Diagram Notation
 
@@ -94,7 +94,7 @@ The multi-agent ecosystem is currently hindered by seven validated pain points t
 
 1.  **Pain Point: Observability & Debugging Gaps**: You can't debug what you can't see. Agents frequently fail silently without leaving message trails or decision rationale logs. Evidence from AgentRx research indicates a +23.6% improvement in developer velocity when using structured observability.
 2.  **Pain Point: Subagent State Isolation & Context Loss**: Parent agents often lose visibility into subagent execution history, receiving only final text outputs while losing critical tool calls and reasoning steps. This issue is extensively documented in LangGraph community reports (#573, #1698, #1923).
-3.  **Pain Point: Agent Discovery & Dynamic Routing**: Current systems rely on hardcoded agent relationships. There is no standard for runtime discovery, service registries, or capability-based search, making dynamic swarm scaling nearly impossible.
+3.  **Pain Point: Agent Discovery & Dynamic Routing**: Current systems rely on hardcoded agent relationships. There is no standard for runtime discovery or service registries, making dynamic swarm scaling nearly impossible.
 4.  **Pain Point: Coordination Failures**: Race conditions, deadlocks, and message ordering issues become non-linear overhead as agent counts grow, following Amdahl's Law and leading to system-wide stalls.
 5.  **Pain Point: Protocol Fragmentation**: The landscape is split between competing standards like MCP (Anthropic), A2A (Google/Linux Foundation), ACP (IBM), and ANP. No unified translation layer exists to bridge these disparate communication models.
 6.  **Pain Point: Scalability Bottlenecks**: Centralized message brokers and heavy JSON-RPC serialization create single points of failure and high discovery latency, preventing large-scale (500+ agent) deployments.
@@ -107,7 +107,7 @@ BobberChat addresses these challenges by moving beyond simple log viewing to a f
 *   **Unified Observability**: Real-time visualization of all agent-to-agent messages with deep filtering, search, and replay capabilities.
 *   **Context Preservation**: Threaded conversations that persist full subagent history, ensuring parent agents and humans never lose the "why" behind an action.
 *   **Semantic Message Tags**: A novel tagging system (e.g., `context-provide`, `no-response`, `request.approval`) that prevents feedback loop storms and provides explicit coordination primitives.
-*   **Dynamic Discovery**: A live directory and registry that allows agents to find peers based on capabilities and health status rather than hardcoded endpoints.
+*   **Dynamic Discovery**: A live directory and registry that allows agents to find peers based on health status rather than hardcoded endpoints.
 *   **Human-in-the-Loop (HITL)**: First-class approval workflows that allow humans to pause, edit, or approve agent requests directly from the TUI.
 *   **Protocol Translation**: A unified bus that bridges MCP, A2A, and gRPC through modular adapters, allowing heterogeneous swarms to communicate seamlessly.
 
@@ -166,9 +166,9 @@ graph TD
 The Backend Service acts as the central coordination hub and source of truth for the entire mesh.
 *   **Responsibilities**:
     *   Managing the high-speed message bus via NATS JetStream.
-    *   Maintaining the Agent Registry (discovery, capabilities, health).
+    *   Maintaining the Agent Registry (discovery, health).
     *   Persisting conversation history and state in PostgreSQL.
-    *   Enforcing authentication and capability-based authorization.
+    *   Enforcing authentication and authorization.
     *   Hosting protocol adapters (MCP, A2A, gRPC) for external mesh bridging.
 *   **Does NOT**:
     *   Execute agent logic or host LLM runtimes.
@@ -199,7 +199,7 @@ The TUI Client is a high-efficiency terminal application for human monitoring an
 
 ### 2.3 Communication Topology
 
-*   **SDK ↔ Backend**: Bi-directional communication primarily via gRPC (for structured capability exchange) and WebSockets (for streaming message events).
+*   **SDK ↔ Backend**: Bi-directional communication primarily via gRPC and WebSockets (for streaming message events).
 *   **TUI ↔ Backend**: Persistent WebSocket connection for real-time state synchronization and event-driven UI updates.
 *   **Backend Internal**: Uses NATS JetStream for internal pub/sub, ensuring horizontal scalability and message persistence across backend processes.
 
@@ -550,7 +550,7 @@ Each agent is a first-class principal with credentials independent of the human 
 - `display_name`: Human-readable label (non-unique, mutable).
 - `api_secret`: Opaque secret used for backend authentication.
 - `owner_user_id`: Foreign key to user account.
-- `capabilities`: Declared capability list for discovery/routing.
+- `updated_at`: Last profile update timestamp.
 - `version`: Agent implementation version (e.g., semver or commit hash).
 - `created_at`: RFC3339 timestamp.
 
@@ -561,7 +561,6 @@ Each agent is a first-class principal with credentials independent of the human 
   "agent_id": "8f4e7145-c9a0-4c1d-af06-d72b0b4eaf13",
   "display_name": "planner-agent",
   "owner_user_id": "usr_01JQX3W9H4Y5N6P7R8S9T0U1V2",
-  "capabilities": ["plan", "delegate", "summarize"],
   "version": "1.3.2",
   "created_at": "2026-03-13T09:45:22Z",
   "created_at": "2026-03-13T09:45:22Z"
@@ -600,7 +599,7 @@ sequenceDiagram
     U->>B: Email registration/login
     B-->>U: User session + JWT
 
-    U->>B: Create agent (display name, capabilities)
+    U->>B: Create agent (display name)
     B-->>U: agent_id + API secret (shown once)
 
     A->>B: Connection request with Authorization: Bearer API secret
@@ -670,10 +669,6 @@ Agents publish a BobberChat-native Agent Card used by discovery, routing, and co
   "owner_user_id": "usr_01JQX3W9H4Y5N6P7R8S9T0U1V2",
   "version": "1.3.2",
   "summary": "Breaks objectives into executable subplans",
-  "capabilities": [
-    {"name": "plan", "input": ["goal"], "output": ["task_graph"]},
-    {"name": "delegate", "input": ["task"], "output": ["assignment"]}
-  ],
   "supported_tags": ["request", "request.approval", "context-provide", "progress"],
   "endpoints": {
     "ws": "wss://api.bobberchat.example/agents/connect",
@@ -689,8 +684,8 @@ Agents publish a BobberChat-native Agent Card used by discovery, routing, and co
 
 Card publishing behavior:
 
-- Agent cards **MUST** be published at registration and on capability/version changes.
-- Backend **SHOULD** reject malformed cards that omit required routing fields (`agent_id`, `capabilities`, `supported_tags`, `endpoints`).
+- Agent cards **MUST** be published at registration and on profile/version changes.
+- Backend **SHOULD** reject malformed cards that omit required routing fields (`agent_id`, `supported_tags`, `endpoints`).
 - Consumers **MAY** cache cards briefly, but backend registry remains source of truth.
 
 ---
@@ -698,10 +693,10 @@ Card publishing behavior:
 ## § 6. Agent Discovery & Registry
 
 **Problem Statement:** Hardcoded peer routing prevents dynamic coordination and fails in high-churn multi-agent systems.
-**Design Decision:** Centralize discovery in a registry with capability indexing, heartbeat-driven liveness, and capability-based routing.
+**Design Decision:** Centralize discovery in a registry with heartbeat-driven liveness and routing.
 **Rationale:** Registry-backed discovery enables elastic, resilient task routing without static topology assumptions.
 
-The BobberChat Registry is the central directory of all agents in the mesh. It enables dynamic coordination by allowing agents and humans to discover peers based on declared capabilities rather than hardcoded endpoints.
+The BobberChat Registry is the central directory of all agents in the mesh. It enables dynamic coordination by allowing agents and humans to discover peers based on health status rather than hardcoded endpoints.
 
 ### 6.1 Registry Data Model
 
@@ -710,7 +705,6 @@ The registry maintains the authoritative state for all workload principals. Regi
 | Field | Type | Description |
 |---|---|---|
 | `agent_id` | UUID | Globally unique identifier (primary key). |
-| `capabilities` | string[] | List of functional capabilities (e.g., `sql-analysis`, `code-review`). |
 | `supported_tags` | string[] | List of protocol message tags the agent understands. |
 | `owner_id` | UUID | Reference to the human user who owns the agent. |
 
@@ -718,11 +712,11 @@ The registry maintains the authoritative state for all workload principals. Regi
 
 The discovery flow follows a publish-query-route pattern:
 
-1.  **Advertisement**: Upon successful authentication, the agent SDK publishes an **Agent Card** to the registry. This card contains the capabilities and supported tags defined in the agent's profile (see §5.6).
+1.  **Advertisement**: Upon successful authentication, the agent SDK publishes an **Agent Card** to the registry. This card contains the supported tags defined in the agent's profile (see §5.6).
 2.  **Query API**: Agents or the TUI can query the registry to find peers.
-    *   **Capability Search**: Find agents that support specific functions (e.g., "who can do `sql-analysis`?").
-    *   **Tag Support Search**: Find agents that can handle specific protocol message types (e.g., "who supports `request.approval`?").
-3.  **Discovery Results**: Query results return a list of matching agent profiles, including `agent_id`, `name`, and `capabilities`.
+    *   **Capability Search**: Find agents that support specific functions (e.g., "who supports `request.approval`?").
+    *   **Tag Support Search**: Find agents that can handle specific protocol message types.
+3.  **Discovery Results**: Query results return a list of matching agent profiles, including `agent_id` and `name`.
 
 ### 6.3 Health Monitoring & Heartbeats
 
@@ -733,20 +727,19 @@ Registry accuracy is maintained through a mandatory heartbeat mechanism:
 -   **Auto-Deregistration**: If an agent remains unreachable for more than 24 hours (configurable), its registry entry is pruned to prevent directory bloat.
 -   **Liveness Probe**: The backend periodically issues a `system.heartbeat` (see §3.3) to the agent; the SDK MUST respond to maintain liveness.
 
-### 6.4 Capability-Based Routing
+### 6.4 Dynamic Routing
 
 The BobberChat Broker uses registry data to perform intelligent message routing:
 
-*   **Dynamic Binding**: A requester can send a message to a "capability" instead of a specific `agent_id` (e.g., `to: "capability:code-review"`).
-*   **Load Balancing**: The broker identifies all registered agents with the required capability and routes the request to the best match (typically using round-robin or least-busy heuristics).
-*   **Failover**: If the primary target for a capability-based request fails to acknowledge, the broker can transparently retry against another matching peer.
+*   **Load Balancing**: The broker identifies all registered agents in a group and routes the request to the best match (typically using round-robin or least-busy heuristics).
+*   **Failover**: If the primary target for a request fails to acknowledge, the broker can transparently retry against another matching peer.
 
 ### 6.5 Handling Ephemeral Agent Churn
 
 To support high-churn environments (short-lived agents), the registry implements two protection mechanisms:
 
 1.  **Registration Rate Limiting**: The backend throttles registration requests per user to prevent "registration storms" from misconfigured scaling logic.
-2.  **Profile Caching**: While an agent may disconnect, its profile and capabilities are cached for a grace period beyond the transport lifetime. This allows the registry to provide "Offline" discovery, where a human can still see what an agent *could* do even if it is currently disconnected.
+2.  **Profile Caching**: While an agent may disconnect, its profile is cached for a grace period beyond the transport lifetime. This allows the registry to provide "Offline" discovery, where a human can still see an agent's metadata even if it is currently disconnected.
 
 ### 6.6 Discovery & Registration Flow
 
@@ -757,7 +750,7 @@ sequenceDiagram
     participant Q as Requester (Agent/TUI)
 
     A->>R: Authenticate & Register (Agent Card)
-    Note over R: Store capabilities & metadata
+    Note over R: Store metadata
     R-->>A: Registration Confirmed
 
     loop Liveness
@@ -765,24 +758,24 @@ sequenceDiagram
         R-->>A: ACK
     end
 
-    Q->>R: Discovery Query (find: "sql-analysis")
+    Q->>R: Discovery Query (find: "DataAnalyzer")
     R-->>Q: Result: [agent_id: 8f4e..., latency: 12ms]
 
-    Q->>R: Route Message (to: "capability:sql-analysis")
+    Q->>R: Route Message (to: "agent:8f4e...")
     R->>R: Select best match (8f4e...)
     R->>A: Forward Request
 ```
 
 ### 6.7 Discovery API (Conceptual)
 
-The registry exposes a discovery endpoint for agents and the TUI to query available agents by capability.
+The registry exposes a discovery endpoint for agents and the TUI to query available agents.
 
 **Endpoint**: `POST /v1/registry/discover`
 
 **Request**:
 ```json
 {
-  "capability": "sql-analysis",
+  "name": "DataAnalyzer",
   "supported_tags": ["request.data"],
   "limit": 10
 }
@@ -795,7 +788,7 @@ The registry exposes a discovery endpoint for agents and the TUI to query availa
     {
       "agent_id": "a7b3-4e2c-91d1",
       "name": "DataAnalyzer",
-      "capabilities": ["sql-analysis", "data-visualization"],
+      "supported_tags": ["request.data"],
       "latency_estimate_ms": 45
     }
   ],
@@ -980,7 +973,7 @@ The MCP adapter bridges MCP JSON-RPC tool traffic into BobberChat request/respon
 The A2A adapter bridges agent-to-agent interactions and discovery metadata from A2A systems.
 
 #### A2A-specific behavior
-- `message/send` maps into BobberChat `request.*` family with tag inference from content and declared skill/capability.
+- `message/send` maps into BobberChat `request.*` family with tag inference from content.
 - A2A Agent Cards map to BobberChat Agent Profiles (see §5.6).
 - Bridging is bi-directional: BobberChat agents can be projected outward as A2A-compatible agents for external orchestrators.
 
@@ -988,7 +981,7 @@ The A2A adapter bridges agent-to-agent interactions and discovery metadata from 
 
 | A2A Primitive | Direction | BobberChat Tag/Model | Mapping Notes |
 |---|---|---|---|
-| `message/send` | Inbound → BobberChat | `request.*` | Adapter infers specific child tag (`request.data`, `request.action`, `request.approval`) from intent + capability metadata. |
+| `message/send` | Inbound → BobberChat | `request.*` | Adapter infers specific child tag (`request.data`, `request.action`, `request.approval`) from intent. |
 | Agent Card (`.well-known/agent.json`) | Inbound → BobberChat | Agent Profile | Capabilities, endpoints, and supported operations normalized to BobberChat profile fields. |
 | `request.*` | BobberChat → A2A | `message/send` | BobberChat request envelope projected as A2A message payload + routing fields. |
 | Agent Profile publish/update | BobberChat → A2A | Agent Card | BobberChat-native profile exported as A2A discoverable card. |
@@ -1090,20 +1083,20 @@ The primary client interface uses a classic three-pane layout to balance navigat
 ```
 
 **Pane Breakdown**:
-* **Left Pane (Agent/Chat Group List)**: Displays registered agents, Chat Groups, and their capabilities.
+* **Left Pane (Agent/Chat Group List)**: Displays registered agents and Chat Groups.
 * **Center Pane (Message View)**: Threaded conversation view with visual tag indicators, featuring timestamps and sender identities.
-* **Right Pane (Context Panel)**: Surface contextual details such as agent capabilities and actionable items like pending approvals.
+* **Right Pane (Context Panel)**: Surface contextual details such as actionable items like pending approvals.
 
 ### 9.2 Key Views
 The TUI is organized into four primary views to manage multi-agent environments:
 1. **Conversation View**: The core interface showing threaded messages with tag badges, sender information, and timestamps.
-2. **Agent Directory**: A live, searchable list displaying agent capabilities and basic health metrics.
+2. **Agent Directory**: A live, searchable list displaying basic health metrics.
 3. **Approval Queue**: Dedicated view for pending user approvals containing necessary context and approve/deny actions.
 4. **Observability Dashboard**: High-level summary of throughput, active connections, and error rates.
 
 ### 9.3 Information Density at Scale
 Handling 100+ concurrent agents requires aggressive noise reduction and grouping:
-* **Grouping**: Agents are collapsed by owner or capability to prevent UI saturation.
+* **Grouping**: Agents are collapsed by owner to prevent UI saturation.
 * **Filter/Search**: Global search capabilities to pinpoint specific agents or groups.
 * **Summary/Aggregation Mode**: Automatically collapses high-volume machine-to-machine chatter into aggregate blocks.
 * **Notification Priority Levels**:
@@ -1261,7 +1254,7 @@ BobberChat MUST meet or exceed the following performance assertions to ensure a 
 | **Message Throughput** | 10,000 msg/sec | Peak aggregate message volume per deployment. |
 | **Broker Latency** | < 50ms (p99) | Time from message arrival at Backend to dispatch. |
 | **Registration Latency**| < 100ms | Time to register or deregister an agent in the registry. |
-| **Discovery Latency** | < 200ms | Time to execute a capability-based registry query. |
+| **Discovery Latency** | < 200ms | Time to execute a registry query. |
 | **End-to-End Latency** | < 500ms | Total time for Agent A → Broker → Agent B delivery. |
 
 ### 12.2 Horizontal Scaling Strategy
@@ -1281,8 +1274,8 @@ BobberChat identifies and proactively addresses common scaling limits in multi-a
     *   *Mitigation*: Use horizontal scaling of Backend services and graceful connection handling.
 *   **Broker Saturation**: High-volume small messages can overwhelm traditional brokers.
     *   *Mitigation*: NATS JetStream is selected for its high-throughput profile (290K+/sec); system expansion allows for linear capacity increases.
-*   **Discovery Query Latency**: Frequent capability searches can strain the registry.
-    *   *Mitigation*: Backend nodes cache agent profiles and capability maps, with invalidation triggered by heartbeat misses or explicit updates (see §6.2).
+*   **Discovery Query Latency**: Frequent searches can strain the registry.
+*   *Mitigation*: Backend nodes cache agent profiles, with invalidation triggered by heartbeat misses or explicit updates (see §6.2).
 *   **JSON Serialization Overhead**: Parsing large JSON envelopes introduces CPU latency.
     *   *Mitigation*: While JSON is the current standard for architecture overview, binary protocol formats (e.g., Protobuf) are reserved for Future Work (§13) if overhead exceeds 15% of total latency.
 
@@ -1328,7 +1321,7 @@ The following items are explicitly deferred from the initial specification and M
 
 The following architectural decisions remain unresolved and require community feedback or experimental validation during the prototyping phase:
 
-> **OPEN QUESTION**: Should cross-system communication use explicit federation tokens or implicit capability-based authorization? (Ref: §1)
+> **OPEN QUESTION**: Should cross-system communication use explicit federation tokens or implicit authorization? (Ref: §1)
 
 > **OPEN QUESTION**: Tag namespace governance: Who approves new core tags? Should there be a formal RFC process for `core.*` tag additions to prevent taxonomy fragmentation?
 
@@ -1336,7 +1329,7 @@ The following architectural decisions remain unresolved and require community fe
 
 > **OPEN QUESTION**: Agent lifecycle: At what threshold of inactivity should the Registry auto-deregister idle agents? Should this be a global setting or per-deployment?
 
-> **OPEN QUESTION**: Cross-system routing: Should agents be discoverable by `capability` across system boundaries by default, or only via explicit `agent_id` sharing?
+> **OPEN QUESTION**: Cross-system routing: Should agents be discoverable across system boundaries by default, or only via explicit `agent_id` sharing?
 
 > **OPEN QUESTION**: Message retention vs. Privacy: In high-compliance environments, should "Zero Retention" be a client-side request or a server-enforced deployment policy?
 
@@ -1394,7 +1387,7 @@ The backend component (NATS JetStream) responsible for routing, persisting, and 
 The central BobberChat control-plane component that authenticates sessions, enforces protocol policy, manages routing, and hosts adapters.
 
 ### **Registry**
-The central directory service where agents publish their capabilities and metadata for discovery by other agents.
+The central directory service where agents publish their metadata for discovery by other agents.
 
 ### **Approval Workflow**
 A structured sequence of messages (using `approval.request`) where an agent seeks permission from a human or peer before executing a privileged action.
@@ -1406,7 +1399,7 @@ A bridge component that translates between BobberChat native tags and external p
 The level of assurance provided by the broker for message delivery (e.g., At-Least-Once, At-Most-Once).
 
 ### **Agent Card**
-A standardized metadata record (aligned with A2A specs) describing an agent's identity, owner, capabilities, and supported protocol tags.
+A standardized metadata record (aligned with A2A specs) describing an agent's identity, owner, and supported protocol tags.
 
 ### **Context Window**
 The maximum amount of historical message data an agent can process or "see" at one time, managed via the `metadata.context-budget` envelope field.
@@ -1481,7 +1474,7 @@ This matrix traces the seven validated pain points identified in §1 to their co
 |-----------|-----------------|-----------------|-------------------|
 | 1. Observability & Debugging Gaps | §1.1 | §10 Observability & Debugging | Trace propagation via `trace_id`, six core metrics, replay/diff/dependency graph tools, structured logging with alerting |
 | 2. Subagent State Isolation & Context Loss | §1.2 | §4 Conversation Model, §10 Observability | Three-tier persistence (hot/warm/cold), state diff viewer, trace reconstruction |
-| 3. Agent Discovery & Dynamic Routing | §1.3 | §6 Agent Discovery & Registry | Capability-based registry, heartbeat-backed liveness, capability routing, dynamic discovery queries |
+| 3. Agent Discovery & Dynamic Routing | §1.3 | §6 Agent Discovery & Registry | Registry-based discovery, heartbeat-backed liveness, dynamic discovery queries |
 | 4. Coordination Failures & Race Conditions | §1.4 | §3.4 Loop Prevention, §7 Approval Workflows, §12.4 Message Ordering | Circuit breaker policy, four conflict primitives (priority, voting, arbiter, escalation), causal ordering guarantees |
 | 5. Protocol Fragmentation | §1.5 | §8 Protocol Adapters | Deterministic MCP/A2A/gRPC adapter contracts with tag auto-mapping, unified protocol envelope |
 | 6. Scalability Bottlenecks | §1.6 | §12 Scalability & Performance | Explicit targets (500 agents, 10K msg/sec), horizontal scaling via stateless API tier, distributed NATS, caching & read replicas |

@@ -25,7 +25,6 @@ type AgentRepository interface {
 	Delete(ctx context.Context, agentID uuid.UUID) error
 	ListAll(ctx context.Context) ([]Agent, error)
 	ListByOwner(ctx context.Context, ownerUserID uuid.UUID) ([]Agent, error)
-	DiscoverByCapability(ctx context.Context, capability string, limit int) ([]Agent, error)
 }
 
 type UserRepository interface {
@@ -110,20 +109,16 @@ func (r *pgAgentRepository) Create(ctx context.Context, agent Agent) (*Agent, er
 	if agent.CreatedAt.IsZero() {
 		agent.CreatedAt = time.Now().UTC()
 	}
-	capabilities, err := json.Marshal(agent.Capabilities)
-	if err != nil {
-		return nil, fmt.Errorf("marshal capabilities: %w", err)
-	}
 
 	row := r.db.Pool().QueryRow(ctx, `
 		INSERT INTO agents (
-			agent_id, display_name, owner_user_id, capabilities,
+			agent_id, display_name, owner_user_id,
 			api_secret_hash, created_at
-		) VALUES ($1,$2,$3,$4,$5,$6)
-		RETURNING agent_id, display_name, owner_user_id, capabilities,
+		) VALUES ($1,$2,$3,$4,$5)
+		RETURNING agent_id, display_name, owner_user_id,
 			api_secret_hash, created_at
 	`,
-		agent.AgentID, agent.DisplayName, agent.OwnerUserID, capabilities,
+		agent.AgentID, agent.DisplayName, agent.OwnerUserID,
 		agent.APISecretHash, agent.CreatedAt,
 	)
 
@@ -136,7 +131,7 @@ func (r *pgAgentRepository) Create(ctx context.Context, agent Agent) (*Agent, er
 
 func (r *pgAgentRepository) GetByID(ctx context.Context, agentID uuid.UUID) (*Agent, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT agent_id, display_name, owner_user_id, capabilities,
+		SELECT agent_id, display_name, owner_user_id,
 			api_secret_hash, created_at
 		FROM agents
 		WHERE agent_id = $1
@@ -157,7 +152,7 @@ func (r *pgAgentRepository) Delete(ctx context.Context, agentID uuid.UUID) error
 
 func (r *pgAgentRepository) ListAll(ctx context.Context) ([]Agent, error) {
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT agent_id, display_name, owner_user_id, capabilities,
+		SELECT agent_id, display_name, owner_user_id,
 			api_secret_hash, created_at
 		FROM agents
 		ORDER BY created_at DESC
@@ -185,7 +180,7 @@ func (r *pgAgentRepository) ListAll(ctx context.Context) ([]Agent, error) {
 
 func (r *pgAgentRepository) ListByOwner(ctx context.Context, ownerUserID uuid.UUID) ([]Agent, error) {
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT agent_id, display_name, owner_user_id, capabilities,
+		SELECT agent_id, display_name, owner_user_id,
 			api_secret_hash, created_at
 		FROM agents
 		WHERE owner_user_id = $1
@@ -209,38 +204,6 @@ func (r *pgAgentRepository) ListByOwner(ctx context.Context, ownerUserID uuid.UU
 		return nil, fmt.Errorf("iterate agents by owner: %w", err)
 	}
 
-	return results, nil
-}
-
-func (r *pgAgentRepository) DiscoverByCapability(ctx context.Context, capability string, limit int) ([]Agent, error) {
-	if limit <= 0 {
-		limit = 10
-	}
-
-	rows, err := r.db.Pool().Query(ctx, `
-		SELECT agent_id, display_name, owner_user_id, capabilities,
-			api_secret_hash, created_at
-		FROM agents
-		WHERE capabilities @> to_jsonb($1::text[])
-		ORDER BY created_at DESC
-		LIMIT $2
-	`, []string{capability}, limit)
-	if err != nil {
-		return nil, fmt.Errorf("discover agents: %w", err)
-	}
-	defer rows.Close()
-
-	results := make([]Agent, 0)
-	for rows.Next() {
-		a, err := scanAgent(rows)
-		if err != nil {
-			return nil, err
-		}
-		results = append(results, *a)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate discovered agents: %w", err)
-	}
 	return results, nil
 }
 
@@ -904,13 +867,11 @@ type rowScanner interface {
 
 func scanAgent(scanner rowScanner) (*Agent, error) {
 	out := Agent{}
-	var capabilitiesRaw []byte
 
 	err := scanner.Scan(
 		&out.AgentID,
 		&out.DisplayName,
 		&out.OwnerUserID,
-		&capabilitiesRaw,
 		&out.APISecretHash,
 		&out.CreatedAt,
 	)
@@ -919,14 +880,6 @@ func scanAgent(scanner rowScanner) (*Agent, error) {
 			return nil, ErrNotFound
 		}
 		return nil, fmt.Errorf("scan agent: %w", err)
-	}
-
-	if len(capabilitiesRaw) > 0 {
-		if err := json.Unmarshal(capabilitiesRaw, &out.Capabilities); err != nil {
-			return nil, fmt.Errorf("unmarshal agent capabilities: %w", err)
-		}
-	} else {
-		out.Capabilities = make([]string, 0)
 	}
 
 	return &out, nil

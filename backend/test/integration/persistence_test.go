@@ -120,8 +120,6 @@ func TestAgentRepository_CRUD(t *testing.T) {
 	agentInput := persistence.Agent{
 		DisplayName:   "integration-agent",
 		OwnerUserID:   owner.ID,
-		Capabilities:  []string{"test"},
-		Version:       "1.0.0",
 		APISecretHash: "secret-hash",
 	}
 
@@ -249,8 +247,6 @@ func TestApprovalRepository_CreateDecide(t *testing.T) {
 	agent, err := repos.Agents.Create(ctx, persistence.Agent{
 		DisplayName:   "approval-agent",
 		OwnerUserID:   owner.ID,
-		Capabilities:  []string{"approval"},
-		Version:       "1.0.0",
 		APISecretHash: "secret-hash",
 	})
 	if err != nil {

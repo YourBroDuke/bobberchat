@@ -740,10 +740,6 @@ func TestAgentCreate(t *testing.T) {
 		if got["display_name"] != "agent-x" {
 			t.Fatalf("unexpected payload: %v", got)
 		}
-		caps, ok := got["capabilities"].([]any)
-		if !ok || len(caps) != 0 {
-			t.Fatalf("expected empty capabilities array, got: %v", got["capabilities"])
-		}
 	})
 
 	t.Run("Success with default name", func(t *testing.T) {

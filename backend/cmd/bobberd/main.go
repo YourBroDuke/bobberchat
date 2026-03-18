@@ -462,8 +462,7 @@ func (a *app) handleWhoAmI(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		DisplayName  string   `json:"display_name"`
-		Capabilities []string `json:"capabilities"`
+		DisplayName string `json:"display_name"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -471,7 +470,7 @@ func (a *app) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := contextString(r.Context(), ctxUserID)
-	agent, secret, err := a.authSvc.CreateAgent(r.Context(), userID, req.DisplayName, req.Capabilities)
+	agent, secret, err := a.authSvc.CreateAgent(r.Context(), userID, req.DisplayName)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -496,7 +495,6 @@ func (a *app) handleGetAgent(w http.ResponseWriter, r *http.Request) {
 		"agent_id":      agent.AgentID,
 		"display_name":  agent.DisplayName,
 		"owner_user_id": agent.OwnerUserID,
-		"capabilities":  agent.Capabilities,
 		"created_at":    agent.CreatedAt,
 	})
 }
@@ -518,7 +516,6 @@ func (a *app) handleEntityInfo(w http.ResponseWriter, r *http.Request) {
 			"agent_id":      agent.AgentID,
 			"display_name":  agent.DisplayName,
 			"owner_user_id": agent.OwnerUserID,
-			"capabilities":  agent.Capabilities,
 			"created_at":    agent.CreatedAt,
 		})
 		return
@@ -592,7 +589,6 @@ func (a *app) handleRotateSecret(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) handleDiscover(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Capability    string   `json:"capability"`
 		SupportedTags []string `json:"supported_tags"`
 		Limit         int      `json:"limit"`
 	}
@@ -602,7 +598,6 @@ func (a *app) handleDiscover(w http.ResponseWriter, r *http.Request) {
 	}
 
 	agents, err := a.registrySvc.Discover(r.Context(), registry.DiscoveryQuery{
-		Capability:    req.Capability,
 		SupportedTags: req.SupportedTags,
 		Limit:         req.Limit,
 	})

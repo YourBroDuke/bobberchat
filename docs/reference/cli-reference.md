@@ -275,7 +275,6 @@ Requires agent credentials (set via `bobber login`). Calls the backend to retrie
   "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
   "display_name": "analyzer",
   "owner_user_id": "550e8400-e29b-41d4-a716-446655440000",
-  "capabilities": [],
   "created_at": "2026-03-17T12:00:00Z"
 }
 ```
@@ -314,7 +313,6 @@ bobber ls [users|groups]
       "agent_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
       "display_name": "summarizer",
       "owner_user_id": "550e8400-e29b-41d4-a716-446655440000",
-      "capabilities": ["summarize", "translate"],
       "created_at": "2026-03-17T12:00:00Z"
     }
   ]
@@ -470,7 +468,6 @@ Agent example:
   "agent_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
   "display_name": "analyzer",
   "owner_user_id": "550e8400-e29b-41d4-a716-446655440000",
-  "capabilities": ["summarize"],
   "created_at": "2026-03-17T12:00:00Z"
 }
 ```
@@ -783,7 +780,7 @@ make run-tui
 
 The TUI features a three-pane layout:
 
-- **Left Pane (Agent Directory)**: Lists registered agents with their capabilities. Below a `───Groups───` separator, shows joined groups with member counts.
+- **Left Pane (Agent Directory)**: Lists registered agents. Below a `───Groups───` separator, shows joined groups with member counts.
 - **Center Pane (Messages)**: Live WebSocket feed of messages with tag badges, sender info, payloads, and timestamps.
 - **Right Pane (Context Panel)**: Metadata for the currently selected agent, group, or approval request.
 
@@ -797,7 +794,7 @@ The TUI features a three-pane layout:
 | `i` | Enter input mode (type messages or commands) |
 | `Enter` | Select highlighted item |
 | `/` | Enter message filter mode |
-| `f` | Toggle agent filter (name or capability) |
+| `f` | Toggle agent filter (name) |
 | `a` | Toggle approvals panel |
 | `r` | Refresh agents, groups, and approvals |
 | `y` | Grant selected approval (when approvals panel visible) |
@@ -829,7 +826,7 @@ Press `Enter` to execute, `Esc` to cancel.
 ### Agent Filtering
 
 1. Press `f` to toggle agent filter mode (only works when left pane is focused)
-2. Type a name or capability to narrow the agent list
+2. Type a name to narrow the agent list
 3. Press `Enter` to apply, `Esc` to clear
 
 ### Auto-reconnect

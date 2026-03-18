@@ -15,14 +15,12 @@ func TestCreateAgent_Success(t *testing.T) {
 
 	resp := env.doRequest(t, http.MethodPost, "/v1/agents", map[string]any{
 		"display_name": "agent-create-success",
-		"capabilities": []string{"test"},
 	}, token)
 	assertStatus(t, resp, http.StatusCreated)
 	body := env.readJSON(t, resp)
 
 	assertJSONField(t, body, "agent_id")
 	assertJSONField(t, body, "api_secret")
-	assertJSONFieldEquals(t, body, "status", "REGISTERED")
 	assertJSONFieldEquals(t, body, "display_name", "agent-create-success")
 }
 
@@ -30,7 +28,6 @@ func TestCreateAgent_NoAuth(t *testing.T) {
 	env := setupTestEnv(t)
 	resp := env.doRequest(t, http.MethodPost, "/v1/agents", map[string]any{
 		"display_name": "agent-no-auth",
-		"capabilities": []string{"test"},
 	}, "")
 	assertStatus(t, resp, http.StatusUnauthorized)
 }
@@ -39,21 +36,19 @@ func TestCreateAgent_MissingFields(t *testing.T) {
 	env := setupTestEnv(t)
 	token, _ := registerAndLogin(t, env, "agent-create-missing")
 
-	respNoName := env.doRequest(t, http.MethodPost, "/v1/agents", map[string]any{
-		"capabilities": []string{"test"},
-	}, token)
+	respNoName := env.doRequest(t, http.MethodPost, "/v1/agents", map[string]any{}, token)
 	assertStatus(t, respNoName, http.StatusBadRequest)
 
-	respNoCaps := env.doRequest(t, http.MethodPost, "/v1/agents", map[string]any{
-		"display_name": "agent-create-missing",
+	respEmpty := env.doRequest(t, http.MethodPost, "/v1/agents", map[string]any{
+		"display_name": "",
 	}, token)
-	assertStatus(t, respNoCaps, http.StatusBadRequest)
+	assertStatus(t, respEmpty, http.StatusBadRequest)
 }
 
 func TestGetAgent_Success(t *testing.T) {
 	env := setupTestEnv(t)
 	token, _ := registerAndLogin(t, env, "agent-get-success")
-	agentID, _ := env.createAgent(t, token, "agent-get-success", []string{"cap"})
+	agentID, _ := env.createAgent(t, token, "agent-get-success")
 
 	resp := env.doRequest(t, http.MethodGet, "/v1/agents/"+agentID, nil, token)
 	assertStatus(t, resp, http.StatusOK)
@@ -62,8 +57,6 @@ func TestGetAgent_Success(t *testing.T) {
 	assertJSONFieldEquals(t, body, "agent_id", agentID)
 	assertJSONFieldEquals(t, body, "display_name", "agent-get-success")
 	assertJSONField(t, body, "owner_user_id")
-	assertJSONField(t, body, "capabilities")
-	assertJSONField(t, body, "status")
 	assertJSONField(t, body, "created_at")
 }
 
@@ -79,7 +72,7 @@ func TestGetAgent_CrossOwner(t *testing.T) {
 	env := setupTestEnv(t)
 	tokenA, _ := registerAndLogin(t, env, "agent-cross-owner-a")
 	tokenB, _ := registerAndLogin(t, env, "agent-cross-owner-b")
-	agentID, _ := env.createAgent(t, tokenA, "agent-cross-owner", []string{"cap"})
+	agentID, _ := env.createAgent(t, tokenA, "agent-cross-owner")
 
 	resp := env.doRequest(t, http.MethodGet, "/v1/agents/"+agentID, nil, tokenB)
 	assertStatus(t, resp, http.StatusForbidden)
@@ -88,7 +81,7 @@ func TestGetAgent_CrossOwner(t *testing.T) {
 func TestDeleteAgent_Success(t *testing.T) {
 	env := setupTestEnv(t)
 	token, _ := registerAndLogin(t, env, "agent-delete-success")
-	agentID, _ := env.createAgent(t, token, "agent-delete-success", []string{"cap"})
+	agentID, _ := env.createAgent(t, token, "agent-delete-success")
 
 	resp := env.doRequest(t, http.MethodDelete, "/v1/agents/"+agentID, nil, token)
 	assertStatus(t, resp, http.StatusOK)
@@ -107,7 +100,7 @@ func TestDeleteAgent_NotFound(t *testing.T) {
 func TestRotateSecret_Success(t *testing.T) {
 	env := setupTestEnv(t)
 	token, _ := registerAndLogin(t, env, "agent-rotate-success")
-	agentID, oldSecret := env.createAgent(t, token, "agent-rotate-success", []string{"cap"})
+	agentID, oldSecret := env.createAgent(t, token, "agent-rotate-success")
 
 	resp := env.doRequest(t, http.MethodPost, "/v1/agents/"+agentID+"/rotate-secret", map[string]any{
 		"grace_period_seconds": 0,
@@ -124,7 +117,7 @@ func TestRotateSecret_Success(t *testing.T) {
 func TestRotateSecret_GracePeriod(t *testing.T) {
 	env := setupTestEnv(t)
 	token, _ := registerAndLogin(t, env, "agent-rotate-grace")
-	agentID, oldSecret := env.createAgent(t, token, "agent-rotate-grace", []string{"cap"})
+	agentID, oldSecret := env.createAgent(t, token, "agent-rotate-grace")
 
 	groupResp := env.doRequest(t, http.MethodPost, "/v1/groups", map[string]any{
 		"name":       "group-for-agent-grace",

@@ -62,8 +62,7 @@ type model struct {
 }
 
 type agentEntry struct {
-	ID, Name     string
-	Capabilities []string
+	ID, Name string
 }
 
 type messageEntry struct {
@@ -533,7 +532,7 @@ func (m *model) renderLeftPane() string {
 			if m.leftSection == 0 && idx == m.agentCursor {
 				marker = "▸"
 			}
-			line := fmt.Sprintf("%s %s [%s]", marker, safeName(a.Name, a.ID), strings.Join(a.Capabilities, ","))
+			line := fmt.Sprintf("%s %s", marker, safeName(a.Name, a.ID))
 			if m.leftSection == 0 && idx == m.agentCursor {
 				line = selectedStyle.Render(line)
 			}
@@ -617,7 +616,6 @@ func (m *model) renderContext() string {
 		a := m.agents[m.agentCursor]
 		return strings.Join([]string{
 			fmt.Sprintf("Agent: %s", safeName(a.Name, a.ID)),
-			fmt.Sprintf("Caps: %s", strings.Join(a.Capabilities, ", ")),
 			fmt.Sprintf("ID: %s", a.ID),
 		}, "\n")
 	}
@@ -815,9 +813,8 @@ func (m *model) filteredAgentIndices() []int {
 			indices = append(indices, i)
 			continue
 		}
-		caps := strings.ToLower(strings.Join(a.Capabilities, " "))
 		name := strings.ToLower(safeName(a.Name, a.ID))
-		if strings.Contains(name, query) || strings.Contains(caps, query) {
+		if strings.Contains(name, query) {
 			indices = append(indices, i)
 		}
 	}
@@ -937,10 +934,9 @@ func fetchAgentsCmd(backendURL, token string) tea.Cmd {
 
 		var payload struct {
 			Agents []struct {
-				AgentID      string   `json:"agent_id"`
-				DisplayName  string   `json:"display_name"`
-				Name         string   `json:"name"`
-				Capabilities []string `json:"capabilities"`
+				AgentID     string `json:"agent_id"`
+				DisplayName string `json:"display_name"`
+				Name        string `json:"name"`
 			} `json:"agents"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
@@ -954,9 +950,8 @@ func fetchAgentsCmd(backendURL, token string) tea.Cmd {
 				name = strings.TrimSpace(a.Name)
 			}
 			agents = append(agents, agentEntry{
-				ID:           a.AgentID,
-				Name:         name,
-				Capabilities: a.Capabilities,
+				ID:   a.AgentID,
+				Name: name,
 			})
 		}
 

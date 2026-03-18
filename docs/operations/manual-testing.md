@@ -52,9 +52,7 @@ AGENT_RESPONSE=$(curl -s -X POST "$BASE_URL/v1/agents" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d "{
-    \"display_name\": \"test-agent-1\",
-    \"capabilities\": [\"summarize\", \"translate\"],
-    \"version\": \"1.0.0\"
+    \"display_name\": \"test-agent-1\"
   }")
 
 echo "$AGENT_RESPONSE" | jq .
@@ -83,20 +81,20 @@ curl -s "$BASE_URL/v1/agents/$AGENT_ID" \
   -H "Authorization: Bearer $TOKEN" | jq .
 ```
 
-Expected: Full agent object with capabilities, timestamps.
+Expected: Full agent object with timestamps.
 
-## 6. Discover Agents by Capability
+## 6. Discover Agents
 
 ```bash
 curl -s -X POST "$BASE_URL/v1/registry/discover" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d "{
-    \"capability\": \"summarize\"
+    \"limit\": 10
   }" | jq .
 ```
 
-Expected: Array of agents that have the "summarize" capability.
+Expected: Array of registered agents.
 
 ## 7. Create a Group
 

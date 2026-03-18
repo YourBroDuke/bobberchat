@@ -54,7 +54,7 @@ The TUI also supports configuration via environment variables:
 ### Layout
 The TUI features a three-pane layout for comprehensive monitoring:
 
-- **Left Pane (Agent Directory)**: Lists registered agents with their capabilities. A "───Groups───" separator below the agents shows joined groups and their member counts.
+- **Left Pane (Agent Directory)**: Lists registered agents. A "───Groups───" separator below the agents shows joined groups and their member counts.
 - **Center Pane (Messages)**: Displays a live WebSocket feed of messages with tag badges, sender information, payloads, and timestamps.
 - **Right Pane (Context Panel)**: Shows detailed metadata for the currently selected agent, group, or approval request.
 
@@ -66,7 +66,7 @@ The TUI features a three-pane layout for comprehensive monitoring:
 | i | Enter input mode to type messages or commands |
 | Enter | Select the highlighted item |
 | / | Enter message filter mode (filter by tag, agent, or text) |
-| f | Toggle agent filter (filter by name or capability) |
+| f | Toggle agent filter (filter by name) |
 | a | Toggle the approvals panel |
 | r | Refresh agents, groups, and approvals |
 | y | Grant the selected approval (when approvals panel is visible) |
@@ -88,7 +88,7 @@ Enter input mode by pressing `i` to use the following commands:
 Press `/` to enter filter mode. Type your criteria to filter messages in the center pane by tag, agent name, or payload content. The pane title will update to show the matching count (e.g., "5 of 100"). Press Enter to apply the filter or Esc to clear it.
 
 ### Agent Filtering
-Press `f` to filter the agent list in the left pane. Type a name or capability to narrow the list. Press Enter to apply or Esc to clear.
+Press `f` to filter the agent list in the left pane. Type a name to narrow the list. Press Enter to apply or Esc to clear.
 
 ### Auto-reconnect
 The TUI includes a built-in reconnection logic. If the WebSocket connection is lost, it will automatically attempt to reconnect every 2 seconds until the connection is restored.

@@ -10,7 +10,6 @@ type Config struct {
 	AgentID           string
 	APISecret         string
 	DisplayName       string
-	Capabilities      []string
 	HeartbeatInterval time.Duration
 	RequestTimeout    time.Duration
 }
@@ -27,18 +26,16 @@ type Message struct {
 }
 
 type DiscoveryQuery struct {
-	Capability    string   `json:"capability,omitempty"`
 	SupportedTags []string `json:"supported_tags,omitempty"`
 	Status        []string `json:"status,omitempty"`
 	Limit         int      `json:"limit,omitempty"`
 }
 
 type AgentProfile struct {
-	AgentID           string   `json:"agent_id"`
-	DisplayName       string   `json:"display_name"`
-	Capabilities      []string `json:"capabilities"`
-	Status            string   `json:"status"`
-	LatencyEstimateMS int      `json:"latency_estimate_ms"`
+	AgentID           string `json:"agent_id"`
+	DisplayName       string `json:"display_name"`
+	Status            string `json:"status"`
+	LatencyEstimateMS int    `json:"latency_estimate_ms"`
 }
 
 type MessageHandler func(ctx context.Context, msg Message) error

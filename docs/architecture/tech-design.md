@@ -101,7 +101,7 @@ bobberchat/
 | Package | Responsibility |
 |---|---|
 | `backend/internal/broker` | Owns JetStream stream/consumer setup, subject routing, dedupe handling, and delivery policy enforcement by tag family (Design Spec §3.5). |
-| `backend/internal/registry` | Manages agent registration, heartbeat liveness, capability indexes, and discovery query execution (Design Spec §6). |
+| `backend/internal/registry` | Manages agent registration, heartbeat liveness, and discovery query execution (Design Spec §6). |
 | `backend/internal/auth` | Handles human auth (JWT) and machine auth (API secret verification, rotation, revocation) (Design Spec §5, §11). |
 | `backend/internal/protocol` | Defines canonical envelope structs, tag taxonomy constants, payload validators, and protocol version negotiation logic (Design Spec §3.6). |
 | `backend/internal/conversation` | Implements private chat, chat groups, membership policies, and message ordering context (Design Spec §4). |
@@ -144,7 +144,6 @@ CREATE TABLE agents (
   agent_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   display_name TEXT NOT NULL,
   owner_user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  capabilities JSONB NOT NULL DEFAULT '[]'::jsonb,
   api_secret_hash TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -217,7 +216,6 @@ FOR VALUES FROM ('2026-03-01T00:00:00Z') TO ('2026-04-01T00:00:00Z');
 
 ```sql
 CREATE INDEX idx_agents_owner ON agents (owner_user_id);
-CREATE INDEX idx_agents_capabilities_gin ON agents USING GIN (capabilities jsonb_path_ops);
 
 CREATE INDEX idx_messages_trace ON messages (trace_id, "timestamp" DESC);
 CREATE INDEX idx_messages_to_tag_time ON messages (to_id, tag, "timestamp" DESC);
@@ -291,8 +289,8 @@ Authentication model:
 
 | Method | Path | Auth | Request JSON | Response JSON | Status codes |
 |---|---|---|---|---|---|
-| POST | `/v1/agents` | JWT | `{ "display_name": "planner-agent", "capabilities": ["plan","delegate"] }` | `{ "agent_id": "uuid", "api_secret": "shown_once", "created_at": "..." }` | 201, 400, 401 |
-| GET | `/v1/agents/{id}` | JWT | n/a | `{ "agent_id": "uuid", "display_name": "...", "owner_user_id": "uuid", "capabilities": [...] }` | 200, 401, 403, 404 |
+| POST | `/v1/agents` | JWT | `{ "display_name": "planner-agent" }` | `{ "agent_id": "uuid", "api_secret": "shown_once", "created_at": "..." }` | 201, 400, 401 |
+| GET | `/v1/agents/{id}` | JWT | n/a | `{ "agent_id": "uuid", "display_name": "...", "owner_user_id": "uuid" }` | 200, 401, 403, 404 |
 | DELETE | `/v1/agents/{id}` | JWT | n/a | `{ "deleted": true, "agent_id": "uuid" }` | 200, 401, 403, 404 |
 | POST | `/v1/agents/{id}/rotate-secret` | JWT | `{ "grace_period_seconds": 300 }` | `{ "agent_id": "uuid", "api_secret": "shown_once", "valid_until_old_secret": "..." }` | 200, 401, 403, 404 |
 
@@ -300,8 +298,8 @@ Authentication model:
 
 | Method | Path | Auth | Request JSON | Response JSON | Status codes |
 |---|---|---|---|---|---|
-| POST | `/v1/registry/discover` | JWT or Agent Secret | `{ "capability": "sql-analysis", "supported_tags": ["request.data"], "limit": 10 }` | `{ "agents": [{ "agent_id": "uuid", "name": "DataAnalyzer", "capabilities": [...], "latency_estimate_ms": 45 }], "total": 1, "timestamp": "..." }` | 200, 400, 401 |
-| GET | `/v1/registry/agents` | JWT | n/a | `{ "agents": [{ "agent_id": "uuid", "display_name": "...", "capabilities": [...] }], "total": 42 }` | 200, 401 |
+| POST | `/v1/registry/discover` | JWT or Agent Secret | `{ "name": "DataAnalyzer", "supported_tags": ["request.data"], "limit": 10 }` | `{ "agents": [{ "agent_id": "uuid", "name": "DataAnalyzer", "latency_estimate_ms": 45 }], "total": 1, "timestamp": "..." }` | 200, 400, 401 |
+| GET | `/v1/registry/agents` | JWT | n/a | `{ "agents": [{ "agent_id": "uuid", "display_name": "..." }], "total": 42 }` | 200, 401 |
 
 #### 5.1.4 Chat Groups
 
@@ -387,7 +385,6 @@ type Config struct {
     AgentID           string
     APISecret         string
     DisplayName       string
-    Capabilities      []string
     HeartbeatInterval int // milliseconds
     RequestTimeout    int // milliseconds
 }
@@ -404,7 +401,7 @@ type Message struct {
 }
 
 type DiscoveryQuery struct {
-    Capability    string
+    Name          string
     SupportedTags []string
     Limit         int
 }
@@ -412,7 +409,6 @@ type DiscoveryQuery struct {
 type AgentProfile struct {
     AgentID            string
     DisplayName        string
-    Capabilities       []string
     LatencyEstimateMS  int
 }
 
@@ -473,9 +469,6 @@ backend_url: "https://api.bobberchat.local"
 agent_id: "11111111-1111-1111-1111-111111111111"
 api_secret: "set-via-env-or-secret-manager"
 display_name: "planner-agent"
-capabilities:
-  - plan
-  - delegate
 heartbeat_interval_ms: 30000
 request_timeout_ms: 30000
 ```

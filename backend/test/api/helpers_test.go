@@ -216,11 +216,10 @@ func (e *testEnv) loginUser(t *testing.T, email, password string) (string, map[s
 	return token, user
 }
 
-func (e *testEnv) createAgent(t *testing.T, token, displayName string, capabilities []string) (agentID, apiSecret string) {
+func (e *testEnv) createAgent(t *testing.T, token, displayName string) (agentID, apiSecret string) {
 	t.Helper()
 	resp := e.doRequest(t, http.MethodPost, "/v1/agents", map[string]any{
 		"display_name": displayName,
-		"capabilities": capabilities,
 	}, token)
 	assertStatus(t, resp, http.StatusCreated)
 	body := e.readJSON(t, resp)
