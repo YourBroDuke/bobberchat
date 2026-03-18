@@ -445,13 +445,13 @@ func blacklistCmd(cfg *cliConfig) *cobra.Command {
 func infoCmd(cfg *cliConfig) *cobra.Command {
 	return &cobra.Command{
 		Use:   "info <target_id>",
-		Short: "Get information for an agent",
+		Short: "Get information about a user, agent, or group",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			if cfg.token() == "" {
 				return errors.New("token required")
 			}
-			resp, err := doJSON(http.MethodGet, cfg.backendURL()+"/v1/agents/"+args[0], cfg.token(), nil)
+			resp, err := doJSON(http.MethodGet, cfg.backendURL()+"/v1/info/"+args[0], cfg.token(), nil)
 			if err != nil {
 				return err
 			}

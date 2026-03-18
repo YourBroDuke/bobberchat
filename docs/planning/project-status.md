@@ -37,7 +37,7 @@ BOBBERCHAT_TEST_DSN="postgres://bobberchat:bobberchat@localhost:5432/bobberchat?
 | `docs/architecture/design-spec.md` | 1,693 | Authoritative design spec — 13 sections + glossary + 4 appendices |
 | `docs/planning/prd.md` | 212 | Product requirements document |
 | `docs/architecture/tech-design.md` | 721 | Technical design document |
-| `api/openapi/openapi.yaml` | ~1,300 | OpenAPI 3.1.0 spec — 28 endpoint paths |
+| `api/openapi/openapi.yaml` | ~1,450 | OpenAPI 3.1.0 spec — 29 endpoint paths |
 | `README.md` | ~280 | Comprehensive project README with TUI user guide |
 | `docs/reference/cli-reference.md` | ~595 | Complete CLI reference for bobber, bobberd, bobber-tui, and Makefile |
 | `docs/operations/deploy-docker-compose.md` | ~120 | Docker Compose deployment guide |
@@ -107,7 +107,7 @@ Key implementation details:
 
 | Binary | Source | Lines | Description |
 |--------|--------|-------|-------------|
-| `bobberd` | `backend/cmd/bobberd/main.go` | ~1,322 | Backend server — 33 REST endpoints + WebSocket + message replay + adapter ingest + production hardening |
+| `bobberd` | `backend/cmd/bobberd/main.go` | ~1,370 | Backend server — 34 REST endpoints + WebSocket + message replay + adapter ingest + production hardening |
 | `bobber` | `cli/cmd/bobber/main.go` | ~700 | CLI tool — account, agent, session, connection, messaging, and group management commands. Tests in `main_test.go` |
 | `bobber-tui` | `tui/cmd/bobber-tui/main.go` | ~1,471 | TUI client — Bubble Tea terminal UI with groups, topics, filtering |
 

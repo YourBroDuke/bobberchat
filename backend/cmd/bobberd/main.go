@@ -267,6 +267,8 @@ func (a *app) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /v1/agents/{id}", a.requireJWT(a.handleDeleteAgent))
 	mux.HandleFunc("POST /v1/agents/{id}/rotate-secret", a.requireJWT(a.handleRotateSecret))
 
+	mux.HandleFunc("GET /v1/info/{id}", a.requireAuth(true, true, a.handleEntityInfo))
+
 	mux.HandleFunc("POST /v1/registry/discover", a.requireAuth(true, true, a.handleDiscover))
 	mux.HandleFunc("GET /v1/registry/agents", a.requireJWT(a.handleListAgents))
 
@@ -499,6 +501,59 @@ func (a *app) handleGetAgent(w http.ResponseWriter, r *http.Request) {
 		"capabilities":  agent.Capabilities,
 		"created_at":    agent.CreatedAt,
 	})
+}
+
+func (a *app) handleEntityInfo(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	uid, err := uuid.Parse(id)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+
+	repos := persistence.NewPostgresRepositories(a.db)
+
+	agent, err := repos.Agents.GetByID(r.Context(), uid)
+	if err == nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"type":          "agent",
+			"agent_id":      agent.AgentID,
+			"display_name":  agent.DisplayName,
+			"owner_user_id": agent.OwnerUserID,
+			"capabilities":  agent.Capabilities,
+			"created_at":    agent.CreatedAt,
+		})
+		return
+	}
+
+	user, err := repos.Users.GetByID(r.Context(), uid)
+	if err == nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"type":           "user",
+			"id":             user.ID,
+			"email":          user.Email,
+			"role":           user.Role,
+			"email_verified": user.EmailVerified,
+			"created_at":     user.CreatedAt,
+		})
+		return
+	}
+
+	group, err := repos.Groups.GetByID(r.Context(), uid)
+	if err == nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"type":        "group",
+			"id":          group.ID,
+			"name":        group.Name,
+			"description": group.Description,
+			"visibility":  group.Visibility,
+			"creator_id":  group.CreatorID,
+			"created_at":  group.CreatedAt,
+		})
+		return
+	}
+
+	writeError(w, http.StatusNotFound, "entity not found")
 }
 
 func (a *app) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {

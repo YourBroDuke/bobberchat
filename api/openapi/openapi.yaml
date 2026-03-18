@@ -312,6 +312,93 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /v1/info/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags:
+        - Info
+      summary: Get entity info (user, agent, or group)
+      operationId: getEntityInfo
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Entity details retrieved with type discriminator
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      type:
+                        type: string
+                        enum: [agent]
+                      agent_id:
+                        type: string
+                        format: uuid
+                      display_name:
+                        type: string
+                      owner_user_id:
+                        type: string
+                        format: uuid
+                      capabilities:
+                        type: array
+                        items:
+                          type: string
+                      created_at:
+                        type: string
+                        format: date-time
+                  - type: object
+                    properties:
+                      type:
+                        type: string
+                        enum: [user]
+                      id:
+                        type: string
+                        format: uuid
+                      email:
+                        type: string
+                      role:
+                        type: string
+                      email_verified:
+                        type: boolean
+                      created_at:
+                        type: string
+                        format: date-time
+                  - type: object
+                    properties:
+                      type:
+                        type: string
+                        enum: [group]
+                      id:
+                        type: string
+                        format: uuid
+                      name:
+                        type: string
+                      description:
+                        type: string
+                        nullable: true
+                      visibility:
+                        type: string
+                      creator_id:
+                        type: string
+                        format: uuid
+                      created_at:
+                        type: string
+                        format: date-time
+                discriminator:
+                  propertyName: type
+        '400':
+          description: Invalid UUID
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /v1/agents/{id}/rotate-secret:
     post:
       tags:

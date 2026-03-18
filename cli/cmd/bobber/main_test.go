@@ -1395,12 +1395,12 @@ func TestGroupInviteCommand(t *testing.T) {
 }
 
 func TestInfoCommand(t *testing.T) {
-	t.Run("Success: GET /v1/agents/{id}", func(t *testing.T) {
+	t.Run("Success: GET /v1/info/{id}", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet || r.URL.Path != "/v1/agents/a1" {
+			if r.Method != http.MethodGet || r.URL.Path != "/v1/info/a1" {
 				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"id": "a1"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"type": "agent", "agent_id": "a1"})
 		}))
 		defer srv.Close()
 

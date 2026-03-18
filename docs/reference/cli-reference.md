@@ -451,7 +451,7 @@ bobber blacklist <target_id>
 
 ##### `bobber info`
 
-Get information for an agent.
+Get information about a user, agent, or group.
 
 ```bash
 bobber info <target_id>
@@ -459,15 +459,43 @@ bobber info <target_id>
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `<target_id>` | Yes | UUID of the target agent |
+| `<target_id>` | Yes | UUID of the target entity (user, agent, or group) |
 
-**Response** (`GET /v1/agents/{id}` → `200`):
+**Response** (`GET /v1/info/{id}` → `200`):
+
+Agent example:
 ```json
 {
+  "type": "agent",
   "agent_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
   "display_name": "analyzer",
   "owner_user_id": "550e8400-e29b-41d4-a716-446655440000",
   "capabilities": ["summarize"],
+  "created_at": "2026-03-17T12:00:00Z"
+}
+```
+
+User example:
+```json
+{
+  "type": "user",
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "email": "alice@example.com",
+  "role": "member",
+  "email_verified": true,
+  "created_at": "2026-03-17T12:00:00Z"
+}
+```
+
+Group example:
+```json
+{
+  "type": "group",
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "name": "my-team",
+  "description": null,
+  "visibility": "private",
+  "creator_id": "550e8400-e29b-41d4-a716-446655440000",
   "created_at": "2026-03-17T12:00:00Z"
 }
 ```
