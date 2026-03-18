@@ -231,24 +231,6 @@ curl -s -X DELETE "$BASE_URL/v1/agents/$AGENT_ID" \
 
 Expected: HTTP 200 or 204. The agent is removed.
 
-## 17. Connect the TUI
-
-With the stack running and a valid token:
-
-```bash
-./bin/bobber-tui --backend-url "$BASE_URL" --token "$TOKEN"
-```
-
-Or via environment variables:
-
-```bash
-export BOBBERCHAT_BACKEND_URL="$BASE_URL"
-export BOBBERCHAT_TOKEN="$TOKEN"
-./bin/bobber-tui
-```
-
-See the [TUI Client section in the README](../../README.md#tui-client-bobber-tui) for keybindings and commands.
-
 ## Cleanup
 
 To reset the entire environment:

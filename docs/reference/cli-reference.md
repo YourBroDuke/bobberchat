@@ -1,6 +1,6 @@
 # BobberChat CLI Reference
 
-Complete reference for all BobberChat command-line tools. The project ships three binaries and a Makefile for development workflows.
+Complete reference for all BobberChat command-line tools. The project ships two binaries and a Makefile for development workflows.
 
 ---
 
@@ -20,13 +20,6 @@ Complete reference for all BobberChat command-line tools. The project ships thre
   - [Usage](#bobberd-usage)
   - [Configuration](#bobberd-configuration)
   - [Behavior](#bobberd-behavior)
-- [bobber-tui — Terminal User Interface](#bobber-tui--terminal-user-interface)
-  - [Usage](#bobber-tui-usage)
-  - [Keybindings](#keybindings)
-  - [Input Commands](#input-commands)
-  - [Message Filtering](#message-filtering)
-  - [Agent Filtering](#agent-filtering)
-  - [Auto-reconnect](#auto-reconnect)
 - [Makefile Targets](#makefile-targets)
 
 ---
@@ -742,114 +735,20 @@ Configuration is loaded from the YAML file and can be overridden with environmen
 
 ---
 
-## bobber-tui — Terminal User Interface
-
-Real-time dashboard for monitoring and interacting with the BobberChat agent ecosystem. Built with Bubble Tea.
-
-**Source**: `tui/cmd/bobber-tui/main.go` | **Framework**: `flag` + Bubble Tea
-
-### bobber-tui Usage
-
-You must obtain a JWT token first (via `bobber login` or the API directly).
-
-```bash
-bobber-tui [--backend-url <url>] [--token <jwt>]
-```
-
-| Flag | Env Var | Default | Description |
-|------|---------|---------|-------------|
-| `--backend-url` | `BOBBERCHAT_BACKEND_URL` | `http://localhost:8080` | Backend server URL |
-| `--token` | `BOBBERCHAT_TOKEN` | *(empty)* | JWT bearer token |
-
-**Note**: The TUI uses `BOBBERCHAT_` env var prefix (not `BOBBER_`), distinct from the CLI.
-
-**Examples:**
-```bash
-# Pre-built binary
-./bin/bobber-tui --backend-url http://localhost:8080 --token <YOUR_JWT>
-
-# Via Go run
-go run ./tui/cmd/bobber-tui --backend-url http://localhost:8080 --token <YOUR_JWT>
-
-# Via Makefile (uses defaults, set env vars first)
-export BOBBERCHAT_TOKEN=<YOUR_JWT>
-make run-tui
-```
-
-### Layout
-
-The TUI features a three-pane layout:
-
-- **Left Pane (Agent Directory)**: Lists registered agents. Below a `───Groups───` separator, shows joined groups with member counts.
-- **Center Pane (Messages)**: Live WebSocket feed of messages with tag badges, sender info, payloads, and timestamps.
-- **Right Pane (Context Panel)**: Metadata for the currently selected agent, group, or approval request.
-
-### Keybindings
-
-| Key | Action |
-|-----|--------|
-| `Tab` | Cycle focus: left → center → right pane |
-| `↑` / `k` | Navigate up in active pane |
-| `↓` / `j` | Navigate down in active pane |
-| `i` | Enter input mode (type messages or commands) |
-| `Enter` | Select highlighted item |
-| `/` | Enter message filter mode |
-| `f` | Toggle agent filter (name) |
-| `a` | Toggle approvals panel |
-| `r` | Refresh agents, groups, and approvals |
-| `y` | Grant selected approval (when approvals panel visible) |
-| `n` | Deny selected approval (when approvals panel visible) |
-| `Esc` | Clear active filter or exit filter/input mode |
-| `q` / `Ctrl+C` | Quit |
-
-### Input Commands
-
-Press `i` to enter input mode, then type a command:
-
-| Command | Description |
-|---------|-------------|
-| `/join <group_id>` | Join a chat group |
-| `/leave <group_id>` | Leave a chat group |
-| `/groups` | Refresh the list of groups |
-| `/approve <id> <grant\|deny> [reason]` | Act on an approval request |
-| *(any other text)* | Send as a message to the currently selected agent |
-
-Press `Enter` to execute, `Esc` to cancel.
-
-### Message Filtering
-
-1. Press `/` to enter filter mode
-2. Type your search query — messages are filtered in real-time by tag, agent name, or payload content
-3. The center pane title updates to show match count (e.g. `Messages (5 of 100)`)
-4. Press `Enter` to lock the filter, or `Esc` to clear it
-
-### Agent Filtering
-
-1. Press `f` to toggle agent filter mode (only works when left pane is focused)
-2. Type a name to narrow the agent list
-3. Press `Enter` to apply, `Esc` to clear
-
-### Auto-reconnect
-
-The TUI includes built-in reconnection logic. If the WebSocket connection drops, it automatically retries every 2 seconds until restored. A periodic tick (every 5 seconds) also triggers reconnection attempts and data refreshes.
-
----
-
 ## Makefile Targets
 
 Development workflow targets for building, testing, and running the project.
 
 | Target | Command | Description |
 |--------|---------|-------------|
-| `make build` | Compiles all 3 binaries | Outputs `bin/bobberd`, `bin/bobber`, `bin/bobber-tui` |
-| `make test` | `go test ./backend/... ./cli/... ./tui/...` | Run unit tests across all modules |
+| `make build` | Compiles all 2 binaries | Outputs `bin/bobberd`, `bin/bobber` |
+| `make test` | `go test ./backend/... ./cli/...` | Run unit tests across all modules |
 | `make test-integration` | `go test -tags=integration -race ./backend/test/integration/ -v` | Run integration tests (requires PostgreSQL) |
 | `make test-api` | `go test -tags=integration -race ./backend/test/api/ -v -count=1` | Run API tests |
 | `make test-e2e` | `./scripts/e2e-test.sh` | Run end-to-end tests (requires `docker compose up`) |
-| `make lint` | `go vet ./backend/... ./cli/... ./tui/...` | Lint all packages |
+| `make lint` | `go vet ./backend/... ./cli/...` | Lint all packages |
 | `make migrate` | `psql -f migrations/001_initial_schema.sql` | Apply database migrations |
 | `make run-backend` | `go run ./backend/cmd/bobberd --config configs/backend.yaml` | Start the backend server locally |
-| `make run-tui` | `go run ./tui/cmd/bobber-tui` | Start the TUI client locally |
 | `make clean` | `rm -rf bin/` | Remove build artifacts |
 
 **Typical development flow:**
@@ -865,7 +764,4 @@ make test
 
 # Start the backend
 make run-backend
-
-# In another terminal, start the TUI
-make run-tui
 ```

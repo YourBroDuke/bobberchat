@@ -229,37 +229,6 @@ helm upgrade bobberchat deploy/helm/bobberchat/ \
    ```
 2. Override credentials if they differ from defaults:
    ```bash
-   PGHOST=localhost PGUSER=bobberchat PGPASSWORD=bobberchat PGDB=bobberchat make migrate
-   ```
+    PGHOST=localhost PGUSER=bobberchat PGPASSWORD=bobberchat PGDB=bobberchat make migrate
+    ```
 3. If using a remote database, set all PG environment variables accordingly.
-
-## TUI Issues
-
-### TUI shows "connecting..." indefinitely
-
-**Symptom**: The TUI starts but never shows agents or messages.
-
-**Cause**: The WebSocket connection cannot be established. Common reasons:
-- Backend is not running
-- Wrong `--backend-url`
-- Invalid or expired token
-
-**Fix**:
-1. Verify the backend is healthy:
-   ```bash
-   curl -s http://localhost:8080/v1/health
-   ```
-2. Check your token is valid (login again if expired)
-3. Ensure the URL scheme matches (http not https for local dev)
-
----
-
-### TUI shows agents but no messages
-
-**Symptom**: The left pane shows agents, but the center pane is empty.
-
-**Cause**: No messages have been sent yet, or the WebSocket is not subscribed to the correct subjects.
-
-**Fix**:
-1. Send a test message via the API (see [manual-testing.md](manual-testing.md))
-2. Verify your authentication token is valid and the WebSocket connection is established

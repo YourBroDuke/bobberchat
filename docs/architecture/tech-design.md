@@ -16,11 +16,10 @@ References:
 
 ## 1. Overview & Architecture Summary
 
-BobberChat is implemented as a three-component system (Design Spec §2):
+BobberChat is implemented as a two-component system (Design Spec §2):
 
 1. **Backend Service (`bobberd`)**: control plane for auth, routing, registry, approvals, persistence, adapters, and observability.
 2. **Agent SDK/CLI (`pkg/sdk`, `bobber`)**: agent-facing integration surface for connect/send/subscribe/discover primitives.
-3. **TUI Client (`bobber-tui`)**: operator-facing terminal client for real-time monitoring and intervention.
 
 Confirmed technology stack (Design Spec §2.5, PRD §9.1):
 
@@ -29,7 +28,6 @@ Confirmed technology stack (Design Spec §2.5, PRD §9.1):
 | Language/runtime | Go 1.25+ |
 | Message fabric | NATS JetStream |
 | Persistence | PostgreSQL 15+ |
-| Terminal UI | Bubble Tea |
 
 Design alignment notes:
 - Envelope and tag taxonomy follow Design Spec §3.
@@ -42,13 +40,13 @@ Design alignment notes:
 
 ## 2. Repository & Module Structure
 
-The project uses a **Go workspace** (`go.work`) with three independent modules — one for each component. This ensures each binary only depends on the libraries it actually needs.
+The project uses a **Go workspace** (`go.work`) with two independent modules — one for each component. This ensures each binary only depends on the libraries it actually needs.
 
 Canonical repository layout:
 
 ```text
 bobberchat/
-├── go.work                # Go workspace definition (use ./backend, ./cli, ./tui)
+├── go.work                # Go workspace definition (use ./backend, ./cli)
 ├── backend/
 │   ├── go.mod             # github.com/bobberchat/bobberchat/backend
 │   ├── go.sum
@@ -76,11 +74,6 @@ bobberchat/
 │   ├── go.sum
 │   └── cmd/bobber/        # CLI tool binary
 │       └── main.go
-├── tui/
-│   ├── go.mod             # github.com/bobberchat/bobberchat/tui
-│   ├── go.sum
-│   └── cmd/bobber-tui/    # TUI Client binary
-│       └── main.go
 ├── api/
 │   └── openapi/           # OpenAPI specs for REST endpoints
 ├── migrations/            # PostgreSQL migration files
@@ -94,7 +87,7 @@ bobberchat/
 
 - `backend/internal/`: private implementation packages for the backend service; not importable outside the backend module per Go visibility rules.
 - `backend/pkg/sdk`: stable public API surface intended for external agent authors; semantic versioning applies to exported types and methods.
-- `cli/` and `tui/` modules have no `internal/` or `pkg/` directories — they are standalone binaries with zero cross-module dependencies.
+- `cli/` module has no `internal/` or `pkg/` directories — it is a standalone binary with zero cross-module dependencies.
 
 ### 2.2 Package responsibilities
 
@@ -273,7 +266,7 @@ All REST endpoints are under `/v1` and require TLS in production.
 ### 5.1 REST API Endpoints
 
 Authentication model:
-- **Human JWT** for user-driven operations (groups, approvals, TUI).
+- **Human JWT** for user-driven operations (groups, approvals).
 - **Agent API secret** for agent registration/runtime operations.
 
 #### 5.1.1 Auth
@@ -363,7 +356,7 @@ Heartbeat protocol:
 - After 3 missed intervals, backend marks session offline and closes socket.
 
 Reconnection behavior:
-- SDK/TUI perform exponential backoff (1s, 2s, 4s, capped at 30s).
+- SDK and CLI clients perform exponential backoff (1s, 2s, 4s, capped at 30s).
 - On reconnect, client sends last acknowledged message cursor for resumable delivery.
 - Backend replays unacked durable messages from JetStream consumer state.
 
@@ -473,34 +466,12 @@ heartbeat_interval_ms: 30000
 request_timeout_ms: 30000
 ```
 
-### 7.3 TUI config (YAML)
-
-```yaml
-backend_url: "https://api.bobberchat.local"
-auth:
-  jwt_token: ""
-  email: "operator@example.com"
-  password: ""
-
-ui:
-  theme: "default"
-  show_timestamps: true
-  default_group: "research-swarm"
-
-reconnect:
-  initial_backoff_ms: 1000
-  max_backoff_ms: 30000
-```
-
 ## 8. Go Dependencies
 
 | Dependency | Version | Purpose |
 |---|---|---|
 | `github.com/nats-io/nats.go` | `v1.49.0` | NATS/JetStream client |
 | `github.com/jackc/pgx/v5` | `v5.8.0` | PostgreSQL driver/pool |
-| `github.com/charmbracelet/bubbletea` | `v1.3.10` | TUI framework |
-| `github.com/charmbracelet/lipgloss` | `v1.1.0` | TUI styling |
-| `github.com/charmbracelet/bubbles` | `v1.0.0` | TUI components |
 | `github.com/golang-jwt/jwt/v5` | `v5.3.1` | JWT parsing/signing |
 | `github.com/google/uuid` | `v1.6.0` | UUID generation/parsing |
 | `github.com/rs/zerolog` | `v1.34.0` | Structured logging |
@@ -516,12 +487,11 @@ reconnect:
 
 | Target | Description |
 |---|---|
-| `build` | Build `bobberd`, `bobber`, `bobber-tui` binaries. |
-| `test` | Run unit tests and integration tests (`go test ./backend/... ./cli/... ./tui/...`). |
+| `build` | Build `bobberd` and `bobber` binaries. |
+| `test` | Run unit tests and integration tests (`go test ./backend/... ./cli/...`). |
 | `lint` | Run static analysis (`go vet`). |
 | `migrate` | Apply PostgreSQL migrations via psql. |
 | `run-backend` | Run backend service locally with default config. |
-| `run-tui` | Run TUI client against configured backend. |
 
 ### 9.2 Local Docker Compose
 

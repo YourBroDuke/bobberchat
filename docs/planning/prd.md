@@ -43,7 +43,7 @@ BobberChat aims to provide a reliable, transparent, and scalable environment for
 ### 3.1 Platform Engineer (Operator)
 *   **Goal**: Monitor swarm health, identify bottlenecks, and manage infrastructure costs.
 *   **Pain Point**: Lack of visibility into subagent reasoning and silent system-wide stalls.
-*   **Key Need**: High-density TUI dashboards and real-time alerting for loop detection.
+*   **Key Need**: High-density dashboards and real-time alerting for loop detection.
 
 ### 3.2 Agent Developer
 *   **Goal**: Integrate autonomous agents into a coordinated workflow with minimal boilerplate.
@@ -61,15 +61,15 @@ Organized by the seven validated production pain points defined in §1.
 
 ### 4.1 Observability & Debugging Gaps
 *   **User Story 1**: As an Operator, I want to see a real-time tree of agent messages linked by `trace_id`, so that I can understand the causal chain of a complex delegation.
-    *   **AC1**: TUI displays a hierarchical "Conversation Trace" view.
+    *   **AC1**: The system displays a hierarchical "Conversation Trace" view.
     *   **AC2**: Every message envelope carries a mandatory `trace_id` per §3.1.
 *   **User Story 2**: As a Developer, I want to replay a specific historical message, so that I can test my agent's recovery logic without re-running the entire workflow.
-    *   **AC1**: TUI allows selecting a message and triggering a "Replay" action.
+    *   **AC1**: The CLI allows selecting a message and triggering a "Replay" action.
     *   **AC2**: Backend re-emits message with original `trace_id` but new unique `id`.
 
 ### 4.2 Subagent State Isolation & Context Loss
 *   **User Story 1**: As an Operator, I want to view the difference between agent context states at each step, so that I can identify where reasoning diverged.
-    *   **AC1**: TUI provides a "State Diff Viewer" for agents publishing state updates.
+    *   **AC1**: The system provides a "State Diff Viewer" for agents publishing state updates.
     *   **AC2**: Backend persists history in three tiers (Hot/Warm/Cold) per §4.4.
 *   **User Story 2**: As an Agent, I want to resume a conversation thread with full historical context, so that I don't repeat previous reasoning steps.
     *   **AC1**: SDK provides primitives to fetch Warm storage history (PostgreSQL) for a conversation thread.
@@ -79,7 +79,7 @@ Organized by the seven validated production pain points defined in §1.
     *   **AC1**: Registry supports `POST /v1/registry/discover` with capability filters per §6.7.
     *   **AC2**: Broker routes messages addressed to `capability:<name>` using round-robin or least-busy heuristics.
 *   **User Story 2**: As an Operator, I want to see a live list of agents and their current health, so that I can identify offline or busy components.
-    *   **AC1**: TUI "Agent Directory" reflects heartbeat-driven liveness per §6.3.
+    *   **AC1**: Agent Directory reflects heartbeat-driven liveness per §6.3.
 
 ### 4.4 Coordination Failures
 *   **User Story 1**: As an Operator, I want the system to automatically block message loops, so that I can prevent runaway token costs and system stalls.
@@ -92,7 +92,7 @@ Organized by the seven validated production pain points defined in §1.
 ### 4.5 Protocol Fragmentation
 *   **User Story 1**: As a Developer, I want to bridge my MCP-compatible tools into the BobberChat fabric, so that my existing tools can coordinate with BobberChat agents.
     *   **AC1**: MCP Adapter maps `tool/call` to `request.action` and `tool/result` to `response.success` per §8.2.
-*   **User Story 2**: As a Developer, I want gRPC service updates to appear as progress bars in the TUI, so that I can monitor long-running tasks.
+*   **User Story 2**: As a Developer, I want gRPC service updates to appear as progress bars in the CLI, so that I can monitor long-running tasks.
     *   **AC1**: gRPC Adapter maps stream frames to `progress.*` tags per §8.4.
 
 ### 4.6 Scalability Bottlenecks
@@ -114,11 +114,10 @@ Organized by the seven validated production pain points defined in §1.
 *   **Core Protocol**: JSON wire envelope with hierarchical tag taxonomy (§3).
 *   **Backend Service**: Go-based service using NATS JetStream and PostgreSQL (§2.2).
 *   **Agent SDK**: Go SDK for identity, discovery, and messaging (§2.2).
-*   **TUI Client**: Bubble Tea interface with three-pane layout and approval queue (§9).
 *   **Registry**: Capability-indexed directory with heartbeat monitoring (§6).
 *   **Auth**: API secret-based agent auth and JWT-based human auth (§5).
 *   **Protocol Adapters**: Core support for MCP, A2A, and gRPC translation (§8).
-*   **HITL**: Basic `approval.*` workflow with TUI-based intervention (§7).
+*   **HITL**: Basic `approval.*` workflow with CLI-based intervention (§7).
 *   **Persistence**: Three-tier storage (In-memory, PostgreSQL, S3-compatible) (§4.4).
 
 ### 5.2 Out-of-Scope (Future Work)
@@ -135,12 +134,12 @@ Organized by the seven validated production pain points defined in §1.
 | :--- | :--- | :--- | :--- |
 | Semantic Message Bus | P0 | Core | JSON envelope + tag-based routing and loop prevention. |
 | Agent Registry | P0 | Core | Capability discovery and heartbeat-driven liveness. |
-| TUI Monitoring | P0 | Client | Real-time message streaming and agent directory view. |
+| CLI Monitoring | P0 | Client | Real-time message streaming and agent discovery. |
 | API Secret Auth | P0 | Security | Mandatory machine credentials for agent connections. |
-| HITL Approvals | P1 | Workflow | Standardized `approval.*` tags and TUI approval queue. |
+| HITL Approvals | P1 | Workflow | Standardized `approval.*` tags and approval queue. |
 | Protocol Adapters | P1 | Integration | MCP, A2A, and gRPC bridging. |
 | Warm Persistence | P1 | Storage | PostgreSQL-based history for 30-day lookback. |
-| Trace Reconstruction | P2 | Observability | Visual causal trees in the TUI using `trace_id`. |
+| Trace Reconstruction | P2 | Observability | Visual causal trees using `trace_id`. |
 | Cold Storage Export | P2 | Storage | S3/GCS export for long-term audit and replay. |
 
 ## 7. Milestones & Timeline
@@ -163,11 +162,11 @@ Organized by the seven validated production pain points defined in §1.
 *   Implement broker-enforced loop prevention and `no-response` logic.
 *   **Deliverable**: SDK and adapters enabling heterogeneous agent coordination.
 
-### M4: TUI Client (Weeks 10-12)
-*   Implement the Bubble Tea three-pane layout.
-*   Build the real-time message stream and agent directory views.
-*   Implement the HITL approval queue and intervention controls.
-*   **Deliverable**: Interactive terminal client for human operators.
+### M4: CLI & HITL Integration (Weeks 10-12)
+*   Enhance CLI with approval workflow commands.
+*   Implement the human-in-the-loop approval queue and intervention controls.
+*   Build out comprehensive CLI documentation and examples.
+*   **Deliverable**: Full-featured CLI client for human operators and automation.
 
 ### M5: Integration & Hardening (Weeks 13-15)
 *   Implement end-to-end integration tests for all 7 pain point scenarios.
@@ -196,13 +195,11 @@ Organized by the seven validated production pain points defined in §1.
 ### 9.1 External Dependencies
 *   **NATS JetStream**: Core message bus for high-throughput pub/sub.
 *   **PostgreSQL**: Primary storage for registry metadata and warm history.
-*   **Bubble Tea (Charm)**: Framework for the TUI Client.
 *   **Go 1.25+**: Primary language for all components.
 
 ### 9.2 Technical Risks
 *   **Serialization Overhead**: JSON parsing may become a bottleneck at 10K msg/sec. *Mitigation*: Reserve Protobuf for future binary upgrade.
 *   **Registry Pressure**: High agent churn (ephemeral model) may strain PostgreSQL. *Mitigation*: Implement caching and registration rate limiting.
-*   **TUI Density**: 500 agents may clutter terminal displays. *Mitigation*: Implement aggressive grouping, filtering, and summary modes (§9.3).
 
 ## 10. Open Questions (from §13.2)
 

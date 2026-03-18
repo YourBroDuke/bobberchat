@@ -16,7 +16,7 @@ This design specification is written for four primary audiences:
 
 2. **SDK Developers**: Engineers building SDKs for Agent frameworks (Python, Rust, Node.js, etc.). Focus on §5 (Identity, Authentication & Agent Lifecycle), §6 (Agent Discovery & Registry), and §4 (Conversation Model).
 
-3. **TUI Contributors**: Engineers building the terminal user interface and observability tooling. Focus on §9 (TUI Client Design & Layout) and §10 (Observability & Debugging).
+3. **Contributors**: Engineers contributing to BobberChat observability and tooling. Focus on §9 (Observability & Debugging).
 
 4. **Enterprise Evaluators**: Operators assessing BobberChat for production deployment. Focus on §11 (Security Considerations) and §12 (Scalability & Performance).
 
@@ -32,11 +32,10 @@ This design specification is written for four primary audiences:
 6. [§ 6. Agent Discovery & Registry](#6-agent-discovery--registry)
 7. [§ 7. Approval Workflows & Coordination Primitives](#7-approval-workflows--coordination-primitives)
 8. [§ 8. Protocol Adapters (MCP/A2A/gRPC Bridging)](#8-protocol-adapters-mcpa2agrpc-bridging)
-9. [§ 9. TUI Client Design & Layout](#9-tui-client-design--layout)
-10. [§ 10. Observability & Debugging](#10-observability--debugging)
-11. [§ 11. Security Considerations](#11-security-considerations)
-12. [§ 12. Scalability & Performance](#12-scalability--performance)
-13. [§ 13. Future Work, Open Questions & Appendices](#13-future-work-open-questions--appendices)
+9. [§ 9. Observability & Debugging](#9-observability--debugging)
+10. [§ 10. Security Considerations](#10-security-considerations)
+11. [§ 11. Scalability & Performance](#11-scalability--performance)
+12. [§ 12. Future Work, Open Questions & Appendices](#12-future-work-open-questions--appendices)
 
 ---
 
@@ -62,14 +61,13 @@ Example:
 ### Diagram Notation
 
 - **Mermaid diagrams** are used for system architecture, message flows, and state machines.
-- **ASCII art** is used for TUI wireframes and simple data structures.
+- **ASCII art** is used for wireframes and simple data structures.
 - **JSON** is used for message format examples and protocol specifications.
 
 ### Canonical Terminology
 
 - **Backend Service** is the canonical term for the cloud coordination component ("Backend" is allowed shorthand).
 - **Agent SDK/CLI** is the canonical term for the agent integration component ("SDK" is allowed shorthand).
-- **TUI Client** is the canonical term for the human interface component ("TUI" is allowed shorthand).
 - **Chat Group** is the canonical term for multi-party conversation spaces ("Channel" is a legacy alias).
 
 ---
@@ -82,7 +80,7 @@ Example:
 
 BobberChat is the coordination layer multi-agent systems are missing. As AI development shifts from monolithic chat interfaces to complex, distributed swarms of autonomous agents, the industry faces a critical observability gap. BobberChat provides a unified terminal-based messaging fabric where humans and agents participate as first-class citizens in shared Chat Groups, threads, and private rooms. It serves as the "Slack for Agents," offering a structured interface for communication, discovery, and human-in-the-loop intervention.
 
-The product centralizes agent-to-agent and human-to-agent interactions into a high-performance TUI, enabling developers to monitor subagent reasoning, approve sensitive actions, and debug coordination failures in real-time. By providing a protocol-agnostic message bus with semantic tagging, BobberChat transforms fragmented agent "black boxes" into transparent, manageable workflows.
+The product centralizes agent-to-agent and human-to-agent interactions into a coordination layer, enabling developers to monitor agent reasoning, approve sensitive actions, and debug coordination failures in real-time. By providing a protocol-agnostic message bus with semantic tagging, BobberChat transforms fragmented agent "black boxes" into transparent, manageable workflows.
 
 ### Market Context
 
@@ -108,7 +106,7 @@ BobberChat addresses these challenges by moving beyond simple log viewing to a f
 *   **Context Preservation**: Threaded conversations that persist full subagent history, ensuring parent agents and humans never lose the "why" behind an action.
 *   **Semantic Message Tags**: A novel tagging system (e.g., `context-provide`, `no-response`, `request.approval`) that prevents feedback loop storms and provides explicit coordination primitives.
 *   **Dynamic Discovery**: A live directory and registry that allows agents to find peers based on health status rather than hardcoded endpoints.
-*   **Human-in-the-Loop (HITL)**: First-class approval workflows that allow humans to pause, edit, or approve agent requests directly from the TUI.
+*   **Human-in-the-Loop (HITL)**: First-class approval workflows that allow humans to pause, edit, or approve agent requests directly from the CLI or API.
 *   **Protocol Translation**: A unified bus that bridges MCP, A2A, and gRPC through modular adapters, allowing heterogeneous swarms to communicate seamlessly.
 
 ### Competitive Landscape
@@ -118,7 +116,7 @@ Existing tools solve parts of the observability puzzle but fail to provide a com
 *   **SwarmWatch**: Provides a desktop overlay for monitoring but lacks the interactive, cross-node messaging and protocol translation required for distributed swarms.
 *   **Agent View**: Focuses on tmux session management for parallel agents but does not offer a unified message bus or semantic discovery.
 *   **AgentDbg**: A specialized debugger that lacks the real-time IM-style collaboration features and human-in-the-loop approval workflows.
-*   **k9s**: The gold standard for resource monitoring, which BobberChat aims to emulate in terms of TUI efficiency, but k9s is built for containers, not the semantic communication patterns of AI agents.
+*   **k9s**: The gold standard for resource monitoring, which BobberChat aims to emulate in terms of efficiency, but k9s is built for containers, not the semantic communication patterns of AI agents.
 
 No existing tool effectively solves the combination of cross-node agent message visualization, protocol translation, and semantic loop prevention.
 
@@ -127,10 +125,10 @@ No existing tool effectively solves the combination of cross-node agent message 
 ## § 2. System Architecture Overview
 
 **Problem Statement:** Multi-agent runtimes need high-throughput machine messaging and low-friction human oversight without coupling those concerns.
-**Design Decision:** Use a three-component architecture: Backend Service, Agent SDK/CLI, and TUI Client.
+**Design Decision:** Use a two-component architecture: Backend Service and Agent SDK/CLI.
 **Rationale:** Separation of concerns improves scale, operability, and evolution of protocol adapters and client UX.
 
-BobberChat utilizes a distributed three-component architecture designed for high-concurrency agent messaging and real-time human observability. The system decouples the high-performance message fabric (Backend) from the agent integration layer (Agent SDK/CLI) and the human interface (TUI Client).
+BobberChat utilizes a distributed two-component architecture designed for high-concurrency agent messaging and real-time observability. The system decouples the high-performance message fabric (Backend) from the agent integration layer (Agent SDK/CLI).
 
 ### 2.1 Component Topology
 
@@ -151,13 +149,8 @@ graph TD
         AgentB["Agent B"] -- "Agent SDK/CLI" --> SDKB["Agent SDK/CLI"]
     end
 
-    subgraph "Human Operator"
-        TUI["TUI Client (Bubble Tea)"]
-    end
-
     SDKA <-- "WebSocket / gRPC" --> Backend
     SDKB <-- "WebSocket / gRPC" --> Backend
-    TUI <-- "WebSocket" --> Backend
 ```
 
 ### 2.2 Component Responsibilities
@@ -173,49 +166,36 @@ The Backend Service acts as the central coordination hub and source of truth for
 *   **Does NOT**:
     *   Execute agent logic or host LLM runtimes.
     *   Manage local agent file systems or tool execution.
-    *   Provide a web interface (CLI/TUI first).
+     *   Provide a CLI interface (protocol-agnostic and SDK-first).
 
 #### Agent SDK/CLI
 The SDK provides the primary programmatic interface for agents to participate in the BobberChat fabric.
 *   **Responsibilities**:
-    *   Managing persistent connections (WebSocket/gRPC) to the Backend.
-    *   Abstracting message tagging logic (e.g., `request`, `progress`).
-    *   Providing peer discovery primitives to the agent.
-    *   Handling automatic retries and local message buffering.
+     *   Managing persistent connections (WebSocket/gRPC) to the Backend.
+     *   Abstracting message tagging logic (e.g., `request`, `progress`).
+     *   Providing peer discovery primitives to the agent.
+     *   Handling automatic retries and local message buffering.
 *   **Does NOT**:
-    *   Store long-term conversation history locally.
-    *   Perform human-in-the-loop approvals (delegates to Backend/TUI).
-
-#### TUI Client
-The TUI Client is a high-efficiency terminal application for human monitoring and intervention.
-*   **Responsibilities**:
-    *   Real-time visualization of agent-to-agent message flows.
-    *   Filtering and searching conversation history by agent or tag.
-    *   Facilitating Human-in-the-Loop (HITL) approval workflows.
-    *   Direct manual messaging (Human-to-Agent).
-*   **Does NOT**:
-    *   Act as a message broker (purely a client).
-    *   Manage agent lifecycles directly (observes registry state).
+     *   Store long-term conversation history locally.
+     *   Perform human-in-the-loop approvals (delegates to Backend).
 
 ### 2.3 Communication Topology
 
 *   **SDK ↔ Backend**: Bi-directional communication primarily via gRPC and WebSockets (for streaming message events).
-*   **TUI ↔ Backend**: Persistent WebSocket connection for real-time state synchronization and event-driven UI updates.
 *   **Backend Internal**: Uses NATS JetStream for internal pub/sub, ensuring horizontal scalability and message persistence across backend processes.
 
 ### 2.4 Data Flow Patterns
 
 1.  **Agent-to-Agent (Direct)**: Agent A sends a message tagged `request.data` via SDK → Backend validates and persists → Backend routes to Agent B via its active SDK connection.
-2.  **Observability Stream**: All messages routed through the Backend are simultaneously broadcast to active TUI Clients subscribed to relevant Chat Groups.
-3.  **Human-in-the-Loop Approval**: Agent A sends `request.approval` → Backend flags message as "Pending" → TUI Client highlights the request → Human approves → Backend notifies Agent A with an `approval.granted` status.
+2.  **Observability Stream**: Operators monitor agent-to-agent messages through CLI or programmatic APIs.
+3.  **Human-in-the-Loop Approval**: Agent A sends `request.approval` → Backend flags message as "Pending" → Operator approves via API/CLI → Backend notifies Agent A with an `approval.granted` status.
 
 ### 2.5 Technology Recommendations (Non-Normative)
 
 To meet the 290K+ msgs/sec performance targets and ensure developer ergonomics, the following stack is recommended:
-*   **Language**: Go (for Backend and TUI) due to superior concurrency primitives and small binary footprints.
+*   **Language**: Go (for Backend) due to superior concurrency primitives and small binary footprints.
 *   **Message Fabric**: NATS JetStream (high throughput, low latency).
 *   **Persistence**: PostgreSQL (structured conversation state and agent metadata).
-*   **TUI Framework**: Bubble Tea (Model-View-Update architecture for complex terminal states).
 
 ---
 
@@ -493,7 +473,7 @@ BobberChat employs a three-tier persistence model to balance real-time performan
 
 | Tier | Storage Layer | Window | Primary Purpose |
 | :--- | :--- | :--- | :--- |
-| **Hot** | Redis / In-Memory | Last 3 Hours | Real-time TUI rendering and active loop prevention. |
+| **Hot** | Redis / In-Memory | Last 3 Hours | Real-time visibility and active loop prevention. |
 | **Warm** | PostgreSQL | Last 30 Days | Searchable history, thread reconstruction, and agent context loading. |
 | **Cold** | Object Storage (S3/GCS) | 90+ Days | Long-term auditing, compliance, and large-scale replay for training. |
 
@@ -518,7 +498,7 @@ graph TD
 ### 4.5 Message Ordering & Guarantees
 
 *   **Causal Ordering**: Guaranteed per-group. If Message A is sent before Message B in the same context, all participants will receive and see A before B.
-*   **Cross-Context Ordering**: No guarantees. Messages in `#dev-ops` and `#research-swarm` may be interleaved at the TUI layer based on local arrival time.
+*   **Cross-Context Ordering**: No guarantees. Messages in `#dev-ops` and `#research-swarm` may be interleaved based on local arrival time.
 *   **Idempotency**: All messages MUST include a client-generated `nonce` to prevent duplicate delivery in high-retry scenarios.
 
 ---
@@ -526,7 +506,7 @@ graph TD
 ## § 5. Identity, Authentication & Agent Lifecycle
 
 **Problem Statement:** Human users and autonomous agents require separate trust boundaries, credentials, and lifecycle management.
-**Design Decision:** Use dual-principal identity (user account + workload agent) with API secrets for agents and JWT sessions for TUI Client users.
+**Design Decision:** Use dual-principal identity (user account + workload agent) with API secrets for agents and JWT sessions for users.
 **Rationale:** Explicit principal separation strengthens security, ownership traceability, and operational control.
 
 BobberChat treats human users and software agents as distinct identities connected by ownership. Human users authenticate as account principals; agents authenticate as workload principals bound to a user account.
@@ -569,7 +549,7 @@ Each agent is a first-class principal with credentials independent of the human 
 
 ### 5.2 Authentication Flow
 
-BobberChat supports two authentication paths: agent runtime authentication and human TUI session authentication.
+BobberChat supports two authentication paths: agent runtime authentication and human user authentication.
 
 #### Agent -> Backend
 
@@ -579,11 +559,11 @@ BobberChat supports two authentication paths: agent runtime authentication and h
 4. Backend validates secret status (active, not revoked, within grace policy if rotating).
 5. Backend binds connection to `agent_id` and establishes authenticated session context.
 
-#### TUI -> Backend
+#### User -> Backend
 
 1. Human user logs in via email-based account flow.
 2. Backend issues JWT (short-lived access token, optional refresh token).
-3. TUI presents `Authorization: Bearer <jwt>` on API calls and WebSocket upgrade.
+3. User presents `Authorization: Bearer <jwt>` on API calls and CLI commands.
 4. Backend authorizes operations using JWT claims (`user_id`, account scope, role claims).
 
 #### Authentication Sequence Diagram
@@ -594,7 +574,6 @@ sequenceDiagram
     participant U as Human User
     participant A as Agent Runtime
     participant B as BobberChat Backend
-    participant T as TUI Client
 
     U->>B: Email registration/login
     B-->>U: User session + JWT
@@ -607,9 +586,9 @@ sequenceDiagram
     A->>B: WebSocket upgrade (Authorization header)
     B-->>A: 101 Switching Protocols (authenticated agent session)
 
-    T->>B: WebSocket/API request with Authorization: Bearer JWT
+    U->>B: API request with Authorization: Bearer JWT
     B->>B: Validate JWT claims (user_id, scope)
-    B-->>T: Authenticated TUI session
+    B-->>U: Authenticated user session
 ```
 
 ### 5.3 Agent Lifecycle Models
@@ -713,7 +692,7 @@ The registry maintains the authoritative state for all workload principals. Regi
 The discovery flow follows a publish-query-route pattern:
 
 1.  **Advertisement**: Upon successful authentication, the agent SDK publishes an **Agent Card** to the registry. This card contains the supported tags defined in the agent's profile (see §5.6).
-2.  **Query API**: Agents or the TUI can query the registry to find peers.
+2.  **Query API**: Agents or operators can query the registry to find peers.
     *   **Capability Search**: Find agents that support specific functions (e.g., "who supports `request.approval`?").
     *   **Tag Support Search**: Find agents that can handle specific protocol message types.
 3.  **Discovery Results**: Query results return a list of matching agent profiles, including `agent_id` and `name`.
@@ -747,7 +726,7 @@ To support high-churn environments (short-lived agents), the registry implements
 sequenceDiagram
     participant A as Agent (SDK)
     participant R as Registry (Backend)
-    participant Q as Requester (Agent/TUI)
+    participant Q as Requester (Agent)
 
     A->>R: Authenticate & Register (Agent Card)
     Note over R: Store metadata
@@ -768,7 +747,7 @@ sequenceDiagram
 
 ### 6.7 Discovery API (Conceptual)
 
-The registry exposes a discovery endpoint for agents and the TUI to query available agents.
+The registry exposes a discovery endpoint for agents and operators to query available agents.
 
 **Endpoint**: `POST /v1/registry/discover`
 
@@ -811,7 +790,7 @@ BobberChat provides structured mechanisms for human-in-the-loop (HITL) intervent
 
 ### 7.1 Approval Workflow Lifecycle
 
-The approval workflow is a specialized request/response cycle managed by the Backend and exposed via the TUI. It transitions from an agent's request to a terminal decision by an authorized approver.
+The approval workflow is a specialized request/response cycle managed by the Backend. It transitions from an agent's request to a terminal decision by an authorized approver.
 
 1.  **Request Initiation**: An agent sends a message tagged `approval.request`. The payload MUST include:
     *   `action`: A descriptive string of the intended operation (e.g., "deploy-to-prod").
@@ -820,7 +799,7 @@ The approval workflow is a specialized request/response cycle managed by the Bac
     *   `timeout_ms`: Maximum duration to wait before the timeout policy triggers.
     *   `max_cost`: (Optional) The estimated or maximum token/financial cost of the action.
 2.  **Routing & Queueing**: The Backend validates the request and routes it to the designated approver's queue. Approvers can be specific human users or supervising agents.
-3.  **TUI Presentation**: The TUI Client receives the pending request and presents it with full conversation context. The human operator is provided with `Approve` and `Deny` actions, along with an optional field for providing a reason.
+3.  **Approval Presentation**: The operator receives the pending request with full conversation context. The operator is provided with `Approve` and `Deny` actions, along with an optional field for providing a reason.
 4.  **Terminal Decision**:
     *   **Granted**: The approver sends `approval.granted`. The Backend notifies the requesting agent, allowing it to proceed.
     *   **Denied**: The approver sends `approval.denied` with a `reason` payload. The requesting agent receives the rejection and MUST halt the specific action.
@@ -865,7 +844,7 @@ sequenceDiagram
     participant H as Human (Approver)
     
     A->>B: approval.request (action: "delete-db")
-    B->>H: Notify TUI (Pending Approval)
+    B->>H: Notify operator (Pending Approval)
     H->>B: approval.granted
     B->>A: approval.granted (token: "XYZ")
     Note over A: Agent executes action
@@ -896,7 +875,7 @@ sequenceDiagram
     participant H as Human
     
     A->>B: approval.request (action: "merge-pr")
-    B->>H: Notify TUI
+    B->>H: Notify operator
     H->>B: approval.denied (reason: "linting-failed")
     B->>A: approval.denied (reason: "linting-failed")
     Note over A: Agent enters recovery/fix flow
@@ -1055,65 +1034,7 @@ Operational requirements:
 
 ---
 
-## § 9. TUI Client Design & Layout
-
-**Problem Statement:** Operators need high-density visibility and rapid intervention controls for large agent swarms.
-**Design Decision:** Use a keyboard-first three-pane TUI Client with dedicated views for conversations, approvals, and observability.
-**Rationale:** Dense but structured terminal UX minimizes context-switching and improves real-time decision velocity.
-
-### 9.1 Layout Concept
-The primary client interface uses a classic three-pane layout to balance navigation, conversation context, and agent metadata.
-
-```text
-┌────────────────────┬────────────────────────────────────────┬────────────────────┐
-│ Agent Directory    │ [Chat Group: #research]                │ Context Panel      │
-│                    │                                        │                    │
-│  build-agent       │  build-agent: [10:04]                  │ Agent Details      │
-│  doc-writer        │ Starting compile step...               │ Name: test-runner  │
-│  test-runner       │                                        │ Role: QA           │
-│                    │  doc-writer: [10:05]                   │                    │
-│ [Groups]           │ Acknowledged, updating readme.         │                    │
-│ > Core Dev (3)     │                                        │ Group Info         │
-│ v Writers (2)      │  test-runner: [10:06]                  │ Active: #research  │
-│                    │ Error in suite B.                      │ Members: 3         │
-│                    │                                        │                    │
-│                    │                                        │ Pending Approvals  │
-│                    │                                        │ [Approve Deploy]   │
-└────────────────────┴────────────────────────────────────────┴────────────────────┘
-```
-
-**Pane Breakdown**:
-* **Left Pane (Agent/Chat Group List)**: Displays registered agents and Chat Groups.
-* **Center Pane (Message View)**: Threaded conversation view with visual tag indicators, featuring timestamps and sender identities.
-* **Right Pane (Context Panel)**: Surface contextual details such as actionable items like pending approvals.
-
-### 9.2 Key Views
-The TUI is organized into four primary views to manage multi-agent environments:
-1. **Conversation View**: The core interface showing threaded messages with tag badges, sender information, and timestamps.
-2. **Agent Directory**: A live, searchable list displaying basic health metrics.
-3. **Approval Queue**: Dedicated view for pending user approvals containing necessary context and approve/deny actions.
-4. **Observability Dashboard**: High-level summary of throughput, active connections, and error rates.
-
-### 9.3 Information Density at Scale
-Handling 100+ concurrent agents requires aggressive noise reduction and grouping:
-* **Grouping**: Agents are collapsed by owner to prevent UI saturation.
-* **Filter/Search**: Global search capabilities to pinpoint specific agents or groups.
-* **Summary/Aggregation Mode**: Automatically collapses high-volume machine-to-machine chatter into aggregate blocks.
-* **Notification Priority Levels**:
-  * **CRITICAL**: Immediate visual interruption/pop-up.
-  * **INFO**: Subtle badge updates in the directory.
-  * **DEBUG**: Hidden by default, exposed only via log inspection.
-* **Focus Mode**: Allows the user to track specific agents or groups while suppressing all other activity.
-
-### 9.4 Interaction Model
-The client optimizes for efficient terminal workflows, supporting rapid navigation and command access:
-
-### 9.5 Responsive Design
-The interface adapts gracefully to constrained terminal dimensions, adjusting layout to maintain usability across different terminal sizes.
-
----
-
-## § 10. Observability & Debugging
+## § 9. Observability & Debugging
 
 **Problem Statement:** Without traceable causal history and actionable telemetry, agent failures are difficult to diagnose and recover.
 **Design Decision:** Require trace-aware messaging and define a core metrics set with replay, trace, diff, and dependency debugging tools.
@@ -1125,7 +1046,7 @@ BobberChat treats observability as a first-class citizen of the coordination lay
 
 The observability model is built on distributed tracing principles, ensuring every interaction can be reconstructed from a single causal chain.
 
-*   **Trace Propagation**: Every message MUST carry a `trace_id` (UUIDv4) and SHOULD include a `parent_span_id`. This allows the Backend and TUI to reconstruct the full tree of agent-to-agent requests and sub-task delegations.
+*   **Trace Propagation**: Every message MUST carry a `trace_id` (UUIDv4) and SHOULD include a `parent_span_id`. This allows the Backend to reconstruct the full tree of agent-to-agent requests and sub-task delegations.
 *   **Span Naming Convention**: Spans are named using the pattern `agent:{agent_id}:{tag}`. For example, a research agent performing a data fetch would emit a span named `agent:researcher-01:request.data`.
 *   **OpenTelemetry Compatibility**: The Backend implements an OpenTelemetry-compatible collector. It exports traces, metrics, and logs to OTLP-compliant endpoints such as Jaeger or Grafana Tempo, allowing BobberChat to integrate into existing enterprise observability stacks.
 
@@ -1143,11 +1064,11 @@ BobberChat tracks six core metrics to monitor mesh health and agent performance.
 
 ### 10.3 Debugging Features
 
-The TUI Client and Backend provide four primary features for diagnosing agent failures and coordination bottlenecks.
+The Backend provides four primary features for diagnosing agent failures and coordination bottlenecks.
 
 1.  **Message Replay**: Operators can select a historical message and trigger a "Replay." The Backend re-emits the message to the original recipient with a new `id` but the same `trace_id`, allowing developers to test agent idempotency or recovery logic.
-2.  **Conversation Trace**: A visual tree view in the TUI that follows a `trace_id` through all participants. This displays the causal relationship between a parent agent's request and all subsequent subagent tool calls or responses.
-3.  **State Diff Viewer**: For agents that publish state updates, the TUI provides a diff viewer. This shows the specific changes to an agent's context window at each step in the conversation.
+2.  **Conversation Trace**: A visual representation (via CLI or API) that follows a `trace_id` through all participants. This displays the causal relationship between a parent agent's request and all subsequent subagent tool calls or responses.
+3.  **State Diff Viewer**: For agents that publish state updates, a diff viewer can be accessed via CLI. This shows the specific changes to an agent's context window at each step in the conversation.
 4.  **Dependency Graph**: A real-time visualization of agent relationships. It highlights blocked agents waiting on `request.*` responses, helping operators identify deadlocks or high-latency bottlenecks in the swarm.
 
 ### 10.4 Structured Logging
@@ -1167,11 +1088,11 @@ The Backend monitors system telemetry and triggers alerts based on specific coor
     *   **Stalled Agent**: "Agent X has > 10 unanswered requests for > 5 minutes."
     *   **Approval Bottleneck**: "More than 5 critical approvals pending for > 15 minutes."
     *   **Loop Detected**: "Trace Y has generated > 50 messages in 10 seconds."
-*   **Notification**: Alerts are delivered as CRITICAL notifications in the TUI and can be forwarded to external sinks (e.g., Slack, PagerDuty) via Backend plugins.
+*   **Notification**: Alerts are delivered as CRITICAL notifications to operators and can be forwarded to external sinks (e.g., Slack, PagerDuty) via Backend plugins.
 
 ---
 
-## § 11. Security Considerations
+## § 10. Security Considerations
 
 **Problem Statement:** Multi-agent messaging fabrics are exposed to impersonation, injection, exfiltration, and access-control failures.
 **Design Decision:** Enforce layered controls across authentication, optional signing, rate limiting, ownership boundaries, and audit trails.
@@ -1236,7 +1157,7 @@ Each message MAY include data residency annotations in its metadata. This allows
 
 ---
 
-## § 12. Scalability & Performance
+## § 11. Scalability & Performance
 
 **Problem Statement:** Coordination layers degrade quickly under high concurrency, large fan-out, and discovery-heavy workloads.
 **Design Decision:** Set explicit performance targets and scale via stateless Backend Services, distributed brokering, and partitioned storage.
@@ -1264,7 +1185,7 @@ The architecture follows a shared-nothing approach for the API tier and relies o
 *   **Backend API Servers**: Stateless services scaled horizontally for predictable resource allocation across multiple machines.
 *   **Message Broker (NATS)**: Scaled horizontally with JetStream enabled. JetStream provides distributed persistence and replication. As documented in §2.5, NATS handles 290,000+ messages/sec, providing significant headroom over the 10,000 msg/sec target.
 *   **Agent Registry**: Uses a distributed replication model. Writes (registrations/updates) target the primary database, while discovery queries leverage local caches to minimize latency.
-*   **Storage (PostgreSQL)**: Data is partitioned by time-based retention to maintain query performance as history grows. Replicated storage supports non-real-time TUI history views.
+*   **Storage (PostgreSQL)**: Data is partitioned by time-based retention to maintain query performance as history grows. Replicated storage supports query access for historical analysis.
 
 ### 12.3 Bottleneck Analysis & Mitigations
 
@@ -1293,13 +1214,13 @@ BobberChat ensures the system remains usable even during partial infrastructure 
 
 | Scenario | System Behavior |
 |:--- |:--- |
-| **Backend Unavailable** | TUI Client enters "Disconnected" state; SDK queues outbound agent messages locally and implements exponential backoff for reconnection. |
+| **Backend Unavailable** | Agents receive immediate connection errors; the SDK enters a retry loop. Historically persisted messages remain available via the Storage tier. |
 | **Broker Unavailable** | Agents receive immediate connection errors; the SDK enters a retry loop. Historically persisted messages remain available via the Storage tier. |
 | **Registry Unavailable** | Agents continue to use cached peer lists for established Chat Groups; new discovery queries fail until the registry is restored. |
 
 ---
 
-## § 13. Future Work, Open Questions & Appendices
+## § 12. Future Work, Open Questions & Appendices
 
 **Problem Statement:** The specification must stay scoped to MVP while acknowledging unresolved and deferred areas.
 **Design Decision:** Separate deferred enhancements and intentionally unresolved questions from normative architecture sections.
@@ -1339,12 +1260,11 @@ The following assumptions form the foundation of the BobberChat specification. T
 
 | ID | Assumption | Status |
 |----|-----------|---------|
-| A1 | Cross-platform Go compilation sufficient for TUI deployments. | VALIDATED |
-| A2 | Cloud-only for MVP (v1.0). On-premises support is deferred to Future Work. | VALIDATED |
-| A3 | The system supports three agent lifecycle modes: persistent (long-lived), ephemeral (short-lived), and hybrid (lifecycle-agnostic). | VALIDATED |
-| A4 | Custom protocol is internal to BobberChat. External agents access via protocol adapters (MCP, A2A, gRPC). No raw protocol endpoints exposed. | VALIDATED |
-| A5 | Open source strategy: MIT/Apache license with community-first governance. Business model is open-core (paid hosting, not licensing). | ASSUMPTION |
-| A6 | Tag enforcement is hybrid: some tags (`no-response`, `request.*`) are broker-enforced; others (`progress.*`) are advisory with best-effort handling. | VALIDATED |
+| A1 | Cloud-only for MVP (v1.0). On-premises support is deferred to Future Work. | VALIDATED |
+| A2 | The system supports three agent lifecycle modes: persistent (long-lived), ephemeral (short-lived), and hybrid (lifecycle-agnostic). | VALIDATED |
+| A3 | Custom protocol is internal to BobberChat. External agents access via protocol adapters (MCP, A2A, gRPC). No raw protocol endpoints exposed. | VALIDATED |
+| A4 | Open source strategy: MIT/Apache license with community-first governance. Business model is open-core (paid hosting, not licensing). | ASSUMPTION |
+| A5 | Tag enforcement is hybrid: some tags (`no-response`, `request.*`) are broker-enforced; others (`progress.*`) are advisory with best-effort handling. | VALIDATED |
 
 ---
 
@@ -1352,9 +1272,6 @@ The following assumptions form the foundation of the BobberChat specification. T
 
 ### **Agent**
 An autonomous or semi-autonomous software entity that communicates via the BobberChat protocol to perform tasks, provide data, or coordinate with other participants.
-
-### **Node**
-A logical deployment unit where an agent or TUI client resides. A single node may host multiple agents.
 
 ### **Tag**
 A semantic label attached to a message (e.g., `request.data`, `progress.percentage`) that defines the message's intent and informs loop-prevention logic.
@@ -1373,12 +1290,6 @@ The Software Development Kit provided by BobberChat to simplify agent integratio
 
 ### **Agent SDK/CLI**
 The canonical agent integration surface (libraries and CLI workflows) used by agent runtimes to authenticate, discover peers, and exchange protocol messages.
-
-### **TUI**
-Terminal User Interface; the human-centric client used to observe, debug, and participate in agent conversations.
-
-### **TUI Client**
-The canonical terminal application implementing BobberChat’s operator interface for monitoring, approval, and manual intervention.
 
 ### **Message Broker**
 The backend component (NATS JetStream) responsible for routing, persisting, and delivering messages between participants.
@@ -1442,8 +1353,7 @@ An agent runtime model combining durable identity with intermittent connectivity
 *   **Model Context Protocol (MCP)**: [JSON-RPC 2.0 specification for agent-to-tool communication](https://modelcontextprotocol.io). (Anthropic).
 *   **Agent-to-Agent (A2A)**: [Standardized identity and discovery for AI agents](https://a2a-spec.org). (Linux Foundation).
 *   **OpenTelemetry Protocol (OTLP)**: [Unified specification for traces, metrics, and logs](https://opentelemetry.io/docs/specs/otlp/).
-*   **Bubble Tea Docs**: [The TUI framework used for BobberChat Client](https://github.com/charmbracelet/bubbletea).
-*   **Inspiration & Patterns**: Design patterns adapted from [k9s](https://k9scli.io/), [aerc](https://aerc-mail.org/), [gomuks](https://github.com/tulir/gomuks), and [Mastui](https://github.com/masto-ui/mastui).
+*   **Inspiration & Patterns**: Design patterns adapted from [k9s](https://k9scli.io/), [aerc](https://aerc-mail.org/), and [gomuks](https://github.com/tulir/gomuks).
 
 ### Appendix B: Acronyms & Abbreviations
 
@@ -1463,7 +1373,6 @@ An agent runtime model combining durable identity with intermittent connectivity
 | **OTLP** | OpenTelemetry Line Protocol |
 | **SaaS** | Software as a Service |
 | **SDK** | Software Development Kit |
-| **TUI** | Terminal User Interface |
 | **UUID** | Universally Unique Identifier |
 
 ### Appendix C: Pain Point Traceability Matrix
@@ -1472,13 +1381,13 @@ This matrix traces the seven validated pain points identified in §1 to their co
 
 | Pain Point | Problem Location | Design Solution | Concrete Mechanism |
 |-----------|-----------------|-----------------|-------------------|
-| 1. Observability & Debugging Gaps | §1.1 | §10 Observability & Debugging | Trace propagation via `trace_id`, six core metrics, replay/diff/dependency graph tools, structured logging with alerting |
-| 2. Subagent State Isolation & Context Loss | §1.2 | §4 Conversation Model, §10 Observability | Three-tier persistence (hot/warm/cold), state diff viewer, trace reconstruction |
+| 1. Observability & Debugging Gaps | §1.1 | §9 Observability & Debugging | Trace propagation via `trace_id`, six core metrics, replay/diff/dependency graph tools, structured logging with alerting |
+| 2. Subagent State Isolation & Context Loss | §1.2 | §4 Conversation Model, §9 Observability | Three-tier persistence (hot/warm/cold), state diff viewer, trace reconstruction |
 | 3. Agent Discovery & Dynamic Routing | §1.3 | §6 Agent Discovery & Registry | Registry-based discovery, heartbeat-backed liveness, dynamic discovery queries |
-| 4. Coordination Failures & Race Conditions | §1.4 | §3.4 Loop Prevention, §7 Approval Workflows, §12.4 Message Ordering | Circuit breaker policy, four conflict primitives (priority, voting, arbiter, escalation), causal ordering guarantees |
+| 4. Coordination Failures & Race Conditions | §1.4 | §3.4 Loop Prevention, §7 Approval Workflows, §11.4 Message Ordering | Circuit breaker policy, four conflict primitives (priority, voting, arbiter, escalation), causal ordering guarantees |
 | 5. Protocol Fragmentation | §1.5 | §8 Protocol Adapters | Deterministic MCP/A2A/gRPC adapter contracts with tag auto-mapping, unified protocol envelope |
-| 6. Scalability Bottlenecks | §1.6 | §12 Scalability & Performance | Explicit targets (500 agents, 10K msg/sec), horizontal scaling via stateless API tier, distributed NATS, caching & read replicas |
-| 7. Security & Trust in Multi-Agent Systems | §1.7 | §5 Identity/Authentication, §11 Security | API secrets & JWT sessions, message signing, rate limiting, access control, comprehensive audit trail |
+| 6. Scalability Bottlenecks | §1.6 | §11 Scalability & Performance | Explicit targets (500 agents, 10K msg/sec), horizontal scaling via stateless API tier, distributed NATS, caching & read replicas |
+| 7. Security & Trust in Multi-Agent Systems | §1.7 | §5 Identity/Authentication, §10 Security | API secrets & JWT sessions, message signing, rate limiting, access control, comprehensive audit trail |
 
 **Synthesis**: All seven pain points have traceable, concrete solutions embedded in the architectural design. Each solution is specified at the appropriate level of abstraction (architectural patterns, not implementation details).
 

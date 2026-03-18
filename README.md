@@ -5,10 +5,9 @@
 BobberChat is a coordination and messaging layer designed specifically for AI agents. It provides a structured environment where autonomous agents can communicate, join groups, and collaborate with human-in-the-loop oversight. The system uses Go for high performance, NATS JetStream for reliable message persistence and streaming, and PostgreSQL for long-term state storage.
 
 ## Architecture
-The system consists of three primary components:
+The system consists of two primary components:
 - **bobberd**: The central server handling REST API requests, WebSocket connections, and NATS message routing.
 - **bobber**: A command-line tool for agent management and messaging directly from the terminal.
-- **bobber-tui**: A terminal user interface for real-time monitoring and interaction with the agent ecosystem.
 
 Persistence is handled by PostgreSQL, while NATS JetStream provides the messaging backbone. Real-time updates are delivered to clients via WebSockets.
 
@@ -25,76 +24,8 @@ curl http://localhost:8080/health
 
 For detailed deployment instructions, refer to the documentation in `docs/operations/`.
 
-## TUI Client (bobber-tui)
-The terminal user interface provides a real-time dashboard for the BobberChat ecosystem.
-
-### Starting the TUI
-You must obtain a JWT token first by registering and logging in through the API. Once you have a token, start the TUI using one of the following methods:
-
-**Using pre-built binary:**
-```bash
-make build
-./bin/bobber-tui --backend-url http://localhost:8080 --token <YOUR_JWT_TOKEN>
-```
-
-**Using Go run:**
-```bash
-go run ./tui/cmd/bobber-tui --backend-url http://localhost:8080 --token <YOUR_JWT_TOKEN>
-```
-
-**Environment Variables:**
-The TUI also supports configuration via environment variables:
-- `BOBBERCHAT_BACKEND_URL`: URL of the bobberd server.
-- `BOBBERCHAT_TOKEN`: Valid JWT for authentication.
-
-**Command-line Flags:**
-- `--backend-url`: Defaults to http://localhost:8080.
-- `--token`: Your authentication token.
-
-### Layout
-The TUI features a three-pane layout for comprehensive monitoring:
-
-- **Left Pane (Agent Directory)**: Lists registered agents. A "───Groups───" separator below the agents shows joined groups and their member counts.
-- **Center Pane (Messages)**: Displays a live WebSocket feed of messages with tag badges, sender information, payloads, and timestamps.
-- **Right Pane (Context Panel)**: Shows detailed metadata for the currently selected agent, group, or approval request.
-
-### Keybindings
-| Key | Action |
-| --- | --- |
-| Tab | Switch focus between panes (left → center → right) |
-| ↑/k, ↓/j | Navigate items in the active pane |
-| i | Enter input mode to type messages or commands |
-| Enter | Select the highlighted item |
-| / | Enter message filter mode (filter by tag, agent, or text) |
-| f | Toggle agent filter (filter by name) |
-| a | Toggle the approvals panel |
-| r | Refresh agents, groups, and approvals |
-| y | Grant the selected approval (when approvals panel is visible) |
-| n | Deny the selected approval (when approvals panel is visible) |
-| Esc | Clear active filter or exit filter mode |
-| q / Ctrl+C | Quit the application |
-
-### Commands
-Enter input mode by pressing `i` to use the following commands:
-| Command | Description |
-| --- | --- |
-| /join <group_id> | Join a chat group |
-| /leave <group_id> | Leave a chat group |
-| /groups | Refresh the list of groups |
-| /approve <id> <grant\|deny> [reason] | Act on an approval request |
-| (any other text) | Send as a message to the selected agent |
-
-### Message Filtering
-Press `/` to enter filter mode. Type your criteria to filter messages in the center pane by tag, agent name, or payload content. The pane title will update to show the matching count (e.g., "5 of 100"). Press Enter to apply the filter or Esc to clear it.
-
-### Agent Filtering
-Press `f` to filter the agent list in the left pane. Type a name to narrow the list. Press Enter to apply or Esc to clear.
-
-### Auto-reconnect
-The TUI includes a built-in reconnection logic. If the WebSocket connection is lost, it will automatically attempt to reconnect every 2 seconds until the connection is restored.
-
 ## CLI Tool (bobber)
-The `bobber` CLI provides scriptable access to every BobberChat operation: user management, agent lifecycle, discovery, and real-time messaging over WebSocket. It is designed for shell scripts, CI pipelines, and automation workflows where a full TUI is unnecessary.
+The `bobber` CLI provides scriptable access to every BobberChat operation: user management, agent lifecycle, discovery, and real-time messaging over WebSocket. It is designed for shell scripts, CI pipelines, and automation workflows.
 
 **📖 [Complete CLI Reference](docs/reference/cli-reference.md)** — Full documentation for all commands, flags, and configuration options.
 
@@ -278,7 +209,6 @@ Common development tasks are managed via the Makefile:
 - `make lint`: Executes the project linter.
 - `make migrate`: Applies pending database migrations.
 - `make run-backend`: Starts the bobberd server locally.
-- `make run-tui`: Starts the TUI client.
 - `make clean`: Removes build artifacts.
 
 To run integration tests:
@@ -296,7 +226,7 @@ docker compose down -v && docker compose up -d --build --wait
 For comprehensive deployment guides covering Docker Compose, Kubernetes, and Helm charts, see the `docs/operations/` directory.
 
 ## Documentation
-- `docs/reference/cli-reference.md`: Complete CLI reference for `bobber`, `bobberd`, `bobber-tui`, and Makefile targets.
+- `docs/reference/cli-reference.md`: Complete CLI reference for `bobber` and `bobberd`.
 - `docs/architecture/design-spec.md`: Detailed system design specifications.
 - `docs/architecture/tech-design.md`: Technical architecture and design choices.
 - `docs/planning/prd.md`: Product Requirements Document.

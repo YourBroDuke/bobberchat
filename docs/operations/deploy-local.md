@@ -56,25 +56,9 @@ curl -s http://localhost:8080/v1/health
 # {"status":"ok"}
 ```
 
-### 4. Start the TUI (Optional)
+### 4. Build Binaries (Optional)
 
-In a separate terminal, first obtain a JWT token (see [manual-testing.md](manual-testing.md) for full steps), then:
-
-```bash
-make run-tui
-```
-
-Or with explicit flags:
-
-```bash
-go run ./tui/cmd/bobber-tui \
-  --backend-url http://localhost:8080 \
-  --token <YOUR_JWT_TOKEN>
-```
-
-### 5. Build Binaries (Optional)
-
-To compile all three binaries (`bobberd`, `bobber`, `bobber-tui`) into the `bin/` directory:
+To compile all binaries (`bobberd`, `bobber`) into the `bin/` directory:
 
 ```bash
 make build
@@ -84,7 +68,6 @@ Then run directly:
 
 ```bash
 ./bin/bobberd --config configs/backend.yaml
-./bin/bobber-tui --backend-url http://localhost:8080 --token <YOUR_JWT_TOKEN>
 ```
 
 ## Configuration
@@ -109,12 +92,11 @@ BOBBERD_AUTH_JWT_SECRET=my-dev-secret go run ./backend/cmd/bobberd --config conf
 
 | Target | Command | Description |
 | --- | --- | --- |
-| make build | `go build -o bin/ ./backend/cmd/bobberd ./cli/cmd/bobber ./tui/cmd/bobber-tui` | Compile all binaries |
-| make test | `go test ./backend/... ./cli/... ./tui/...` | Run unit tests |
-| make lint | `go vet ./backend/... ./cli/... ./tui/...` | Run static analysis |
+| make build | `go build -o bin/ ./backend/cmd/bobberd ./cli/cmd/bobber` | Compile all binaries |
+| make test | `go test ./backend/... ./cli/...` | Run unit tests |
+| make lint | `go vet ./backend/... ./cli/...` | Run static analysis |
 | make migrate | `psql -f migrations/001_initial_schema.sql` | Apply database schema |
 | make run-backend | `go run ./backend/cmd/bobberd` | Start backend server |
-| make run-tui | `go run ./tui/cmd/bobber-tui` | Start TUI client |
 | make clean | `rm -rf bin/` | Remove build artifacts |
 
 ## Running Tests

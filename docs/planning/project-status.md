@@ -8,14 +8,14 @@
 
 ## Current State: All Implementation & Documentation Complete
 
-All core modules, protocol adapters, production hardening, TUI enhancements, CI/CD & deployment, README, and TSG documentation are implemented, compiled, tested, and verified end-to-end.
+All core modules, protocol adapters, production hardening, CI/CD & deployment, README, and documentation are implemented, compiled, tested, and verified end-to-end.
 
 ### Build & Test Verification
 
 ```bash
-go build ./backend/... ./cli/... ./tui/...    # ✅ Clean (Go workspace)
-go vet ./backend/... ./cli/... ./tui/...      # ✅ Clean
-go test ./backend/... ./cli/... ./tui/...     # ✅ 15 packages pass (~245+ subtests)
+go build ./backend/... ./cli/...    # ✅ Clean (Go workspace)
+go vet ./backend/... ./cli/...      # ✅ Clean
+go test ./backend/... ./cli/...     # ✅ 15 packages pass (~245+ subtests)
 
 # Docker-based E2E
 docker compose up -d
@@ -38,13 +38,13 @@ BOBBERCHAT_TEST_DSN="postgres://bobberchat:bobberchat@localhost:5432/bobberchat?
 | `docs/planning/prd.md` | 212 | Product requirements document |
 | `docs/architecture/tech-design.md` | 721 | Technical design document |
 | `api/openapi/openapi.yaml` | ~1,450 | OpenAPI 3.1.0 spec — 29 endpoint paths |
-| `README.md` | ~280 | Comprehensive project README with TUI user guide |
-| `docs/reference/cli-reference.md` | ~595 | Complete CLI reference for bobber, bobberd, bobber-tui, and Makefile |
+| `README.md` | ~280 | Comprehensive project README |
+| `docs/reference/cli-reference.md` | ~595 | Complete CLI reference for bobber and bobberd |
 | `docs/operations/deploy-docker-compose.md` | ~120 | Docker Compose deployment guide |
 | `docs/operations/deploy-kubernetes.md` | ~130 | Raw Kubernetes manifests deployment guide |
 | `docs/operations/deploy-helm.md` | ~170 | Helm chart deployment guide |
 | `docs/operations/deploy-local.md` | ~120 | Local development setup guide |
-| `docs/operations/troubleshooting.md` | ~200 | Common issues and fixes (Docker, API, K8s, Helm, TUI) |
+| `docs/operations/troubleshooting.md` | ~200 | Common issues and fixes (Docker, API, K8s, Helm) |
 | `docs/operations/manual-testing.md` | ~210 | Step-by-step manual testing walkthrough with curl |
 
 ### Core Implementation (8 packages)
@@ -103,13 +103,12 @@ Key implementation details:
 - **Graceful shutdown**: `activeConns sync.WaitGroup` tracks live WebSocket connections; shutdown drains with timeout
 - **All 3 publish call sites** (`handleReplayMessage`, `handleAdapterIngest`, `handleWebSocket`) route through `publishAndAudit`
 
-### Binaries (3 commands — Go Workspace)
+### Binaries (2 commands — Go Workspace)
 
 | Binary | Source | Lines | Description |
 |--------|--------|-------|-------------|
 | `bobberd` | `backend/cmd/bobberd/main.go` | ~1,370 | Backend server — 34 REST endpoints + WebSocket + message replay + adapter ingest + production hardening |
 | `bobber` | `cli/cmd/bobber/main.go` | ~700 | CLI tool — account, agent, session, connection, messaging, and group management commands. Tests in `main_test.go` |
-| `bobber-tui` | `tui/cmd/bobber-tui/main.go` | ~1,471 | TUI client — Bubble Tea terminal UI with groups, filtering |
 
 ### SDK
 
@@ -171,22 +170,6 @@ Key implementation details:
 - [x] Agent heartbeat timeout detection — already existed (`missedPongs` counter, `heartbeatTTL`)
 - [ ] NATS JetStream consumer recovery on reconnect — deferred (NATS client handles basic reconnect)
 
-### ~~Priority 2: TUI Enhancements~~ ✅ COMPLETE
-
-- [x] Live WebSocket message feed in conversation view — already existed
-- [x] Agent heartbeat display — already existed (heartbeat in context panel)
-- [x] Approval workflow interaction (grant/deny from TUI) — already existed (y/n keys + `/approve` command)
-- [x] Message filtering and search — message filter (`/` key), agent filter (`f` key)
-- [x] Group management from TUI — group listing in left sidebar, `/join`/`/leave`/`/groups` commands
-
-TUI enhancements added (~590 lines):
-- **Left pane redesign**: Agents + Groups split with `───Groups───` separator, cursor navigation across sections
-- **Group data**: `fetchGroupsCmd`, group entries with name + member count, periodic refresh
-- **Message filtering**: `/` enters filter mode, filters by tag/agent/payload substring, shows `(N of M)` count
-- **Agent filtering**: `f` toggles agent filter by name
-- **Group commands**: `/join <id>`, `/leave <id>`, `/groups` in input mode
-- **Updated status bar**: Shows new keybindings
-
 ### Priority 3: CI/CD & Deployment ✅ COMPLETE
 
 - [x] GitHub Actions CI workflow (lint, build, unit tests, integration tests, E2E tests, Docker build)
@@ -235,7 +218,7 @@ Azure resources:
 ### Module & Dependencies
 
 ```
-Go Workspace (go.work) with 3 independent modules:
+Go Workspace (go.work) with 2 independent modules:
 
   backend/go.mod — github.com/bobberchat/bobberchat/backend
     nats.go v1.49.0         — NATS JetStream messaging
@@ -253,12 +236,6 @@ Go Workspace (go.work) with 3 independent modules:
     cobra v1.10.2           — CLI framework
     viper v1.21.0           — Configuration
     uuid v1.6.0             — UUID generation
-    gorilla/websocket v1.5.3 — WebSocket client
-
-  tui/go.mod — github.com/bobberchat/bobberchat/tui
-    bubbletea v1.3.10       — TUI framework
-    lipgloss v1.1.0         — TUI styling
-    bubbles v1.0.0          — TUI components
     gorilla/websocket v1.5.3 — WebSocket client
 
 Go version: 1.25.0 (go.mod)
@@ -335,11 +312,11 @@ I'm continuing work on the BobberChat project. Read docs/planning/project-status
 
 The project is a "Slack for Agents" — a multi-agent coordination layer built with Go, NATS JetStream, and PostgreSQL.
 
-The codebase uses a Go workspace (go.work) with 3 independent modules: backend/, cli/, tui/. Each has its own go.mod.
+The codebase uses a Go workspace (go.work) with 2 independent modules: backend/, cli/. Each has its own go.mod.
 
-All planned work is COMPLETE: core implementation, protocol adapters, production hardening, TUI enhancements, CI/CD & deployment, and CLI test coverage. All code compiles, unit tests pass (~245+ subtests across 15 packages), E2E tests pass (29/29), and integration tests pass (5/5).
+All planned work is COMPLETE: core implementation, protocol adapters, production hardening, CI/CD & deployment, and CLI test coverage. All code compiles, unit tests pass (~245+ subtests across 15 packages), E2E tests pass (29/29), and integration tests pass (5/5).
 
-Follow the existing codebase patterns. Run `go build ./backend/... ./cli/... ./tui/...` and `go test ./backend/... ./cli/... ./tui/...` to verify.
+Follow the existing codebase patterns. Run `go build ./backend/... ./cli/...` and `go test ./backend/... ./cli/...` to verify.
 For E2E: `docker compose up -d && ./scripts/e2e-test.sh`
 ```
 
@@ -349,7 +326,7 @@ For E2E: `docker compose up -d && ./scripts/e2e-test.sh`
 
 ```
 bobberchat/
-├── go.work                                   # Go workspace (backend, cli, tui)
+├── go.work                                   # Go workspace (backend, cli)
 ├── .github/workflows/
 │   ├── ci.yml                            # CI pipeline (lint, build, test, integration, E2E, Docker build, Docker push)
 │   ├── deploy-staging.yml                # Staging deployment pipeline
@@ -406,11 +383,6 @@ bobberchat/
 │   └── cmd/bobber/
 │       ├── main.go                       # CLI tool (634 lines)
 │       └── main_test.go                  # CLI tests (refactored to match new command structure)
-├── tui/
-│   ├── go.mod                            # TUI module: github.com/bobberchat/bobberchat/tui
-│   ├── go.sum
-│   └── cmd/bobber-tui/
-│       └── main.go                       # TUI client
 ├── configs/backend.yaml                  # Default config
 ├── deploy/
 │   ├── k8s/                              # Raw Kubernetes manifests
@@ -456,7 +428,7 @@ bobberchat/
 │   │   ├── prd.md                    # Product requirements
 │   │   └── project-status.md         # ← THIS FILE
 │   └── reference/
-│       └── cli-reference.md          # Complete CLI reference (bobber, bobberd, bobber-tui, Makefile)
+│       └── cli-reference.md          # Complete CLI reference (bobber, bobberd, Makefile)
 ├── migrations/001_initial_schema.sql  # Full DB schema
 ├── migrations/002_email_verification.sql # User email verification columns/index
 ├── migrations/003_connections_blacklist.sql # Connection request and blacklist persistence
