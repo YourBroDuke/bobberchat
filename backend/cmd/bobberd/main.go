@@ -82,7 +82,6 @@ type messagePublisher interface {
 
 const (
 	ctxUserID  contextKey = "user_id"
-	ctxRole    contextKey = "role"
 	ctxAgentID contextKey = "agent_id"
 )
 
@@ -324,7 +323,6 @@ func (a *app) authenticate(r *http.Request, allowJWT, allowAgentSecret bool) (co
 			if err == nil {
 				ctx := r.Context()
 				ctx = context.WithValue(ctx, ctxUserID, claims.UserID)
-				ctx = context.WithValue(ctx, ctxRole, claims.Role)
 				return ctx, nil
 			}
 		}
@@ -338,7 +336,6 @@ func (a *app) authenticate(r *http.Request, allowJWT, allowAgentSecret bool) (co
 			if err == nil {
 				ctx := r.Context()
 				ctx = context.WithValue(ctx, ctxUserID, "")
-				ctx = context.WithValue(ctx, ctxRole, "agent")
 				ctx = context.WithValue(ctx, ctxAgentID, agent.AgentID.String())
 				return ctx, nil
 			}
@@ -367,7 +364,6 @@ func (a *app) handleRegister(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"id":         user.ID,
 		"email":      user.Email,
-		"role":       user.Role,
 		"created_at": user.CreatedAt,
 	})
 }
@@ -394,7 +390,6 @@ func (a *app) handleLogin(w http.ResponseWriter, r *http.Request) {
 		"user": map[string]any{
 			"id":         user.ID,
 			"email":      user.Email,
-			"role":       user.Role,
 			"created_at": user.CreatedAt,
 		},
 	})
@@ -457,7 +452,6 @@ func (a *app) handleWhoAmI(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"user_id": user.ID,
 		"email":   user.Email,
-		"role":    user.Role,
 		"agents":  agents,
 	})
 }
@@ -529,7 +523,6 @@ func (a *app) handleEntityInfo(w http.ResponseWriter, r *http.Request) {
 			"type":           "user",
 			"id":             user.ID,
 			"email":          user.Email,
-			"role":           user.Role,
 			"email_verified": user.EmailVerified,
 			"created_at":     user.CreatedAt,
 		})

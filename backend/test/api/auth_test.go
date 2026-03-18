@@ -20,7 +20,6 @@ func TestRegister_Success(t *testing.T) {
 
 	assertJSONField(t, body, "id")
 	assertJSONFieldEquals(t, body, "email", email)
-	assertJSONFieldEquals(t, body, "role", "member")
 	assertJSONField(t, body, "created_at")
 }
 

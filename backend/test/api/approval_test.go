@@ -19,9 +19,9 @@ func seedPendingApproval(t *testing.T, env *testEnv, approverUserID string) stri
 	approvalID := uuid.New()
 
 	_, err := env.db.Pool().Exec(context.Background(), `
-		INSERT INTO users (id, email, password_hash, role, created_at)
-		VALUES ($1,$2,$3,$4,NOW())
-	`, ownerID, newEmail("approval-owner"), "hash", "member")
+		INSERT INTO users (id, email, password_hash, created_at)
+		VALUES ($1,$2,$3,NOW())
+	`, ownerID, newEmail("approval-owner"), "hash")
 	if err != nil {
 		t.Fatalf("insert owner user: %v", err)
 	}

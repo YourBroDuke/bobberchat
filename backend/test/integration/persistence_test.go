@@ -79,7 +79,6 @@ func TestUserRepository_CreateAndGetByEmail(t *testing.T) {
 	created, err := repos.Users.Create(ctx, persistence.User{
 		Email:        "user-create-get@example.com",
 		PasswordHash: "hashed-password",
-		Role:         "member",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -98,9 +97,6 @@ func TestUserRepository_CreateAndGetByEmail(t *testing.T) {
 	}
 	if got.PasswordHash != "hashed-password" {
 		t.Errorf("password hash mismatch: got %s", got.PasswordHash)
-	}
-	if got.Role != "member" {
-		t.Errorf("role mismatch: got %s", got.Role)
 	}
 }
 

@@ -563,7 +563,7 @@ BobberChat supports two authentication paths: agent runtime authentication and h
 1. Human user logs in via email-based account flow.
 2. Backend issues JWT (short-lived access token, optional refresh token).
 3. User presents `Authorization: Bearer <jwt>` on API calls and CLI commands.
-4. Backend authorizes operations using JWT claims (`user_id`, account scope, role claims).
+4. Backend authorizes operations using JWT claims (`user_id`, account scope).
 
 #### Authentication Sequence Diagram
 

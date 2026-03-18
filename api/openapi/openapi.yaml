@@ -67,8 +67,6 @@ paths:
                     format: uuid
                   email:
                     type: string
-                  role:
-                    type: string
                   created_at:
                     type: string
                     format: date-time
@@ -116,8 +114,6 @@ paths:
                         type: string
                         format: uuid
                       email:
-                        type: string
-                      role:
                         type: string
                       created_at:
                         type: string
@@ -211,8 +207,6 @@ paths:
                     type: string
                     format: uuid
                   email:
-                    type: string
-                  role:
                     type: string
                   agents:
                     type: array
@@ -354,8 +348,6 @@ paths:
                         type: string
                         format: uuid
                       email:
-                        type: string
-                      role:
                         type: string
                       email_verified:
                         type: boolean

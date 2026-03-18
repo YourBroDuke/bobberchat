@@ -34,12 +34,10 @@ type Service struct {
 
 type JWTClaims struct {
 	UserID string
-	Role   string
 }
 
 type jwtTokenClaims struct {
 	UserID string `json:"user_id"`
-	Role   string `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -85,7 +83,6 @@ func (s *Service) RegisterUser(ctx context.Context, emailAddr, password string) 
 	created, err := repos.Users.Create(ctx, persistence.User{
 		Email:        strings.ToLower(strings.TrimSpace(emailAddr)),
 		PasswordHash: string(hash),
-		Role:         "member",
 	})
 	if err != nil {
 		return nil, err
@@ -137,7 +134,6 @@ func (s *Service) LoginUser(ctx context.Context, email, password string) (access
 	now := time.Now().UTC()
 	claims := jwtTokenClaims{
 		UserID: u.ID.String(),
-		Role:   u.Role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   "user:" + u.ID.String(),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -223,7 +219,7 @@ func (s *Service) ValidateJWT(tokenStr string) (*JWTClaims, error) {
 		return nil, errors.New("invalid token claims")
 	}
 
-	return &JWTClaims{UserID: claims.UserID, Role: claims.Role}, nil
+	return &JWTClaims{UserID: claims.UserID}, nil
 }
 
 func (s *Service) CreateAgent(ctx context.Context, ownerUserID, displayName string) (agent *persistence.Agent, apiSecret string, err error) {
@@ -315,7 +311,7 @@ func (s *Service) getUserByEmail(ctx context.Context, email string) (*persistenc
 	}
 
 	row := s.db.Pool().QueryRow(ctx, `
-		SELECT id, email, password_hash, role, created_at,
+		SELECT id, email, password_hash, created_at,
 			email_verified, verification_token, verification_token_expires_at
 		FROM users
 		WHERE email = $1
@@ -328,7 +324,6 @@ func (s *Service) getUserByEmail(ctx context.Context, email string) (*persistenc
 		&u.ID,
 		&u.Email,
 		&u.PasswordHash,
-		&u.Role,
 		&u.CreatedAt,
 		&u.EmailVerified,
 		&u.VerificationToken,

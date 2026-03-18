@@ -143,7 +143,6 @@ func TestValidateJWTRoundTrip(t *testing.T) {
 
 	claims := jwtTokenClaims{
 		UserID: "user-1",
-		Role:   "member",
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   "user:user-1",
 			IssuedAt:  jwt.NewNumericDate(time.Now().UTC()),
@@ -162,7 +161,7 @@ func TestValidateJWTRoundTrip(t *testing.T) {
 		t.Fatalf("ValidateJWT returned error: %v", err)
 	}
 
-	if validated.UserID != claims.UserID || validated.Role != claims.Role {
+	if validated.UserID != claims.UserID {
 		t.Fatalf("unexpected claims: got %+v", validated)
 	}
 }
@@ -173,7 +172,6 @@ func TestValidateJWTRejectsInvalidTokens(t *testing.T) {
 
 	goodClaims := jwtTokenClaims{
 		UserID: "user-1",
-		Role:   "member",
 		RegisteredClaims: jwt.RegisteredClaims{
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
@@ -188,7 +186,6 @@ func TestValidateJWTRejectsInvalidTokens(t *testing.T) {
 
 	expiredClaims := jwtTokenClaims{
 		UserID: "user-1",
-		Role:   "member",
 		RegisteredClaims: jwt.RegisteredClaims{
 			IssuedAt:  jwt.NewNumericDate(now.Add(-2 * time.Hour)),
 			ExpiresAt: jwt.NewNumericDate(now.Add(-time.Hour)),

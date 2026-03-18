@@ -235,26 +235,21 @@ func (r *pgUserRepository) Create(ctx context.Context, user User) (*User, error)
 	if user.CreatedAt.IsZero() {
 		user.CreatedAt = time.Now().UTC()
 	}
-	if user.Role == "" {
-		user.Role = "member"
-	}
-
 	row := r.db.Pool().QueryRow(ctx, `
 		INSERT INTO users (
-			id, email, password_hash, role, created_at,
+			id, email, password_hash, created_at,
 			email_verified, verification_token, verification_token_expires_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		RETURNING id, email, password_hash, role, created_at,
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id, email, password_hash, created_at,
 			email_verified, verification_token, verification_token_expires_at
-	`, user.ID, strings.ToLower(strings.TrimSpace(user.Email)), user.PasswordHash, user.Role, user.CreatedAt, user.EmailVerified, user.VerificationToken, user.VerificationTokenExpiresAt)
+	`, user.ID, strings.ToLower(strings.TrimSpace(user.Email)), user.PasswordHash, user.CreatedAt, user.EmailVerified, user.VerificationToken, user.VerificationTokenExpiresAt)
 
 	created := User{}
 	err := row.Scan(
 		&created.ID,
 		&created.Email,
 		&created.PasswordHash,
-		&created.Role,
 		&created.CreatedAt,
 		&created.EmailVerified,
 		&created.VerificationToken,
@@ -268,7 +263,7 @@ func (r *pgUserRepository) Create(ctx context.Context, user User) (*User, error)
 
 func (r *pgUserRepository) GetByEmail(ctx context.Context, email string) (*User, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, email, password_hash, role, created_at,
+		SELECT id, email, password_hash, created_at,
 			email_verified, verification_token, verification_token_expires_at
 		FROM users
 		WHERE email = $1
@@ -279,7 +274,6 @@ func (r *pgUserRepository) GetByEmail(ctx context.Context, email string) (*User,
 		&u.ID,
 		&u.Email,
 		&u.PasswordHash,
-		&u.Role,
 		&u.CreatedAt,
 		&u.EmailVerified,
 		&u.VerificationToken,
@@ -296,7 +290,7 @@ func (r *pgUserRepository) GetByEmail(ctx context.Context, email string) (*User,
 
 func (r *pgUserRepository) GetByID(ctx context.Context, userID uuid.UUID) (*User, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, email, password_hash, role, created_at,
+		SELECT id, email, password_hash, created_at,
 			email_verified, verification_token, verification_token_expires_at
 		FROM users
 		WHERE id = $1
@@ -307,7 +301,6 @@ func (r *pgUserRepository) GetByID(ctx context.Context, userID uuid.UUID) (*User
 		&u.ID,
 		&u.Email,
 		&u.PasswordHash,
-		&u.Role,
 		&u.CreatedAt,
 		&u.EmailVerified,
 		&u.VerificationToken,
@@ -346,7 +339,7 @@ func (r *pgUserRepository) VerifyEmail(ctx context.Context, token string) (*User
 		WHERE verification_token = $1
 			AND verification_token IS NOT NULL
 			AND verification_token_expires_at > NOW()
-		RETURNING id, email, password_hash, role, created_at,
+		RETURNING id, email, password_hash, created_at,
 			email_verified, verification_token, verification_token_expires_at
 	`, token)
 
@@ -355,7 +348,6 @@ func (r *pgUserRepository) VerifyEmail(ctx context.Context, token string) (*User
 		&u.ID,
 		&u.Email,
 		&u.PasswordHash,
-		&u.Role,
 		&u.CreatedAt,
 		&u.EmailVerified,
 		&u.VerificationToken,
@@ -373,7 +365,7 @@ func (r *pgUserRepository) VerifyEmail(ctx context.Context, token string) (*User
 
 func (r *pgUserRepository) GetByVerificationToken(ctx context.Context, token string) (*User, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, email, password_hash, role, created_at,
+		SELECT id, email, password_hash, created_at,
 			email_verified, verification_token, verification_token_expires_at
 		FROM users
 		WHERE verification_token = $1
@@ -386,7 +378,6 @@ func (r *pgUserRepository) GetByVerificationToken(ctx context.Context, token str
 		&u.ID,
 		&u.Email,
 		&u.PasswordHash,
-		&u.Role,
 		&u.CreatedAt,
 		&u.EmailVerified,
 		&u.VerificationToken,

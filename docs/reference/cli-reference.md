@@ -92,7 +92,6 @@ bobber account register --email alice@example.com --password s3cret
 {
   "id": "550e8400-e29b-41d4-a716-446655440000",
   "email": "alice@example.com",
-  "role": "user",
   "created_at": "2026-03-17T12:00:00Z"
 }
 ```
@@ -120,7 +119,6 @@ bobber account login --email <email> --password <password>
   "user": {
     "id": "550e8400-e29b-41d4-a716-446655440000",
     "email": "alice@example.com",
-    "role": "user",
     "created_at": "2026-03-17T12:00:00Z"
   }
 }
@@ -471,7 +469,6 @@ User example:
   "type": "user",
   "id": "550e8400-e29b-41d4-a716-446655440000",
   "email": "alice@example.com",
-  "role": "member",
   "email_verified": true,
   "created_at": "2026-03-17T12:00:00Z"
 }
