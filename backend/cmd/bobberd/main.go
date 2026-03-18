@@ -388,7 +388,6 @@ func (a *app) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"access_token": token,
-		"token_type":   "Bearer",
 		"expires_in":   int(time.Hour.Seconds()),
 		"user": map[string]any{
 			"id":         user.ID,

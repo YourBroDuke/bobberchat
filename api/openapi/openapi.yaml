@@ -107,9 +107,6 @@ paths:
                 properties:
                   access_token:
                     type: string
-                  token_type:
-                    type: string
-                    example: Bearer
                   expires_in:
                     type: integer
                   user:

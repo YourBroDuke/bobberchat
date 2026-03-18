@@ -102,11 +102,11 @@ fi
 print_step "3/31 Login"
 request "POST" "/v1/auth/login" "{\"email\":\"test@example.com\",\"password\":\"testpass123\"}"
 TOKEN="$(echo "$LAST_BODY" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4 || true)"
-if [ "$LAST_STATUS" -eq 200 ] && [ -n "$TOKEN" ] && [[ "$LAST_BODY" == *'"token_type":"Bearer"'* ]]; then
+if [ "$LAST_STATUS" -eq 200 ] && [ -n "$TOKEN" ]; then
   echo "  PASS: Login (HTTP $LAST_STATUS)"
   PASS=$((PASS + 1))
 else
-  echo "  FAIL: Login (expected 200 with access_token and token_type, got HTTP $LAST_STATUS)"
+  echo "  FAIL: Login (expected 200 with access_token, got HTTP $LAST_STATUS)"
   FAIL=$((FAIL + 1))
 fi
 

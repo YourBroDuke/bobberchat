@@ -66,7 +66,6 @@ func TestLogin_Success(t *testing.T) {
 	body := env.readJSON(t, resp)
 
 	assertJSONField(t, body, "access_token")
-	assertJSONFieldEquals(t, body, "token_type", "Bearer")
 	assertJSONField(t, body, "expires_in")
 	user := assertJSONField(t, body, "user").(map[string]any)
 	assertJSONFieldEquals(t, user, "email", email)

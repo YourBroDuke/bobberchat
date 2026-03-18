@@ -302,7 +302,7 @@ Authentication model:
 | Method | Path | Auth | Request JSON | Response JSON | Status codes |
 |---|---|---|---|---|---|
 | POST | `/v1/auth/register` | None | `{ "email": "user@example.com", "password": "string" }` | `{ "user_id": "uuid", "email": "...", "created_at": "..." }` | 201, 400, 409 |
-| POST | `/v1/auth/login` | None | `{ "email": "user@example.com", "password": "string" }` | `{ "access_token": "jwt", "token_type": "Bearer", "expires_in": 3600, "user": { "user_id": "uuid", "role": "member" } }` | 200, 400, 401 |
+| POST | `/v1/auth/login` | None | `{ "email": "user@example.com", "password": "string" }` | `{ "access_token": "jwt", "expires_in": 3600, "user": { "user_id": "uuid", "role": "member" } }` | 200, 400, 401 |
 | POST | `/v1/auth/verify-email` | None | `{ "token": "string" }` | `{ "verified": true, "user_id": "uuid", "email": "user@example.com" }` | 200, 400 |
 | POST | `/v1/auth/resend-verification` | None | `{ "email": "user@example.com" }` | `{ "sent": true }` | 200, 400 |
 
