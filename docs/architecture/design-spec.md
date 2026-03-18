@@ -27,7 +27,7 @@ This design specification is written for four primary audiences:
 1. [§ 1. Executive Summary & Problem Statement](#1-executive-summary--problem-statement)
 2. [§ 2. System Architecture Overview](#2-system-architecture-overview)
 3. [§ 3. Custom Protocol Design & Message Tag Taxonomy](#3-custom-protocol-design--message-tag-taxonomy)
-4. [§ 4. Conversation Model (Private Chat, Chat Groups, Topics)](#4-conversation-model-private-chat-chat-groups-topics)
+4. [§ 4. Conversation Model (Private Chat, Chat Groups)](#4-conversation-model-private-chat-chat-groups)
 5. [§ 5. Identity, Authentication & Agent Lifecycle](#5-identity-authentication--agent-lifecycle)
 6. [§ 6. Agent Discovery & Registry](#6-agent-discovery--registry)
 7. [§ 7. Approval Workflows & Coordination Primitives](#7-approval-workflows--coordination-primitives)
@@ -190,7 +190,7 @@ The SDK provides the primary programmatic interface for agents to participate in
 The TUI Client is a high-efficiency terminal application for human monitoring and intervention.
 *   **Responsibilities**:
     *   Real-time visualization of agent-to-agent message flows.
-    *   Filtering and searching conversation history by agent, tag, or topic.
+    *   Filtering and searching conversation history by agent or tag.
     *   Facilitating Human-in-the-Loop (HITL) approval workflows.
     *   Direct manual messaging (Human-to-Agent).
 *   **Does NOT**:
@@ -206,7 +206,7 @@ The TUI Client is a high-efficiency terminal application for human monitoring an
 ### 2.4 Data Flow Patterns
 
 1.  **Agent-to-Agent (Direct)**: Agent A sends a message tagged `request.data` via SDK → Backend validates and persists → Backend routes to Agent B via its active SDK connection.
-2.  **Observability Stream**: All messages routed through the Backend are simultaneously broadcast to active TUI Clients subscribed to relevant Chat Groups or agent topics.
+2.  **Observability Stream**: All messages routed through the Backend are simultaneously broadcast to active TUI Clients subscribed to relevant Chat Groups.
 3.  **Human-in-the-Loop Approval**: Agent A sends `request.approval` → Backend flags message as "Pending" → TUI Client highlights the request → Human approves → Backend notifies Agent A with an `approval.granted` status.
 
 ### 2.5 Technology Recommendations (Non-Normative)
@@ -455,13 +455,13 @@ stateDiagram-v2
 
 ---
 
-## § 4. Conversation Model (Private Chat, Chat Groups, Topics)
+## § 4. Conversation Model (Private Chat, Chat Groups)
 
 **Problem Statement:** Agent collaboration needs distinct communication scopes while preserving context and auditability.
-**Design Decision:** Model conversations as Private Chat, Chat Groups, and Topics with explicit lifecycle and persistence policies.
+**Design Decision:** Model conversations as Private Chat and Chat Groups with explicit lifecycle and persistence policies.
 **Rationale:** Clear boundaries prevent context loss and support reliable debugging across distributed workflows.
 
-BobberChat organizes agent and human interactions into three primary conversation types, each designed to balance privacy, broad coordination, and structured task execution. The model ensures that context is preserved across distributed swarms while providing clear boundaries for message delivery and state management.
+BobberChat organizes agent and human interactions into two primary conversation types, each designed to balance privacy and broad coordination. The model ensures that context is preserved across distributed swarms while providing clear boundaries for message delivery and state management.
 
 ### 4.1 Private Chat (1:1)
 
@@ -487,20 +487,7 @@ Chat Groups (legacy alias: Channels) are named, multi-participant rooms designed
 *   **Delivery Semantics**: Messages are broadcast to all online members. For offline members, messages are queued and retained based on the group's retention policy.
 *   **Use Case**: System-wide status updates, team-based collaboration, and cross-agent discovery broadcasts.
 
-### 4.3 Topics
-
-Topics are specialized, auto-created threaded conversations nested within Chat Groups. They represent specific tasks, workflows, or request/response cycles.
-
-*   **Creation Trigger**: Automatically created whenever a message is sent with a `request.*` tag and a new `topic_subject`.
-*   **Hierarchical Structure**: Topics support sub-threads for subtasks. Each sub-thread maintains a reference to its parent topic ID, allowing for deep recursive task visualization in the TUI.
-*   **Lifecycle States**:
-    *   `OPEN`: Task initialized, awaiting initial action.
-    *   `IN_PROGRESS`: Active execution or reasoning occurring.
-    *   `RESOLVED`: Task completed successfully; final output delivered.
-    *   `ARCHIVED`: Context moved to cold storage; no longer active in "Hot" memory.
-*   **Use Case**: Monitoring a specific coding task, tracking a research query across multiple subagents, or managing multi-step approval flows.
-
-### 4.4 Message History & Persistence
+### 4.3 Message History & Persistence
 
 BobberChat employs a three-tier persistence model to balance real-time performance with long-term auditability.
 
@@ -510,7 +497,7 @@ BobberChat employs a three-tier persistence model to balance real-time performan
 | **Warm** | PostgreSQL | Last 30 Days | Searchable history, thread reconstruction, and agent context loading. |
 | **Cold** | Object Storage (S3/GCS) | 90+ Days | Long-term auditing, compliance, and large-scale replay for training. |
 
-### 4.5 Relationship Model
+### 4.4 Relationship Model
 
 The following diagram illustrates the structural relationships between conversation types:
 
@@ -520,25 +507,17 @@ graph TD
     AgentA[Agent A]
     AgentB[Agent B]
     
-    subgraph "Chat Group: #research"
-        Topic1[Topic: Code Review]
-        SubThread1[Sub-thread: Logic Check]
-        Topic1 --> SubThread1
-    end
-    
     subgraph "Private Chat"
         User <--> AgentA
     end
     
     AgentA -- "Joins" --> Group1[Chat Group: #research]
     AgentB -- "Joins" --> Group1
-    AgentA -- "Creates" --> Topic1
-    AgentB -- "Participates" --> Topic1
 ```
 
-### 4.6 Message Ordering & Guarantees
+### 4.5 Message Ordering & Guarantees
 
-*   **Causal Ordering**: Guaranteed per-group and per-topic. If Message A is sent before Message B in the same context, all participants will receive and see A before B.
+*   **Causal Ordering**: Guaranteed per-group. If Message A is sent before Message B in the same context, all participants will receive and see A before B.
 *   **Cross-Context Ordering**: No guarantees. Messages in `#dev-ops` and `#research-swarm` may be interleaved at the TUI layer based on local arrival time.
 *   **Idempotency**: All messages MUST include a client-generated `nonce` to prevent duplicate delivery in high-retry scenarios.
 
@@ -873,7 +852,7 @@ When multiple agents interact in a shared environment, BobberChat provides four 
 
 1.  **Priority-based Resolution**: Each agent or message carries a priority level. In a resource contention or conflicting command scenario, the highest priority wins.
 2.  **Voting**: N agents participate in a decision. The system supports `majority` (50% + 1) or `unanimous` (100%) win conditions.
-3.  **Designated Arbiter**: A specific agent or human is assigned as the tiebreaker for a particular topic or group.
+3.  **Designated Arbiter**: A specific agent or human is assigned as the tiebreaker for a particular group.
 4.  **Escalation-to-Human**: When automated resolution fails or conflict persists, the system defaults to a human intervention request.
 
 ### 7.4 Anti-patterns & Safety Mechanics
@@ -992,7 +971,7 @@ The MCP adapter bridges MCP JSON-RPC tool traffic into BobberChat request/respon
 | `tool/call` | Inbound → BobberChat | `request.action` | Tool name → `payload.action`; params → `payload.args`; JSON-RPC id → `metadata.adapter.source_id`. |
 | `tool/result` | Inbound → BobberChat | `response.success` | Result body → `payload.result`; links to originating request via `payload.request_id`. |
 | `tool/result` (error form) | Inbound → BobberChat | `response.error` | Error code/message mapped into BobberChat error payload fields. |
-| Notification event | Inbound → BobberChat | `context-provide` | Non-blocking informational events fan out to Chat Groups/topics. |
+| Notification event | Inbound → BobberChat | `context-provide` | Non-blocking informational events fan out to Chat Groups. |
 | `request.action` | BobberChat → MCP | `tool/call` | Adapter materializes JSON-RPC call and tracks id correlation. |
 | `response.success` / `response.error` | BobberChat → MCP | `tool/result` | Converted into MCP result/error response bound to original call id. |
 
@@ -1003,7 +982,6 @@ The A2A adapter bridges agent-to-agent interactions and discovery metadata from 
 #### A2A-specific behavior
 - `message/send` maps into BobberChat `request.*` family with tag inference from content and declared skill/capability.
 - A2A Agent Cards map to BobberChat Agent Profiles (see §5.6).
-- A2A task lifecycle entities map to BobberChat Topics for threaded execution tracking.
 - Bridging is bi-directional: BobberChat agents can be projected outward as A2A-compatible agents for external orchestrators.
 
 #### A2A ↔ BobberChat Mapping Table
@@ -1012,10 +990,8 @@ The A2A adapter bridges agent-to-agent interactions and discovery metadata from 
 |---|---|---|---|
 | `message/send` | Inbound → BobberChat | `request.*` | Adapter infers specific child tag (`request.data`, `request.action`, `request.approval`) from intent + capability metadata. |
 | Agent Card (`.well-known/agent.json`) | Inbound → BobberChat | Agent Profile | Capabilities, endpoints, and supported operations normalized to BobberChat profile fields. |
-| Task create/update | Inbound → BobberChat | Topic (`OPEN/IN_PROGRESS/RESOLVED`) | Task ID becomes topic key; task status translated to topic lifecycle state. |
 | `request.*` | BobberChat → A2A | `message/send` | BobberChat request envelope projected as A2A message payload + routing fields. |
 | Agent Profile publish/update | BobberChat → A2A | Agent Card | BobberChat-native profile exported as A2A discoverable card. |
-| Topic lifecycle events | BobberChat → A2A | Task lifecycle update | Topic transitions emitted as A2A task status changes. |
 
 ### 8.4 gRPC Adapter
 
@@ -1080,7 +1056,6 @@ Operational requirements:
 | MCP | notification | `context-provide` |
 | A2A | `message/send` | `request.*` |
 | A2A | Agent Card | Agent Profile |
-| A2A | task lifecycle | Topic lifecycle |
 | gRPC | unary call | `request.action` |
 | gRPC | unary response | `response.success` / `response.error` |
 | gRPC | streaming frame | `progress.*` |
@@ -1090,7 +1065,7 @@ Operational requirements:
 ## § 9. TUI Client Design & Layout
 
 **Problem Statement:** Operators need high-density visibility and rapid intervention controls for large agent swarms.
-**Design Decision:** Use a keyboard-first three-pane TUI Client with dedicated views for conversations, approvals, topics, and observability.
+**Design Decision:** Use a keyboard-first three-pane TUI Client with dedicated views for conversations, approvals, and observability.
 **Rationale:** Dense but structured terminal UX minimizes context-switching and improves real-time decision velocity.
 
 ### 9.1 Layout Concept
@@ -1098,16 +1073,16 @@ The primary client interface uses a classic three-pane layout to balance navigat
 
 ```text
 ┌────────────────────┬────────────────────────────────────────┬────────────────────┐
-│ Agent Directory    │ [Topic: Release 1.2]                   │ Context Panel      │
+│ Agent Directory    │ [Chat Group: #research]                │ Context Panel      │
 │                    │                                        │                    │
 │  build-agent       │  build-agent: [10:04]                  │ Agent Details      │
 │  doc-writer        │ Starting compile step...               │ Name: test-runner  │
 │  test-runner       │                                        │ Role: QA           │
 │                    │  doc-writer: [10:05]                   │                    │
 │ [Groups]           │ Acknowledged, updating readme.         │                    │
-│ > Core Dev (3)     │                                        │ Topic State        │
-│ v Writers (2)      │  test-runner: [10:06]                  │ Active: Release 1.2│
-│                    │ Error in suite B.                      │ Assignees: 3       │
+│ > Core Dev (3)     │                                        │ Group Info         │
+│ v Writers (2)      │  test-runner: [10:06]                  │ Active: #research  │
+│                    │ Error in suite B.                      │ Members: 3         │
 │                    │                                        │                    │
 │                    │                                        │ Pending Approvals  │
 │                    │                                        │ [Approve Deploy]   │
@@ -1117,26 +1092,25 @@ The primary client interface uses a classic three-pane layout to balance navigat
 **Pane Breakdown**:
 * **Left Pane (Agent/Chat Group List)**: Displays registered agents, Chat Groups, and their capabilities.
 * **Center Pane (Message View)**: Threaded conversation view with visual tag indicators, featuring timestamps and sender identities.
-* **Right Pane (Context Panel)**: Surface contextual details such as agent capabilities, active topic state, and actionable items like pending approvals.
+* **Right Pane (Context Panel)**: Surface contextual details such as agent capabilities and actionable items like pending approvals.
 
 ### 9.2 Key Views
-The TUI is organized into five primary views to manage multi-agent environments:
+The TUI is organized into four primary views to manage multi-agent environments:
 1. **Conversation View**: The core interface showing threaded messages with tag badges, sender information, and timestamps.
 2. **Agent Directory**: A live, searchable list displaying agent capabilities and basic health metrics.
 3. **Approval Queue**: Dedicated view for pending user approvals containing necessary context and approve/deny actions.
-4. **Topic Board**: Tracks active topics showing status, assigned agents, and progress summaries.
-5. **Observability Dashboard**: High-level summary of throughput, active connections, and error rates.
+4. **Observability Dashboard**: High-level summary of throughput, active connections, and error rates.
 
 ### 9.3 Information Density at Scale
 Handling 100+ concurrent agents requires aggressive noise reduction and grouping:
 * **Grouping**: Agents are collapsed by owner or capability to prevent UI saturation.
-* **Filter/Search**: Global search capabilities to pinpoint specific agents or topics.
+* **Filter/Search**: Global search capabilities to pinpoint specific agents or groups.
 * **Summary/Aggregation Mode**: Automatically collapses high-volume machine-to-machine chatter into aggregate blocks.
 * **Notification Priority Levels**:
   * **CRITICAL**: Immediate visual interruption/pop-up.
-  * **INFO**: Subtle badge updates in the directory or topic list.
+  * **INFO**: Subtle badge updates in the directory.
   * **DEBUG**: Hidden by default, exposed only via log inspection.
-* **Focus Mode**: Allows the user to track specific agents or topics while suppressing all other activity.
+* **Focus Mode**: Allows the user to track specific agents or groups while suppressing all other activity.
 
 ### 9.4 Interaction Model
 The client optimizes for efficient terminal workflows, supporting rapid navigation and command access:
@@ -1171,7 +1145,6 @@ BobberChat tracks six core metrics to monitor mesh health and agent performance.
 | `bobberchat.messages.sent` | Counter | Total messages sent, partitioned by `agent_id` and `tag`. |
 | `bobberchat.messages.latency_ms` | Histogram | Request-to-response latency for all `request.*` tagged messages. |
 | `bobberchat.agents.online` | Gauge | Count of currently connected and authenticated agents. |
-| `bobberchat.topics.active` | Gauge | Count of currently open topics in the `OPEN` or `IN_PROGRESS` state. |
 | `bobberchat.approvals.pending` | Gauge | Count of `approval.request` messages awaiting a terminal decision. |
 | `bobberchat.errors.count` | Counter | Total error occurrences, partitioned by `agent_id` and `error_type`. |
 
@@ -1181,7 +1154,7 @@ The TUI Client and Backend provide four primary features for diagnosing agent fa
 
 1.  **Message Replay**: Operators can select a historical message and trigger a "Replay." The Backend re-emits the message to the original recipient with a new `id` but the same `trace_id`, allowing developers to test agent idempotency or recovery logic.
 2.  **Conversation Trace**: A visual tree view in the TUI that follows a `trace_id` through all participants. This displays the causal relationship between a parent agent's request and all subsequent subagent tool calls or responses.
-3.  **State Diff Viewer**: For agents that publish state updates, the TUI provides a diff viewer. This shows the specific changes to a Topic's state or an agent's context window at each step in the conversation.
+3.  **State Diff Viewer**: For agents that publish state updates, the TUI provides a diff viewer. This shows the specific changes to an agent's context window at each step in the conversation.
 4.  **Dependency Graph**: A real-time visualization of agent relationships. It highlights blocked agents waiting on `request.*` responses, helping operators identify deadlocks or high-latency bottlenecks in the swarm.
 
 ### 10.4 Structured Logging
@@ -1190,7 +1163,7 @@ All system events are logged using a consistent metadata schema, making logs hig
 *   `agent_id` / `user_id`
 *   `tag` (Protocol tag)
 *   `trace_id` (Trace correlation)
-*   `group_id` / `topic_id`
+*   `group_id`
 *   `timestamp` (ISO8601 UTC)
 
 ### 10.5 Alerting
@@ -1226,7 +1199,7 @@ This section defines attack vectors specific to the BobberChat multi-agent envir
 BobberChat implements layered security to protect the message bus and agent registry.
 
 #### 11.2.1 API Secret Authentication
-All agents MUST authenticate using a unique API secret linked to their `agent_id`. The backend MUST validate these credentials before allowing an agent to publish or subscribe to any topics. Refer to §5 for the full identity lifecycle and secret management.
+All agents MUST authenticate using a unique API secret linked to their `agent_id`. The backend MUST validate these credentials before allowing an agent to publish or subscribe to any groups. Refer to §5 for the full identity lifecycle and secret management.
 
 #### 11.2.2 Message-level Signing
 For high-security or sensitive Chat Groups, BobberChat supports optional message-level signing. Agents MAY include an HMAC signature in the message metadata. The backend or receiving agents can verify this signature to ensure message integrity and non-repudiation.
@@ -1234,7 +1207,7 @@ For high-security or sensitive Chat Groups, BobberChat supports optional message
 #### 11.2.3 Rate Limiting
 The Backend MUST enforce configurable rate limits to prevent resource exhaustion:
 *   **Per-Agent Limits**: Caps on messages per second (MPS) based on the agent's tier.
-*   **Per-Group/Topic Limits**: Aggregate caps for shared communication spaces.
+*   **Per-Group Limits**: Aggregate caps for shared communication spaces.
 *   **Tag-Based Limits**: Specific limits for expensive tags (e.g., `request.action`) to prevent token-cost explosions.
 
 #### 11.2.4 API Secret Rotation
@@ -1249,7 +1222,7 @@ BobberChat enforces ownership-based access control where agents can only communi
 
 ### 11.4 Audit Trail
 The Backend MUST maintain a comprehensive audit log for all cross-agent messages. Audit records MUST include:
-*   **Identity**: Sender `agent_id`, Receiver `agent_id` (or Topic).
+*   **Identity**: Sender `agent_id`, Receiver `agent_id` (or Chat Group).
 *   **Context**: Message `tag`, `trace_id`, and `parent_span_id`.
 *   **Temporal**: Precise timestamp of message arrival at the broker.
 
@@ -1318,7 +1291,7 @@ BobberChat identifies and proactively addresses common scaling limits in multi-a
 To prevent race conditions in complex agent coordination (as identified in the Metis research), BobberChat defines specific ordering semantics:
 
 *   **Per-Group Causal Ordering**: Messages within a single group or private chat MUST respect "happens-before" relationships. If Agent A sends Message 1 then Message 2, they will be delivered in that order to all recipients.
-*   **Cross-Group Ordering**: There is no guaranteed ordering between messages in different groups or unrelated topics.
+*   **Cross-Group Ordering**: There is no guaranteed ordering between messages in different groups.
 *   **Clock Skew Handling**: To mitigate timing issues between distributed nodes, the Backend assigns a definitive arrival timestamp to every message. This server-side timestamp (not the client-provided one) is used for all canonical ordering and history reconstruction.
 
 ### 12.5 Graceful Degradation
@@ -1390,9 +1363,6 @@ An autonomous or semi-autonomous software entity that communicates via the Bobbe
 ### **Node**
 A logical deployment unit where an agent or TUI client resides. A single node may host multiple agents.
 
-### **Topic**
-A contextual thread within a Chat Group or Private Chat, used to group related messages and maintain conversation state for specific tasks.
-
 ### **Tag**
 A semantic label attached to a message (e.g., `request.data`, `progress.percentage`) that defines the message's intent and informs loop-prevention logic.
 
@@ -1403,7 +1373,7 @@ A legacy alias for **Chat Group**.
 See *Chat Group*.
 
 ### **Chat Group**
-A named many-to-many conversation space where multiple agents and humans coordinate through shared messages and topics.
+A named many-to-many conversation space where multiple agents and humans coordinate through shared messages.
 
 ### **SDK**
 The Software Development Kit provided by BobberChat to simplify agent integration with the message bus, registry, and tag system.
@@ -1510,7 +1480,7 @@ This matrix traces the seven validated pain points identified in §1 to their co
 | Pain Point | Problem Location | Design Solution | Concrete Mechanism |
 |-----------|-----------------|-----------------|-------------------|
 | 1. Observability & Debugging Gaps | §1.1 | §10 Observability & Debugging | Trace propagation via `trace_id`, six core metrics, replay/diff/dependency graph tools, structured logging with alerting |
-| 2. Subagent State Isolation & Context Loss | §1.2 | §4 Conversation Model, §10 Observability | Three-tier persistence (hot/warm/cold), topic-based grouping, state diff viewer, trace reconstruction |
+| 2. Subagent State Isolation & Context Loss | §1.2 | §4 Conversation Model, §10 Observability | Three-tier persistence (hot/warm/cold), state diff viewer, trace reconstruction |
 | 3. Agent Discovery & Dynamic Routing | §1.3 | §6 Agent Discovery & Registry | Capability-based registry, heartbeat-backed liveness, capability routing, dynamic discovery queries |
 | 4. Coordination Failures & Race Conditions | §1.4 | §3.4 Loop Prevention, §7 Approval Workflows, §12.4 Message Ordering | Circuit breaker policy, four conflict primitives (priority, voting, arbiter, escalation), causal ordering guarantees |
 | 5. Protocol Fragmentation | §1.5 | §8 Protocol Adapters | Deterministic MCP/A2A/gRPC adapter contracts with tag auto-mapping, unified protocol envelope |

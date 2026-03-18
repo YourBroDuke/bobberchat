@@ -95,42 +95,6 @@ func TestConversationMethods_InvalidInput(t *testing.T) {
 			name: "LeaveGroup empty kind",
 			err:  (&Service{}).LeaveGroup(context.Background(), "group", "participant", ""),
 		},
-		{
-			name: "CreateTopic empty groupID",
-			err: func() error {
-				_, err := (&Service{}).CreateTopic(context.Background(), "", "subject", nil)
-				return err
-			}(),
-		},
-		{
-			name: "CreateTopic empty subject",
-			err: func() error {
-				_, err := (&Service{}).CreateTopic(context.Background(), "group", "", nil)
-				return err
-			}(),
-		},
-		{
-			name: "GetTopic empty topicID",
-			err: func() error {
-				_, err := (&Service{}).GetTopic(context.Background(), "")
-				return err
-			}(),
-		},
-		{
-			name: "ListTopics empty groupID",
-			err: func() error {
-				_, err := (&Service{}).ListTopics(context.Background(), "")
-				return err
-			}(),
-		},
-		{
-			name: "UpdateTopicStatus empty topicID",
-			err:  (&Service{}).UpdateTopicStatus(context.Background(), "", persistence.TopicStatusOpen),
-		},
-		{
-			name: "UpdateTopicStatus empty status",
-			err:  (&Service{}).UpdateTopicStatus(context.Background(), "topic", ""),
-		},
 	}
 
 	for _, tc := range tests {

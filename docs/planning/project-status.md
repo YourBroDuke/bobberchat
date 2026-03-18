@@ -19,7 +19,7 @@ go test ./backend/... ./cli/... ./tui/...     # ✅ 15 packages pass (~245+ subt
 
 # Docker-based E2E
 docker compose up -d
-./scripts/e2e-test.sh                    # ✅ 31/31 pass
+./scripts/e2e-test.sh                    # ✅ 29/29 pass
 
 # Integration tests (requires running PostgreSQL via Docker Compose)
 BOBBERCHAT_TEST_DSN="postgres://bobberchat:bobberchat@localhost:5432/bobberchat?sslmode=disable" \
@@ -58,7 +58,7 @@ BOBBERCHAT_TEST_DSN="postgres://bobberchat:bobberchat@localhost:5432/bobberchat?
 | `backend/internal/registry` | `registry.go` | ~115 | Agent discovery, capability-based lookup |
 | `backend/internal/broker` | `broker.go` | ~232 | NATS JetStream message routing, 3 streams, subject mapping |
 | `backend/internal/approval` | `approval.go` | ~123 | Human-in-the-loop approval workflows with escalation |
-| `backend/internal/conversation` | `conversation.go` | ~202 | Chat groups, topics, membership, message history |
+| `backend/internal/conversation` | `conversation.go` | ~202 | Chat groups, membership, message history |
 | `backend/internal/observability` | `observability.go` | ~110 | Prometheus metrics (incl. rate limit, audit, active WS conn gauges), structured logging |
 
 ### Protocol Adapters (3 packages — Design Spec §8)
@@ -109,7 +109,7 @@ Key implementation details:
 |--------|--------|-------|-------------|
 | `bobberd` | `backend/cmd/bobberd/main.go` | ~1,370 | Backend server — 34 REST endpoints + WebSocket + message replay + adapter ingest + production hardening |
 | `bobber` | `cli/cmd/bobber/main.go` | ~700 | CLI tool — account, agent, session, connection, messaging, and group management commands. Tests in `main_test.go` |
-| `bobber-tui` | `tui/cmd/bobber-tui/main.go` | ~1,471 | TUI client — Bubble Tea terminal UI with groups, topics, filtering |
+| `bobber-tui` | `tui/cmd/bobber-tui/main.go` | ~1,471 | TUI client — Bubble Tea terminal UI with groups, filtering |
 
 ### SDK
 
@@ -139,8 +139,8 @@ Key implementation details:
 | `backend/cmd/bobberd/main_test.go` | 8 | Cross-owner denial, rate limiting, audit trail, disabled limiter |
 | `backend/pkg/sdk/helpers_test.go` | 4 | Message helper functions |
 | `cli/cmd/bobber/main_test.go` | — | CLI unit tests: account register/login, agent create/use/rotate-secret/delete, login/whoami/logout, ls, connect/inbox/accept/reject/blacklist, info, send, poll, group create/leave/invite, config/flag precedence |
-| `backend/test/integration/persistence_test.go` | 5 | User, Agent, Group, Topic, Approval CRUD (build-tagged `//go:build integration`) |
-| `scripts/e2e-test.sh` | 31 | Full API lifecycle: auth, agents, groups, topics, approvals |
+| `backend/test/integration/persistence_test.go` | 5 | User, Agent, Group, Approval CRUD (build-tagged `//go:build integration`) |
+| `scripts/e2e-test.sh` | 29 | Full API lifecycle: auth, agents, groups, approvals |
 
 ### Infrastructure
 
@@ -148,14 +148,14 @@ Key implementation details:
 |------|-------------|
 | `Dockerfile` | Multi-stage build (`golang:latest` → `alpine:3.19`), workspace-aware, copies migrations |
 | `docker-compose.yml` | 4 services: `nats`, `postgres`, `init-db` (migration), `bobberd` with health checks |
-| `migrations/001_initial_schema.sql` | Full schema — 8 tables, 4 enum types, 8 indexes, default partition |
+| `migrations/001_initial_schema.sql` | Full schema — 7 tables, 4 enum types, 8 indexes, default partition |
 | `migrations/002_email_verification.sql` | Adds `users.email_verified`, verification token columns, and partial token index |
 | `migrations/003_connections_blacklist.sql` | Adds `connection_requests` and `blacklist_entries` tables, enum, and indexes |
 | `migrations/004_remove_agent_status.sql` | Removes `agent_status` enum type, `status` column, and associated index from agents table |
 | `migrations/005_remove_agent_version_heartbeat.sql` | Removes `version`, `connected_at`, `last_heartbeat` columns from agents table |
 | `configs/backend.yaml` | Default backend configuration |
 | `Makefile` | Build, test, lint, migrate, run targets |
-| `scripts/e2e-test.sh` | 31-test curl-based API e2e test script |
+| `scripts/e2e-test.sh` | 29-test curl-based API e2e test script |
 | `backend/test/integration/persistence_test.go` | 5 integration tests (build-tagged `//go:build integration`) |
 ---
 
@@ -176,13 +176,12 @@ Key implementation details:
 - [x] Live WebSocket message feed in conversation view — already existed
 - [x] Agent heartbeat display — already existed (heartbeat in context panel)
 - [x] Approval workflow interaction (grant/deny from TUI) — already existed (y/n keys + `/approve` command)
-- [x] Topic filtering and search — message filter (`/` key), agent filter (`f` key)
-- [x] Group management from TUI — group listing in left sidebar, `/join`/`/leave`/`/groups` commands, topic board view
+- [x] Message filtering and search — message filter (`/` key), agent filter (`f` key)
+- [x] Group management from TUI — group listing in left sidebar, `/join`/`/leave`/`/groups` commands
 
 TUI enhancements added (~590 lines):
 - **Left pane redesign**: Agents + Groups split with `───Groups───` separator, cursor navigation across sections
 - **Group data**: `fetchGroupsCmd`, group entries with name + member count, periodic refresh
-- **Topic board**: `fetchTopicsCmd`, toggled center pane view for group topics, topic details in context panel
 - **Message filtering**: `/` enters filter mode, filters by tag/agent/payload substring, shows `(N of M)` count
 - **Agent filtering**: `f` toggles agent filter by name/capability
 - **Group commands**: `/join <id>`, `/leave <id>`, `/groups` in input mode
@@ -275,8 +274,8 @@ Backend config: `configs/backend.yaml`
 ### Database
 
 - PostgreSQL 15+
-- 8 tables: `users`, `agents`, `chat_groups`, `chat_group_members`, `topics`, `messages`, `approval_requests`, `audit_log`
-- 5 enum types: `group_visibility`, `topic_status`, `approval_status`, `urgency`, `participant_type`
+- 7 tables: `users`, `agents`, `chat_groups`, `chat_group_members`, `messages`, `approval_requests`, `audit_log`
+- 4 enum types: `group_visibility`, `approval_status`, `urgency`, `participant_type`
 - `messages` table uses time-based partitioning by `timestamp` (monthly ranges)
 - Migration: `migrations/001_initial_schema.sql`
 
@@ -297,7 +296,6 @@ Auth:       POST /v1/auth/register, /v1/auth/login, /v1/auth/verify-email, /v1/a
 Agents:     POST /v1/agents, GET/DELETE /v1/agents/:id, POST /v1/agents/:id/rotate-secret
 Registry:   GET /v1/registry/agents, POST /v1/registry/discover
 Groups:     POST/GET /v1/groups, POST /v1/groups/:id/join, /v1/groups/:id/leave
-Topics:     POST/GET /v1/groups/:id/topics
 Messages:   GET /v1/messages, GET /v1/messages/poll, POST /v1/messages/:id/replay
 Connections: POST /v1/connections/request, GET /v1/connections/inbox, POST /v1/connections/:id/accept, POST /v1/connections/:id/reject
 Blacklist:  POST /v1/blacklist, DELETE /v1/blacklist/:id
@@ -339,7 +337,7 @@ The project is a "Slack for Agents" — a multi-agent coordination layer built w
 
 The codebase uses a Go workspace (go.work) with 3 independent modules: backend/, cli/, tui/. Each has its own go.mod.
 
-All planned work is COMPLETE: core implementation, protocol adapters, production hardening, TUI enhancements, CI/CD & deployment, and CLI test coverage. All code compiles, unit tests pass (~245+ subtests across 15 packages), E2E tests pass (31/31), and integration tests pass (5/5).
+All planned work is COMPLETE: core implementation, protocol adapters, production hardening, TUI enhancements, CI/CD & deployment, and CLI test coverage. All code compiles, unit tests pass (~245+ subtests across 15 packages), E2E tests pass (29/29), and integration tests pass (5/5).
 
 Follow the existing codebase patterns. Run `go build ./backend/... ./cli/... ./tui/...` and `go test ./backend/... ./cli/... ./tui/...` to verify.
 For E2E: `docker compose up -d && ./scripts/e2e-test.sh`
@@ -381,7 +379,7 @@ bobberchat/
 │   │   │   ├── azurecs/azurecs.go        # Azure Communication Services sender (HMAC-SHA256 REST API)
 │   │   │   └── console/console.go        # Console sender for local/dev
 │   │   ├── broker/broker.go              # NATS JetStream routing
-│   │   ├── conversation/conversation.go  # Groups, topics, history
+│   │   ├── conversation/conversation.go  # Groups, history
 │   │   ├── observability/observability.go# Metrics, logging (~110 lines)
 │   │   ├── persistence/                  # PostgreSQL repositories
 │   │   │   ├── models.go                 # Models with JSON struct tags
@@ -464,8 +462,9 @@ bobberchat/
 ├── migrations/003_connections_blacklist.sql # Connection request and blacklist persistence
 ├── migrations/004_remove_agent_status.sql # Removes agent_status enum/column/index
 ├── migrations/005_remove_agent_version_heartbeat.sql # Removes version, connected_at, last_heartbeat from agents
+├── migrations/006_remove_topics.sql # Removes topics table, topic_id column, and topic_status enum
 ├── scripts/
-│   ├── e2e-test.sh                  # 31-test API e2e test
+│   ├── e2e-test.sh                  # 29-test API e2e test
 │   └── smoke-test.sh                # Quick deployment smoke test
 ├── Makefile
 └── README.md

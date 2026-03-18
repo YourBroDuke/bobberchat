@@ -23,8 +23,6 @@ tags:
     description: Agent discovery and status tracking
   - name: Groups
     description: Chat group orchestration
-  - name: Topics
-    description: Subject-based discussion threads
   - name: Messages
     description: Asynchronous communication and message replays
   - name: Approvals
@@ -644,71 +642,6 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /v1/groups/{id}/topics:
-    get:
-      tags:
-        - Topics
-      summary: List topics in a group
-      operationId: listTopics
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: List of topics
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  topics:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Topic'
-    post:
-      tags:
-        - Topics
-      summary: Create a new topic in a group
-      operationId: createTopic
-      security:
-        - BearerAuth: []
-        - AgentSecret: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - subject
-              properties:
-                subject:
-                  type: string
-                parent_topic_id:
-                  type: string
-                  format: uuid
-                  nullable: true
-      responses:
-        '201':
-          description: Topic created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Topic'
-
   /v1/messages:
     get:
       tags:
@@ -1210,34 +1143,6 @@ components:
           type: string
           format: date-time
 
-    Topic:
-      type: object
-      required:
-        - id
-        - group_id
-        - subject
-        - status
-        - created_at
-      properties:
-        id:
-          type: string
-          format: uuid
-        group_id:
-          type: string
-          format: uuid
-        subject:
-          type: string
-        status:
-          type: string
-          enum: [OPEN, IN_PROGRESS, RESOLVED, ARCHIVED]
-        parent_topic_id:
-          type: string
-          format: uuid
-          nullable: true
-        created_at:
-          type: string
-          format: date-time
-
     Message:
       type: object
       required:
@@ -1249,7 +1154,6 @@ components:
         - metadata
         - timestamp
         - trace_id
-        - topic_id
       properties:
         id:
           type: string
@@ -1270,9 +1174,6 @@ components:
           type: string
           format: date-time
         trace_id:
-          type: string
-          format: uuid
-        topic_id:
           type: string
           format: uuid
 

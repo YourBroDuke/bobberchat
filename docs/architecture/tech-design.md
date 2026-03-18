@@ -59,7 +59,7 @@ bobberchat/
 │   │   ├── registry/      # Agent registry & discovery
 │   │   ├── auth/          # API secret & JWT authentication
 │   │   ├── protocol/      # Wire envelope, tag taxonomy, validation
-│   │   ├── conversation/  # Chat groups, topics, private chats
+│   │   ├── conversation/  # Chat groups, private chats
 │   │   ├── approval/      # Approval workflow engine
 │   │   ├── persistence/   # PostgreSQL + storage tier management
 │   │   ├── adapter/       # Protocol adapters (MCP, A2A, gRPC)
@@ -104,7 +104,7 @@ bobberchat/
 | `backend/internal/registry` | Manages agent registration, heartbeat liveness, capability indexes, and discovery query execution (Design Spec §6). |
 | `backend/internal/auth` | Handles human auth (JWT) and machine auth (API secret verification, rotation, revocation) (Design Spec §5, §11). |
 | `backend/internal/protocol` | Defines canonical envelope structs, tag taxonomy constants, payload validators, and protocol version negotiation logic (Design Spec §3.6). |
-| `backend/internal/conversation` | Implements private chat, chat groups, topic lifecycle, membership policies, and message ordering context (Design Spec §4). |
+| `backend/internal/conversation` | Implements private chat, chat groups, membership policies, and message ordering context (Design Spec §4). |
 | `backend/internal/approval` | Implements `approval.request/granted/denied` state machine, timeout policy (`auto-deny`, `auto-approve`, `escalate`), and idempotency gates (Design Spec §7). |
 | `backend/internal/persistence` | PostgreSQL repositories, message archival orchestration (hot/warm/cold boundaries), and migration integration (Design Spec §4.4). |
 | `backend/internal/adapter/mcp` | Translates MCP JSON-RPC primitives to/from BobberChat envelope and tags (Design Spec §8.2). |
@@ -121,8 +121,6 @@ Schema follows Design Spec §4, §5, §6, §7, §10, §11 and PRD acceptance cri
 
 ```sql
 CREATE TYPE group_visibility AS ENUM ('public', 'private');
-
-CREATE TYPE topic_status AS ENUM ('OPEN', 'IN_PROGRESS', 'RESOLVED', 'ARCHIVED');
 
 CREATE TYPE approval_status AS ENUM ('PENDING', 'GRANTED', 'DENIED', 'TIMED_OUT', 'ESCALATED');
 
@@ -168,15 +166,6 @@ CREATE TABLE chat_group_members (
   PRIMARY KEY (group_id, participant_id, participant_kind)
 );
 
-CREATE TABLE topics (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  group_id UUID NOT NULL REFERENCES chat_groups(id) ON DELETE CASCADE,
-  subject TEXT NOT NULL,
-  status topic_status NOT NULL DEFAULT 'OPEN',
-  parent_topic_id UUID REFERENCES topics(id) ON DELETE SET NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 CREATE TABLE messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   from_id UUID NOT NULL,
@@ -185,8 +174,7 @@ CREATE TABLE messages (
   payload JSONB NOT NULL,
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   "timestamp" TIMESTAMPTZ NOT NULL,
-  trace_id UUID NOT NULL,
-  topic_id UUID REFERENCES topics(id) ON DELETE SET NULL
+  trace_id UUID NOT NULL
 );
 
 CREATE TABLE approval_requests (
@@ -231,11 +219,7 @@ FOR VALUES FROM ('2026-03-01T00:00:00Z') TO ('2026-04-01T00:00:00Z');
 CREATE INDEX idx_agents_owner ON agents (owner_user_id);
 CREATE INDEX idx_agents_capabilities_gin ON agents USING GIN (capabilities jsonb_path_ops);
 
-CREATE INDEX idx_topics_group_status ON topics (group_id, status, created_at DESC);
-CREATE INDEX idx_topics_parent ON topics (parent_topic_id);
-
 CREATE INDEX idx_messages_trace ON messages (trace_id, "timestamp" DESC);
-CREATE INDEX idx_messages_topic_time ON messages (topic_id, "timestamp" DESC);
 CREATE INDEX idx_messages_to_tag_time ON messages (to_id, tag, "timestamp" DESC);
 
 CREATE INDEX idx_approvals_pending ON approval_requests (status, urgency, created_at)
@@ -291,7 +275,7 @@ All REST endpoints are under `/v1` and require TLS in production.
 ### 5.1 REST API Endpoints
 
 Authentication model:
-- **Human JWT** for user-driven operations (groups, topics, approvals, TUI).
+- **Human JWT** for user-driven operations (groups, approvals, TUI).
 - **Agent API secret** for agent registration/runtime operations.
 
 #### 5.1.1 Auth
@@ -327,13 +311,6 @@ Authentication model:
 | GET | `/v1/groups` | JWT | n/a | `{ "groups": [{ "id": "uuid", "name": "...", "visibility": "public", "member_count": 12 }], "total": 3 }` | 200, 401 |
 | POST | `/v1/groups/{id}/join` | JWT or Agent Secret | `{ "participant_id": "uuid", "participant_kind": "user|agent" }` | `{ "group_id": "uuid", "joined": true, "joined_at": "..." }` | 200, 400, 401, 403, 404 |
 | POST | `/v1/groups/{id}/leave` | JWT or Agent Secret | `{ "participant_id": "uuid", "participant_kind": "user|agent" }` | `{ "group_id": "uuid", "left": true }` | 200, 400, 401, 403, 404 |
-
-#### 5.1.5 Topics
-
-| Method | Path | Auth | Request JSON | Response JSON | Status codes |
-|---|---|---|---|---|---|
-| GET | `/v1/groups/{id}/topics` | JWT | n/a | `{ "topics": [{ "id": "uuid", "subject": "Release 1.2", "status": "IN_PROGRESS", "parent_topic_id": null, "created_at": "..." }], "total": 8 }` | 200, 401, 403, 404 |
-| POST | `/v1/groups/{id}/topics` | JWT or Agent Secret | `{ "subject": "Investigate incident", "parent_topic_id": "uuid|null" }` | `{ "id": "uuid", "group_id": "uuid", "status": "OPEN", "created_at": "..." }` | 201, 400, 401, 403, 404 |
 
 #### 5.1.6 Messages
 
@@ -621,7 +598,7 @@ Claims:
 
 ### 10.3 Rate limiting
 
-- Token bucket per `agent_id` (and optional per group/topic).
+- Token bucket per `agent_id` (and optional per group).
 - Separate buckets by tag class (`request.action` stricter than `progress.*`).
 - Exceeding limit returns `429` for REST and emits `error.recoverable` for message path.
 
@@ -648,7 +625,6 @@ Aligned with Design Spec §10.
   - `bobberchat.messages.sent` (counter)
   - `bobberchat.messages.latency_ms` (histogram)
   - `bobberchat.agents.connected` (gauge)
-  - `bobberchat.topics.active` (gauge)
   - `bobberchat.approvals.pending` (gauge)
   - `bobberchat.errors.count` (counter)
 
@@ -658,7 +634,7 @@ JSON logs using zerolog with required fields:
 - `level`, `time`, `msg`
 - `trace_id`, `tag`
 - `agent_id` and/or `user_id`
-- `group_id`, `topic_id` (when present)
+- `group_id` (when present)
 - `component` (`broker`, `registry`, `approval`, etc.)
 
 Example log event:

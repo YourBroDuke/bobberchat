@@ -33,8 +33,8 @@ func setupDB(t *testing.T) (*persistence.DB, func()) {
 
 	// Drop existing schema before re-applying migration (handles pre-populated databases)
 	_, _ = db.Pool().Exec(ctx, `
-		DROP TABLE IF EXISTS blacklist_entries, connection_requests, audit_log, approval_requests, messages_default, messages, topics, chat_group_members, chat_groups, agents, users CASCADE;
-		DROP TYPE IF EXISTS connection_request_status, participant_type, urgency, approval_status, topic_status, group_visibility CASCADE;
+		DROP TABLE IF EXISTS blacklist_entries, connection_requests, audit_log, approval_requests, messages_default, messages, chat_group_members, chat_groups, agents, users CASCADE;
+		DROP TYPE IF EXISTS connection_request_status, participant_type, urgency, approval_status, group_visibility CASCADE;
 	`)
 
 	migrationFiles, err := filepath.Glob("../../../migrations/*.sql")
@@ -60,8 +60,8 @@ func setupDB(t *testing.T) (*persistence.DB, func()) {
 	cleanup := func() {
 		cleanupCtx := context.Background()
 		_, _ = db.Pool().Exec(cleanupCtx, `
-			DROP TABLE IF EXISTS blacklist_entries, connection_requests, audit_log, approval_requests, messages_default, messages, topics, chat_group_members, chat_groups, agents, users CASCADE;
-			DROP TYPE IF EXISTS connection_request_status, participant_type, urgency, approval_status, topic_status, group_visibility CASCADE;
+			DROP TABLE IF EXISTS blacklist_entries, connection_requests, audit_log, approval_requests, messages_default, messages, chat_group_members, chat_groups, agents, users CASCADE;
+			DROP TYPE IF EXISTS connection_request_status, participant_type, urgency, approval_status, group_visibility CASCADE;
 		`)
 		db.Close()
 	}
@@ -230,61 +230,6 @@ func TestChatGroupRepository_CreateAndMembers(t *testing.T) {
 	}
 	if groups[0].ID != group.ID {
 		t.Errorf("group id mismatch: got %s want %s", groups[0].ID, group.ID)
-	}
-}
-
-func TestTopicRepository_CreateAndUpdateStatus(t *testing.T) {
-	db, _ := setupDB(t)
-	repos := persistence.NewPostgresRepositories(db)
-	ctx := context.Background()
-
-	creator, err := repos.Users.Create(ctx, persistence.User{
-		Email:        "topic-creator@example.com",
-		PasswordHash: "creator-hash",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	group, err := repos.Groups.Create(ctx, persistence.ChatGroup{
-		Name:       "topic-group",
-		Visibility: persistence.GroupVisibilityPrivate,
-		CreatorID:  creator.ID,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	created, err := repos.Topics.Create(ctx, persistence.Topic{
-		GroupID: group.ID,
-		Subject: "integration test topic",
-		Status:  persistence.TopicStatusOpen,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	topics, err := repos.Topics.ListByGroup(ctx, group.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(topics) != 1 {
-		t.Errorf("topics list length mismatch: got %d want 1", len(topics))
-	}
-	if topics[0].ID != created.ID {
-		t.Errorf("topic id mismatch: got %s want %s", topics[0].ID, created.ID)
-	}
-
-	if err := repos.Topics.UpdateStatus(ctx, created.ID, persistence.TopicStatusResolved); err != nil {
-		t.Fatal(err)
-	}
-
-	updated, err := repos.Topics.GetByID(ctx, created.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if updated.Status != persistence.TopicStatusResolved {
-		t.Errorf("topic status mismatch: got %s want %s", updated.Status, persistence.TopicStatusResolved)
 	}
 }
 

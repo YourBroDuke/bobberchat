@@ -142,7 +142,7 @@ docker compose down -v && docker compose up -d --build --wait
 ./scripts/e2e-test.sh
 ```
 
-The E2E script runs 31 tests covering registration, login, agent CRUD, groups, topics, messaging, approvals, and WebSocket connectivity.
+The E2E script runs 29 tests covering registration, login, agent CRUD, groups, messaging, approvals, and WebSocket connectivity.
 
 ## Stopping
 

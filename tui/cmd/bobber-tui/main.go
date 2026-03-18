@@ -36,10 +36,6 @@ type model struct {
 	msgCursor   int
 	msgViewport viewport.Model
 
-	topics      []topicEntry
-	topicCursor int
-	showTopics  bool
-
 	filterMode       bool
 	filterText       string
 	filteredMessages []int
@@ -88,13 +84,8 @@ type groupEntry struct {
 	MemberCount          int
 }
 
-type topicEntry struct {
-	ID, GroupID, Title, Status string
-}
-
 type agentsMsg []agentEntry
 type groupsMsg []groupEntry
-type topicsMsg []topicEntry
 type messageMsg messageEntry
 type approvalsMsg []approvalEntry
 type errMsg error
@@ -307,18 +298,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.moveCursor(1)
 
 		case "enter":
-			if m.activePane == 0 && m.leftSection == 1 && len(m.groups) > 0 {
-				group := m.groups[m.groupCursor]
-				m.showTopics = true
-				m.topics = nil
-				m.topicCursor = 0
-				m.statusMsg = fmt.Sprintf("Loading topics for %s...", safeName(group.Name, group.ID))
-				m.rebuildContext()
-				return m, fetchTopicsCmd(m.backendURL, m.token, group.ID)
-			}
-			if m.activePane == 0 && m.leftSection == 0 {
-				m.showTopics = false
-			}
 			m.rebuildContext()
 
 		case "a":
@@ -330,7 +309,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.textInput.Focus()
 
 		case "/":
-			m.showTopics = false
 			m.filterMode = true
 			m.filterText = ""
 			m.applyMessageFilter()
@@ -429,20 +407,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if len(m.groups) == 0 {
 			m.leftSection = 0
-			m.showTopics = false
-			m.topics = nil
-			m.topicCursor = 0
 		}
 		m.statusMsg = fmt.Sprintf("Group list refreshed (%d total)", len(m.groups))
-		m.rebuildContext()
-
-	case topicsMsg:
-		m.topics = msg
-		if m.topicCursor >= len(m.topics) {
-			m.topicCursor = maxInt(0, len(m.topics)-1)
-		}
-		m.showTopics = true
-		m.statusMsg = fmt.Sprintf("Topics updated (%d items)", len(m.topics))
 		m.rebuildContext()
 
 	case messageMsg:
@@ -496,10 +462,6 @@ func (m model) View() string {
 	left := m.renderPane("Agent Directory", m.renderLeftPane(), leftW, bodyH, m.activePane == 0)
 	centerTitle := "Messages"
 	centerContent := m.msgViewport.View()
-	if m.showTopics {
-		centerTitle = "Topic Board"
-		centerContent = m.renderTopicsBoard(centerW)
-	}
 	if len(m.filteredMessages) > 0 || strings.TrimSpace(m.filterText) != "" {
 		centerTitle = fmt.Sprintf("%s (%d of %d)", centerTitle, len(m.filteredMessages), len(m.messages))
 	}
@@ -603,27 +565,6 @@ func (m *model) renderLeftPane() string {
 	return strings.Join(lines, "\n")
 }
 
-func (m *model) renderTopicsBoard(width int) string {
-	if len(m.topics) == 0 {
-		return mutedStyle.Render("No topics found for selected group")
-	}
-	maxW := maxInt(10, width-6)
-	lines := make([]string, 0, len(m.topics)*2)
-	for i, t := range m.topics {
-		marker := " "
-		if i == m.topicCursor {
-			marker = "▸"
-		}
-		head := fmt.Sprintf("%s %s", marker, truncate(firstNonEmpty(strings.TrimSpace(t.Title), t.ID), maxW-2))
-		meta := fmt.Sprintf("  %s", mutedStyle.Render(fmt.Sprintf("status:%s", strings.ToUpper(strings.TrimSpace(t.Status)))))
-		if i == m.topicCursor {
-			head = selectedStyle.Render(head)
-		}
-		lines = append(lines, truncate(head, maxW), truncate(meta, maxW))
-	}
-	return strings.Join(lines, "\n")
-}
-
 func (m *model) renderContext() string {
 	if m.showApprovals {
 		if len(m.approvals) == 0 {
@@ -644,22 +585,6 @@ func (m *model) renderContext() string {
 			wrap(ap.Justification, maxInt(20, m.width/4-8)),
 			"",
 			mutedStyle.Render("Press y=grant n=deny"),
-		}, "\n")
-	}
-
-	if m.activePane == 1 && m.showTopics && len(m.topics) > 0 {
-		t := m.topics[m.topicCursor]
-		selectedGroup := ""
-		if len(m.groups) > 0 {
-			selectedGroup = safeName(m.groups[m.groupCursor].Name, m.groups[m.groupCursor].ID)
-		}
-		return strings.Join([]string{
-			fmt.Sprintf("Group: %s", selectedGroup),
-			fmt.Sprintf("Topic ID: %s", t.ID),
-			fmt.Sprintf("Title: %s", t.Title),
-			fmt.Sprintf("Status: %s", strings.ToUpper(strings.TrimSpace(t.Status))),
-			"Assignee: (not provided)",
-			fmt.Sprintf("Group ID: %s", t.GroupID),
 		}, "\n")
 	}
 
@@ -685,7 +610,6 @@ func (m *model) renderContext() string {
 			fmt.Sprintf("ID: %s", g.ID),
 			fmt.Sprintf("Visibility: %s", firstNonEmpty(strings.TrimSpace(g.Visibility), "UNKNOWN")),
 			fmt.Sprintf("Members: %d", g.MemberCount),
-			fmt.Sprintf("Topics loaded: %d", len(m.topics)),
 		}, "\n")
 	}
 
@@ -757,24 +681,17 @@ func (m *model) moveCursor(delta int) {
 		}
 		m.rebuildContext()
 	case 1:
-		if m.showTopics {
-			if len(m.topics) == 0 {
-				return
-			}
-			m.topicCursor = clamp(m.topicCursor+delta, 0, len(m.topics)-1)
-		} else {
-			vis := m.visibleMessageIndices()
-			if len(vis) == 0 {
-				return
-			}
-			pos := m.positionInVisibleMessages(m.msgCursor)
-			if pos < 0 {
-				pos = len(vis) - 1
-			}
-			pos = clamp(pos+delta, 0, len(vis)-1)
-			m.msgCursor = vis[pos]
-			m.rebuildMessageViewport()
+		vis := m.visibleMessageIndices()
+		if len(vis) == 0 {
+			return
 		}
+		pos := m.positionInVisibleMessages(m.msgCursor)
+		if pos < 0 {
+			pos = len(vis) - 1
+		}
+		pos = clamp(pos+delta, 0, len(vis)-1)
+		m.msgCursor = vis[pos]
+		m.rebuildMessageViewport()
 		m.rebuildContext()
 	case 2:
 		if m.showApprovals && len(m.approvals) > 0 {
@@ -1147,60 +1064,6 @@ func fetchGroupsCmd(backendURL, token string) tea.Cmd {
 		})
 
 		return groupsMsg(groups)
-	}
-}
-
-func fetchTopicsCmd(backendURL, token, groupID string) tea.Cmd {
-	return func() tea.Msg {
-		gid := strings.TrimSpace(groupID)
-		if gid == "" {
-			return errMsg(errors.New("missing group id"))
-		}
-		req, err := http.NewRequest(http.MethodGet, strings.TrimRight(backendURL, "/")+"/v1/groups/"+url.PathEscape(gid)+"/topics", nil)
-		if err != nil {
-			return errMsg(err)
-		}
-		req.Header.Set("Authorization", "Bearer "+token)
-
-		cli := &http.Client{Timeout: 10 * time.Second}
-		resp, err := cli.Do(req)
-		if err != nil {
-			return errMsg(fmt.Errorf("fetch topics: %w", err))
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			body, _ := io.ReadAll(resp.Body)
-			return errMsg(fmt.Errorf("fetch topics failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body))))
-		}
-
-		var payload struct {
-			Topics []struct {
-				ID      string `json:"id"`
-				GroupID string `json:"group_id"`
-				Title   string `json:"title"`
-				Status  string `json:"status"`
-			} `json:"topics"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-			return errMsg(fmt.Errorf("decode topics response: %w", err))
-		}
-
-		topics := make([]topicEntry, 0, len(payload.Topics))
-		for _, t := range payload.Topics {
-			topics = append(topics, topicEntry{
-				ID:      strings.TrimSpace(t.ID),
-				GroupID: strings.TrimSpace(t.GroupID),
-				Title:   strings.TrimSpace(t.Title),
-				Status:  strings.TrimSpace(t.Status),
-			})
-		}
-
-		sort.SliceStable(topics, func(i, j int) bool {
-			return firstNonEmpty(topics[i].Title, topics[i].ID) < firstNonEmpty(topics[j].Title, topics[j].ID)
-		})
-
-		return topicsMsg(topics)
 	}
 }
 

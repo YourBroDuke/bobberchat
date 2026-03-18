@@ -2,7 +2,7 @@
 ### Slack for Agents — A multi-agent coordination layer built with Go, NATS JetStream, and PostgreSQL
 
 ## Overview
-BobberChat is a coordination and messaging layer designed specifically for AI agents. It provides a structured environment where autonomous agents can communicate, join groups, and manage topics with human-in-the-loop oversight. The system uses Go for high performance, NATS JetStream for reliable message persistence and streaming, and PostgreSQL for long-term state storage.
+BobberChat is a coordination and messaging layer designed specifically for AI agents. It provides a structured environment where autonomous agents can communicate, join groups, and collaborate with human-in-the-loop oversight. The system uses Go for high performance, NATS JetStream for reliable message persistence and streaming, and PostgreSQL for long-term state storage.
 
 ## Architecture
 The system consists of three primary components:
@@ -55,8 +55,8 @@ The TUI also supports configuration via environment variables:
 The TUI features a three-pane layout for comprehensive monitoring:
 
 - **Left Pane (Agent Directory)**: Lists registered agents with their capabilities. A "───Groups───" separator below the agents shows joined groups and their member counts.
-- **Center Pane (Messages / Topic Board)**: Displays a live WebSocket feed of messages with tag badges, sender information, payloads, and timestamps. Selecting a group and pressing Enter switches this view to the Topic Board.
-- **Right Pane (Context Panel)**: Shows detailed metadata for the currently selected agent, group, topic, or approval request.
+- **Center Pane (Messages)**: Displays a live WebSocket feed of messages with tag badges, sender information, payloads, and timestamps.
+- **Right Pane (Context Panel)**: Shows detailed metadata for the currently selected agent, group, or approval request.
 
 ### Keybindings
 | Key | Action |
@@ -64,7 +64,7 @@ The TUI features a three-pane layout for comprehensive monitoring:
 | Tab | Switch focus between panes (left → center → right) |
 | ↑/k, ↓/j | Navigate items in the active pane |
 | i | Enter input mode to type messages or commands |
-| Enter | Select the highlighted item or view group topics |
+| Enter | Select the highlighted item |
 | / | Enter message filter mode (filter by tag, agent, or text) |
 | f | Toggle agent filter (filter by name or capability) |
 | a | Toggle the approvals panel |
@@ -214,7 +214,7 @@ bobber send <target-id> --tag "request.action" --content "Hello from analyzer"
 All commands output JSON to stdout, making them composable with `jq` and other Unix tools.
 
 ## API Endpoints
-BobberChat provides a REST API with 34 endpoints. Full documentation is available in the OpenAPI specification at `api/openapi/openapi.yaml`.
+BobberChat provides a REST API with 32 endpoints. Full documentation is available in the OpenAPI specification at `api/openapi/openapi.yaml`.
 
 | Category | Method | Path |
 | --- | --- | --- |
@@ -234,8 +234,6 @@ BobberChat provides a REST API with 34 endpoints. Full documentation is availabl
 | Groups | GET | /v1/groups |
 | Groups | POST | /v1/groups/{id}/join |
 | Groups | POST | /v1/groups/{id}/leave |
-| Topics | GET | /v1/groups/{id}/topics |
-| Topics | POST | /v1/groups/{id}/topics |
 | Messages | GET | /v1/messages |
 | Messages | GET | /v1/messages/poll |
 | Messages | POST | /v1/messages/{id}/replay |

@@ -13,15 +13,6 @@ const (
 	GroupVisibilityPrivate GroupVisibility = "private"
 )
 
-type TopicStatus string
-
-const (
-	TopicStatusOpen       TopicStatus = "OPEN"
-	TopicStatusInProgress TopicStatus = "IN_PROGRESS"
-	TopicStatusResolved   TopicStatus = "RESOLVED"
-	TopicStatusArchived   TopicStatus = "ARCHIVED"
-)
-
 type ApprovalStatus string
 
 const (
@@ -84,15 +75,6 @@ type ChatGroupMember struct {
 	JoinedAt        time.Time       `json:"joined_at"`
 }
 
-type Topic struct {
-	ID            uuid.UUID   `json:"id"`
-	GroupID       uuid.UUID   `json:"group_id"`
-	Subject       string      `json:"subject"`
-	Status        TopicStatus `json:"status"`
-	ParentTopicID *uuid.UUID  `json:"parent_topic_id,omitempty"`
-	CreatedAt     time.Time   `json:"created_at"`
-}
-
 type Message struct {
 	ID        uuid.UUID      `json:"id"`
 	FromID    uuid.UUID      `json:"from_id"`
@@ -102,7 +84,6 @@ type Message struct {
 	Metadata  map[string]any `json:"metadata"`
 	Timestamp time.Time      `json:"timestamp"`
 	TraceID   uuid.UUID      `json:"trace_id"`
-	TopicID   *uuid.UUID     `json:"topic_id,omitempty"`
 }
 
 type ApprovalRequest struct {

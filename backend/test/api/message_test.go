@@ -18,9 +18,9 @@ func TestGetMessagesByTraceID_Success(t *testing.T) {
 	traceID := uuid.New()
 
 	_, err := env.db.Pool().Exec(context.Background(), `
-		INSERT INTO messages (id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id, topic_id)
-		VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,$8,$9)
-	`, uuid.New(), uid, uid, "request.action", `{"hello":"world"}`, `{}`, time.Now().UTC(), traceID, nil)
+		INSERT INTO messages (id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id)
+		VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7,$8)
+	`, uuid.New(), uid, uid, "request.action", `{"hello":"world"}`, `{}`, time.Now().UTC(), traceID)
 	if err != nil {
 		t.Fatalf("insert message: %v", err)
 	}

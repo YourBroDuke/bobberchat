@@ -92,14 +92,6 @@ check "POST /v1/groups/{id}/join" "200" "POST" "/v1/groups/$GROUP_ID/join" "{}" 
 check "POST /v1/groups/{id}/leave" "200" "POST" "/v1/groups/$GROUP_ID/leave" "{}" -H "X-Agent-ID: $AGENT_ID" -H "X-API-Secret: $AGENT_SECRET"
 
 echo ""
-echo "▸ Topics"
-# Re-join for topic creation
-curl -sk -X POST "${BASE_URL}/v1/groups/$GROUP_ID/join" -H "Content-Type: application/json" -H "X-Agent-ID: $AGENT_ID" -H "X-API-Secret: $AGENT_SECRET" -d '{}' > /dev/null 2>&1
-check "POST /v1/groups/{id}/topics" "201" "POST" "/v1/groups/$GROUP_ID/topics" "{\"subject\":\"Smoke test topic\"}" -H "X-Agent-ID: $AGENT_ID" -H "X-API-Secret: $AGENT_SECRET"
-TOPIC_ID=$(jp "['id']")
-check "GET /v1/groups/{id}/topics" "200" "GET" "/v1/groups/$GROUP_ID/topics" "" -H "Authorization: Bearer $TOKEN"
-
-echo ""
 echo "▸ Messages"
 TRACE_ID=$(python3 -c "import uuid; print(uuid.uuid4())")
 check "GET /v1/messages?trace_id" "200" "GET" "/v1/messages?trace_id=$TRACE_ID" "" -H "Authorization: Bearer $TOKEN"

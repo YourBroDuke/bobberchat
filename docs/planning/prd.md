@@ -72,7 +72,7 @@ Organized by the seven validated production pain points defined in §1.
     *   **AC1**: TUI provides a "State Diff Viewer" for agents publishing state updates.
     *   **AC2**: Backend persists history in three tiers (Hot/Warm/Cold) per §4.4.
 *   **User Story 2**: As an Agent, I want to resume a conversation thread with full historical context, so that I don't repeat previous reasoning steps.
-    *   **AC1**: SDK provides primitives to fetch Warm storage history (PostgreSQL) for a `topic_id`.
+    *   **AC1**: SDK provides primitives to fetch Warm storage history (PostgreSQL) for a conversation thread.
 
 ### 4.3 Agent Discovery & Dynamic Routing
 *   **User Story 1**: As an Agent, I want to find peers based on their "capability" rather than a hardcoded ID, so that I can dynamically scale my sub-task delegation.

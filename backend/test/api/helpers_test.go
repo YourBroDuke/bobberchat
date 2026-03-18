@@ -60,7 +60,7 @@ func (e *testEnv) resetSchema(t *testing.T) {
 	// server's pgx prepared-statement cache (OIDs change when enum types are
 	// recreated, causing "cached plan must not change result type" errors).
 	_, err := e.db.Pool().Exec(ctx, `
-		TRUNCATE TABLE audit_log, approval_requests, messages_default, messages, topics, chat_group_members, chat_groups, agents, users CASCADE;
+		TRUNCATE TABLE audit_log, approval_requests, messages_default, messages, chat_group_members, chat_groups, agents, users CASCADE;
 	`)
 	if err != nil {
 		t.Fatalf("truncate tables: %v", err)
@@ -96,7 +96,7 @@ func (e *testEnv) cleanup(t *testing.T) {
 
 	ctx := context.Background()
 	_, _ = e.db.Pool().Exec(ctx, `
-		TRUNCATE TABLE audit_log, approval_requests, messages_default, messages, topics, chat_group_members, chat_groups, agents, users CASCADE;
+		TRUNCATE TABLE audit_log, approval_requests, messages_default, messages, chat_group_members, chat_groups, agents, users CASCADE;
 	`)
 	e.db.Close()
 }

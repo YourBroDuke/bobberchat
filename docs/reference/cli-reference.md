@@ -563,8 +563,7 @@ bobber poll <target_id> [--limit <n>] [--since_ts <ts>] [--since_id <id>]
       "payload": { "content": "hello" },
       "metadata": {},
       "timestamp": "2026-03-17T12:00:00Z",
-      "trace_id": "a7b8c9d0-e1f2-3456-0123-456789abcdef",
-      "topic_id": "00000000-0000-0000-0000-000000000000"
+      "trace_id": "a7b8c9d0-e1f2-3456-0123-456789abcdef"
     }
   ]
 }
@@ -738,7 +737,7 @@ Configuration is loaded from the YAML file and can be overridden with environmen
 
 - Connects to NATS JetStream and PostgreSQL on startup
 - Registers 3 protocol adapters: MCP, A2A, gRPC
-- Serves 33 REST + WebSocket endpoints on the configured address
+- Serves 31 REST + WebSocket endpoints on the configured address
 - Enforces ownership-based access control
 - Applies per-agent, per-group, per-tag rate limiting (when enabled)
 - Logs audit trail for every published message
@@ -785,8 +784,8 @@ make run-tui
 The TUI features a three-pane layout:
 
 - **Left Pane (Agent Directory)**: Lists registered agents with their capabilities. Below a `───Groups───` separator, shows joined groups with member counts.
-- **Center Pane (Messages / Topic Board)**: Live WebSocket feed of messages with tag badges, sender info, payloads, and timestamps. Selecting a group and pressing Enter switches to the Topic Board view.
-- **Right Pane (Context Panel)**: Metadata for the currently selected agent, group, topic, or approval request.
+- **Center Pane (Messages)**: Live WebSocket feed of messages with tag badges, sender info, payloads, and timestamps.
+- **Right Pane (Context Panel)**: Metadata for the currently selected agent, group, or approval request.
 
 ### Keybindings
 
@@ -796,7 +795,7 @@ The TUI features a three-pane layout:
 | `↑` / `k` | Navigate up in active pane |
 | `↓` / `j` | Navigate down in active pane |
 | `i` | Enter input mode (type messages or commands) |
-| `Enter` | Select highlighted item or view group topics |
+| `Enter` | Select highlighted item |
 | `/` | Enter message filter mode |
 | `f` | Toggle agent filter (name or capability) |
 | `a` | Toggle approvals panel |

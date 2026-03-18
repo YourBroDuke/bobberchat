@@ -276,8 +276,6 @@ func (a *app) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/groups", a.requireJWT(a.handleListGroups))
 	mux.HandleFunc("POST /v1/groups/{id}/join", a.requireAuth(true, true, a.handleJoinGroup))
 	mux.HandleFunc("POST /v1/groups/{id}/leave", a.requireAuth(true, true, a.handleLeaveGroup))
-	mux.HandleFunc("GET /v1/groups/{id}/topics", a.requireJWT(a.handleListTopics))
-	mux.HandleFunc("POST /v1/groups/{id}/topics", a.requireAuth(true, true, a.handleCreateTopic))
 
 	mux.HandleFunc("GET /v1/messages", a.requireJWT(a.handleMessagesByTraceID))
 	mux.HandleFunc("GET /v1/messages/poll", a.requireJWT(a.handlePollMessages))
@@ -712,34 +710,6 @@ func (a *app) handleLeaveGroup(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"group_id": id, "left": true})
 }
 
-func (a *app) handleListTopics(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	topics, err := a.convSvc.ListTopics(r.Context(), id)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"topics": topics})
-}
-
-func (a *app) handleCreateTopic(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	var req struct {
-		Subject       string  `json:"subject"`
-		ParentTopicID *string `json:"parent_topic_id"`
-	}
-	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	topic, err := a.convSvc.CreateTopic(r.Context(), id, req.Subject, req.ParentTopicID)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusCreated, topic)
-}
-
 func (a *app) handleMessagesByTraceID(w http.ResponseWriter, r *http.Request) {
 	traceID := strings.TrimSpace(r.URL.Query().Get("trace_id"))
 	if traceID == "" {
@@ -965,7 +935,7 @@ func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
 	var payloadRaw []byte
 	var metadataRaw []byte
 	err = a.db.Pool().QueryRow(r.Context(), `
-		SELECT id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id, topic_id
+		SELECT id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id
 		FROM messages
 		WHERE id = $1
 	`, originalID).Scan(
@@ -977,7 +947,6 @@ func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
 		&metadataRaw,
 		&original.Timestamp,
 		&original.TraceID,
-		&original.TopicID,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

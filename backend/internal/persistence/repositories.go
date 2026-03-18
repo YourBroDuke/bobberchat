@@ -45,17 +45,9 @@ type ChatGroupRepository interface {
 	RemoveMember(ctx context.Context, member ChatGroupMember) error
 }
 
-type TopicRepository interface {
-	Create(ctx context.Context, topic Topic) (*Topic, error)
-	GetByID(ctx context.Context, topicID uuid.UUID) (*Topic, error)
-	ListByGroup(ctx context.Context, groupID uuid.UUID) ([]Topic, error)
-	UpdateStatus(ctx context.Context, topicID uuid.UUID, status TopicStatus) error
-}
-
 type MessageRepository interface {
 	Save(ctx context.Context, message Message) (*Message, error)
 	GetByTraceID(ctx context.Context, traceID uuid.UUID) ([]Message, error)
-	GetByTopic(ctx context.Context, topicID uuid.UUID) ([]Message, error)
 	GetByID(ctx context.Context, messageID uuid.UUID, timestamp time.Time) (*Message, error)
 	GetByPeer(ctx context.Context, userID, peerID uuid.UUID, limit int, sinceTS *time.Time, sinceID *uuid.UUID) ([]Message, error)
 }
@@ -89,7 +81,6 @@ type PostgresRepositories struct {
 	Agents             AgentRepository
 	Users              UserRepository
 	Groups             ChatGroupRepository
-	Topics             TopicRepository
 	Messages           MessageRepository
 	Approvals          ApprovalRepository
 	AuditLogs          AuditLogRepository
@@ -102,7 +93,6 @@ func NewPostgresRepositories(db *DB) *PostgresRepositories {
 		Agents:             &pgAgentRepository{db: db},
 		Users:              &pgUserRepository{db: db},
 		Groups:             &pgChatGroupRepository{db: db},
-		Topics:             &pgTopicRepository{db: db},
 		Messages:           &pgMessageRepository{db: db},
 		Approvals:          &pgApprovalRepository{db: db},
 		AuditLogs:          &pgAuditLogRepository{db: db},
@@ -530,97 +520,6 @@ func (r *pgChatGroupRepository) RemoveMember(ctx context.Context, member ChatGro
 	return nil
 }
 
-type pgTopicRepository struct{ db *DB }
-
-func (r *pgTopicRepository) Create(ctx context.Context, topic Topic) (*Topic, error) {
-	if topic.ID == uuid.Nil {
-		topic.ID = uuid.New()
-	}
-	if topic.CreatedAt.IsZero() {
-		topic.CreatedAt = time.Now().UTC()
-	}
-	if topic.Status == "" {
-		topic.Status = TopicStatusOpen
-	}
-
-	row := r.db.Pool().QueryRow(ctx, `
-		INSERT INTO topics (id, group_id, subject, status, parent_topic_id, created_at)
-		VALUES ($1,$2,$3,$4,$5,$6)
-		RETURNING id, group_id, subject, status, parent_topic_id, created_at
-	`, topic.ID, topic.GroupID, topic.Subject, string(topic.Status), topic.ParentTopicID, topic.CreatedAt)
-
-	out := Topic{}
-	var status string
-	err := row.Scan(&out.ID, &out.GroupID, &out.Subject, &status, &out.ParentTopicID, &out.CreatedAt)
-	if err != nil {
-		return nil, fmt.Errorf("create topic: %w", err)
-	}
-	out.Status = TopicStatus(status)
-	return &out, nil
-}
-
-func (r *pgTopicRepository) GetByID(ctx context.Context, topicID uuid.UUID) (*Topic, error) {
-	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, group_id, subject, status, parent_topic_id, created_at
-		FROM topics
-		WHERE id = $1
-	`, topicID)
-
-	t := Topic{}
-	var status string
-	err := row.Scan(&t.ID, &t.GroupID, &t.Subject, &status, &t.ParentTopicID, &t.CreatedAt)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNotFound
-		}
-		return nil, fmt.Errorf("get topic: %w", err)
-	}
-	t.Status = TopicStatus(status)
-	return &t, nil
-}
-
-func (r *pgTopicRepository) ListByGroup(ctx context.Context, groupID uuid.UUID) ([]Topic, error) {
-	rows, err := r.db.Pool().Query(ctx, `
-		SELECT id, group_id, subject, status, parent_topic_id, created_at
-		FROM topics
-		WHERE group_id = $1
-		ORDER BY created_at DESC
-	`, groupID)
-	if err != nil {
-		return nil, fmt.Errorf("list topics: %w", err)
-	}
-	defer rows.Close()
-
-	topics := make([]Topic, 0)
-	for rows.Next() {
-		t := Topic{}
-		var status string
-		if err := rows.Scan(&t.ID, &t.GroupID, &t.Subject, &status, &t.ParentTopicID, &t.CreatedAt); err != nil {
-			return nil, fmt.Errorf("scan topic: %w", err)
-		}
-		t.Status = TopicStatus(status)
-		topics = append(topics, t)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate topics: %w", err)
-	}
-
-	return topics, nil
-}
-
-func (r *pgTopicRepository) UpdateStatus(ctx context.Context, topicID uuid.UUID, status TopicStatus) error {
-	res, err := r.db.Pool().Exec(ctx, `
-		UPDATE topics SET status = $1 WHERE id = $2
-	`, string(status), topicID)
-	if err != nil {
-		return fmt.Errorf("update topic status: %w", err)
-	}
-	if res.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
 type pgMessageRepository struct{ db *DB }
 
 func (r *pgMessageRepository) Save(ctx context.Context, message Message) (*Message, error) {
@@ -638,10 +537,10 @@ func (r *pgMessageRepository) Save(ctx context.Context, message Message) (*Messa
 	}
 
 	row := r.db.Pool().QueryRow(ctx, `
-		INSERT INTO messages (id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id, topic_id)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-		RETURNING id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id, topic_id
-	`, message.ID, message.FromID, message.ToID, message.Tag, payload, metadata, message.Timestamp, message.TraceID, message.TopicID)
+		INSERT INTO messages (id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+		RETURNING id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id
+	`, message.ID, message.FromID, message.ToID, message.Tag, payload, metadata, message.Timestamp, message.TraceID)
 
 	out, err := scanMessage(row)
 	if err != nil {
@@ -652,7 +551,7 @@ func (r *pgMessageRepository) Save(ctx context.Context, message Message) (*Messa
 
 func (r *pgMessageRepository) GetByTraceID(ctx context.Context, traceID uuid.UUID) ([]Message, error) {
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id, topic_id
+		SELECT id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id
 		FROM messages
 		WHERE trace_id = $1
 		ORDER BY "timestamp" ASC
@@ -676,35 +575,9 @@ func (r *pgMessageRepository) GetByTraceID(ctx context.Context, traceID uuid.UUI
 	return messages, nil
 }
 
-func (r *pgMessageRepository) GetByTopic(ctx context.Context, topicID uuid.UUID) ([]Message, error) {
-	rows, err := r.db.Pool().Query(ctx, `
-		SELECT id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id, topic_id
-		FROM messages
-		WHERE topic_id = $1
-		ORDER BY "timestamp" ASC
-	`, topicID)
-	if err != nil {
-		return nil, fmt.Errorf("get messages by topic: %w", err)
-	}
-	defer rows.Close()
-
-	messages := make([]Message, 0)
-	for rows.Next() {
-		m, err := scanMessage(rows)
-		if err != nil {
-			return nil, err
-		}
-		messages = append(messages, *m)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate messages by topic: %w", err)
-	}
-	return messages, nil
-}
-
 func (r *pgMessageRepository) GetByID(ctx context.Context, messageID uuid.UUID, timestamp time.Time) (*Message, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id, topic_id
+		SELECT id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id
 		FROM messages
 		WHERE id = $1 AND "timestamp" = $2
 	`, messageID, timestamp)
@@ -717,7 +590,7 @@ func (r *pgMessageRepository) GetByPeer(ctx context.Context, userID, peerID uuid
 	}
 
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id, topic_id
+		SELECT id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id
 		FROM messages
 		WHERE ((from_id = $1 AND to_id = $2) OR (from_id = $2 AND to_id = $1))
 			AND ($3::timestamptz IS NULL OR "timestamp" > $3)
@@ -1073,7 +946,6 @@ func scanMessage(scanner rowScanner) (*Message, error) {
 		&metadataRaw,
 		&out.Timestamp,
 		&out.TraceID,
-		&out.TopicID,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

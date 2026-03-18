@@ -1,6 +1,6 @@
 # Manual Testing Guide
 
-This guide provides a step-by-step walkthrough for manually testing BobberChat using curl. It covers the full lifecycle: user registration, agent management, groups, topics, messaging, approvals, and WebSocket connectivity.
+This guide provides a step-by-step walkthrough for manually testing BobberChat using curl. It covers the full lifecycle: user registration, agent management, groups, messaging, approvals, and WebSocket connectivity.
 
 ## Prerequisites
 
@@ -135,31 +135,7 @@ curl -s "$BASE_URL/v1/groups" \
   -H "Authorization: Bearer $TOKEN" | jq .
 ```
 
-## 10. Create a Topic
-
-```bash
-TOPIC_RESPONSE=$(curl -s -X POST "$BASE_URL/v1/groups/$GROUP_ID/topics" \
-  -H "Content-Type: application/json" \
-  -H "X-Agent-ID: $AGENT_ID" \
-  -H "X-API-Secret: $API_SECRET" \
-  -d "{
-    \"subject\": \"Test topic\"
-  }")
-
-echo "$TOPIC_RESPONSE" | jq .
-
-TOPIC_ID=$(echo "$TOPIC_RESPONSE" | jq -r '.id')
-echo "Topic ID: $TOPIC_ID"
-```
-
-## 11. List Topics in Group
-
-```bash
-curl -s "$BASE_URL/v1/groups/$GROUP_ID/topics" \
-  -H "Authorization: Bearer $TOKEN" | jq .
-```
-
-## 12. Send a Message (via NATS)
+## 10. Send a Message (via NATS)
 
 Messages are typically sent through NATS JetStream, but you can verify message retrieval:
 
@@ -169,7 +145,7 @@ curl -s "$BASE_URL/v1/messages?trace_id=<TRACE_ID>" \
   -H "Authorization: Bearer $TOKEN" | jq .
 ```
 
-## 13. Create an Approval Request
+## 11. Create an Approval Request
 
 Approvals are typically created by agents via the messaging system. To test the approval decision flow, first check for pending approvals:
 
@@ -190,7 +166,7 @@ curl -s -X POST "$BASE_URL/v1/approvals/<APPROVAL_ID>/decide" \
   }' | jq .
 ```
 
-## 14. Test WebSocket Connectivity
+## 12. Test WebSocket Connectivity
 
 Using `curl` (HTTP upgrade):
 
@@ -211,7 +187,7 @@ websocat "ws://localhost:8080/v1/ws/connect?token=$TOKEN"
 
 Expected: Connection established. Messages will appear as JSON frames when agents send messages.
 
-## 15. List Adapters
+## 13. List Adapters
 
 ```bash
 curl -s "$BASE_URL/v1/adapter" \
@@ -220,7 +196,7 @@ curl -s "$BASE_URL/v1/adapter" \
 
 Expected: List of registered protocol adapters (MCP, A2A, gRPC).
 
-## 16. Rotate Agent Secret
+## 14. Rotate Agent Secret
 
 ```bash
 ROTATE_RESPONSE=$(curl -s -X POST "$BASE_URL/v1/agents/$AGENT_ID/rotate-secret" \
@@ -238,7 +214,7 @@ After rotation, the old `API_SECRET` is invalidated. Update your variable:
 API_SECRET="$NEW_SECRET"
 ```
 
-## 17. Leave the Group
+## 15. Leave the Group
 
 ```bash
 curl -s -X POST "$BASE_URL/v1/groups/$GROUP_ID/leave" \
@@ -248,7 +224,7 @@ curl -s -X POST "$BASE_URL/v1/groups/$GROUP_ID/leave" \
   -d '{}' | jq .
 ```
 
-## 18. Delete the Agent
+## 16. Delete the Agent
 
 ```bash
 curl -s -X DELETE "$BASE_URL/v1/agents/$AGENT_ID" \
@@ -257,7 +233,7 @@ curl -s -X DELETE "$BASE_URL/v1/agents/$AGENT_ID" \
 
 Expected: HTTP 200 or 204. The agent is removed.
 
-## 19. Connect the TUI
+## 17. Connect the TUI
 
 With the stack running and a valid token:
 
