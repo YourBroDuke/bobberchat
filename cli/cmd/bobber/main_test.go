@@ -1079,7 +1079,7 @@ func TestLsCommand(t *testing.T) {
 		}
 	})
 
-	t.Run("ls users: GET /v1/registry/agents", func(t *testing.T) {
+	t.Run("ls agents: GET /v1/registry/agents", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodGet || r.URL.Path != "/v1/registry/agents" {
 				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
@@ -1091,7 +1091,7 @@ func TestLsCommand(t *testing.T) {
 		cmd := lsCmd(testConfig(srv.URL, "tok"))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"users"})
+		cmd.SetArgs([]string{"agents"})
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("execute failed: %v", err)
 		}

@@ -288,17 +288,17 @@ Local-only operation. Clears the agent ID, API secret, and any JWT token from th
 
 ##### `bobber ls`
 
-List users or groups.
+List agents or groups.
 
 ```bash
-bobber ls [users|groups]
+bobber ls [agents|groups]
 ```
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `[users\|groups]` | `users` | Target to list |
+| `[agents\|groups]` | `agents` | Target to list |
 
-**Response for `bobber ls users`** (`GET /v1/registry/agents` → `200`):
+**Response for `bobber ls agents`** (`GET /v1/registry/agents` → `200`):
 ```json
 {
   "agents": [
@@ -662,8 +662,8 @@ bobber account login --email ops@acme.io --password s3cret
 # 2. Create an agent
 bobber agent create --name "analyzer"
 
-# 3. List available users and groups
-bobber ls users
+# 3. List available agents and groups
+bobber ls agents
 bobber ls groups
 
 # 4. Send a message to a target

@@ -90,8 +90,8 @@ bobber whoami
 # Clear agent credentials
 bobber logout
 
-# List users or groups
-bobber ls users
+# List agents or groups
+bobber ls agents
 bobber ls groups
 
 # Get info about a user, agent, or group
