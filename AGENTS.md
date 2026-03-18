@@ -11,18 +11,18 @@ Check whether the changes made require updates to any of these documents:
 | Document | What to check |
 |----------|--------------|
 | `README.md` | API endpoint table, CLI flags, keybindings, env vars, quick start instructions |
-| `docs/PROJECT_STATUS.md` | "What's Done" sections, file/line counts, test counts, file tree, dependency versions |
-| `docs/tech-design.md` | Architecture descriptions, component interactions, data flows |
-| `docs/design-spec.md` | Protocol definitions, interface contracts, system specifications |
-| `docs/prd.md` | Feature descriptions, requirements traceability |
+| `docs/planning/project-status.md` | "What's Done" sections, file/line counts, test counts, file tree, dependency versions |
+| `docs/architecture/tech-design.md` | Architecture descriptions, component interactions, data flows |
+| `docs/architecture/design-spec.md` | Protocol definitions, interface contracts, system specifications |
+| `docs/planning/prd.md` | Feature descriptions, requirements traceability |
 | `api/openapi/openapi.yaml` | Endpoint paths, request/response schemas, status codes |
-| `docs/tsg/*.md` | Deployment steps, config references, troubleshooting entries |
+| `docs/operations/*.md` | Deployment steps, config references, troubleshooting entries |
 
 ### 2. Update Affected Documents
 
 - Update any document where the completed work has introduced new information, changed existing behavior, or made content inaccurate.
 - Keep the same style and formatting as the existing document.
-- Update the `Last updated` date in `docs/PROJECT_STATUS.md` if it was modified.
+- Update the `Last updated` date in `docs/planning/project-status.md` if it was modified.
 
 ### 3. Commit and Push
 

@@ -34,18 +34,18 @@ BOBBERCHAT_TEST_DSN="postgres://bobberchat:bobberchat@localhost:5432/bobberchat?
 
 | File | Lines | Description |
 |------|-------|-------------|
-| `docs/design-spec.md` | 1,693 | Authoritative design spec — 13 sections + glossary + 4 appendices |
-| `docs/prd.md` | 212 | Product requirements document |
-| `docs/tech-design.md` | 721 | Technical design document |
+| `docs/architecture/design-spec.md` | 1,693 | Authoritative design spec — 13 sections + glossary + 4 appendices |
+| `docs/planning/prd.md` | 212 | Product requirements document |
+| `docs/architecture/tech-design.md` | 721 | Technical design document |
 | `api/openapi/openapi.yaml` | ~1,300 | OpenAPI 3.1.0 spec — 28 endpoint paths |
 | `README.md` | ~280 | Comprehensive project README with TUI user guide |
-| `docs/cli-reference.md` | ~595 | Complete CLI reference for bobber, bobberd, bobber-tui, and Makefile |
-| `docs/tsg/deploy-docker-compose.md` | ~120 | Docker Compose deployment guide |
-| `docs/tsg/deploy-kubernetes.md` | ~130 | Raw Kubernetes manifests deployment guide |
-| `docs/tsg/deploy-helm.md` | ~170 | Helm chart deployment guide |
-| `docs/tsg/deploy-local.md` | ~120 | Local development setup guide |
-| `docs/tsg/troubleshooting.md` | ~200 | Common issues and fixes (Docker, API, K8s, Helm, TUI) |
-| `docs/tsg/manual-testing.md` | ~210 | Step-by-step manual testing walkthrough with curl |
+| `docs/reference/cli-reference.md` | ~595 | Complete CLI reference for bobber, bobberd, bobber-tui, and Makefile |
+| `docs/operations/deploy-docker-compose.md` | ~120 | Docker Compose deployment guide |
+| `docs/operations/deploy-kubernetes.md` | ~130 | Raw Kubernetes manifests deployment guide |
+| `docs/operations/deploy-helm.md` | ~170 | Helm chart deployment guide |
+| `docs/operations/deploy-local.md` | ~120 | Local development setup guide |
+| `docs/operations/troubleshooting.md` | ~200 | Common issues and fixes (Docker, API, K8s, Helm, TUI) |
+| `docs/operations/manual-testing.md` | ~210 | Step-by-step manual testing walkthrough with curl |
 
 ### Core Implementation (8 packages)
 
@@ -332,7 +332,7 @@ System:     GET /v1/health, /v1/metrics
 ```
 # Prompt to paste into a new AI session:
 
-I'm continuing work on the BobberChat project. Read docs/PROJECT_STATUS.md for full context.
+I'm continuing work on the BobberChat project. Read docs/planning/project-status.md for full context.
 
 The project is a "Slack for Agents" — a multi-agent coordination layer built with Go, NATS JetStream, and PostgreSQL.
 
@@ -441,20 +441,23 @@ bobberchat/
 ├── docker-compose.yml                    # 4 services with health checks
 ├── Dockerfile                            # Multi-stage build (workspace-aware)
 ├── docs/
-│   ├── cli-reference.md              # Complete CLI reference (bobber, bobberd, bobber-tui, Makefile)
-│   ├── design-spec.md                # Authoritative spec (1,693 lines)
-│   ├── prd.md                        # Product requirements
-│   ├── tech-design.md                # Technical design
-│   ├── PROJECT_STATUS.md             # ← THIS FILE
-│   └── tsg/
-│       ├── ci-cd.md                 # CI/CD pipeline documentation
-│       ├── deploy-azure.md          # Azure AKS deployment guide
-│       ├── deploy-docker-compose.md # Docker Compose deployment
-│       ├── deploy-kubernetes.md     # Raw K8s manifests deployment
-│       ├── deploy-helm.md           # Helm chart deployment
-│       ├── deploy-local.md          # Local dev setup
-│       ├── troubleshooting.md       # Common issues & fixes
-│       └── manual-testing.md        # Hands-on curl walkthrough
+│   ├── architecture/
+│   │   ├── design-spec.md            # Authoritative spec (1,693 lines)
+│   │   └── tech-design.md            # Technical design
+│   ├── operations/
+│   │   ├── ci-cd.md                  # CI/CD pipeline documentation
+│   │   ├── deploy-azure.md           # Azure AKS deployment guide
+│   │   ├── deploy-docker-compose.md  # Docker Compose deployment
+│   │   ├── deploy-kubernetes.md      # Raw K8s manifests deployment
+│   │   ├── deploy-helm.md            # Helm chart deployment
+│   │   ├── deploy-local.md           # Local dev setup
+│   │   ├── troubleshooting.md        # Common issues & fixes
+│   │   └── manual-testing.md         # Hands-on curl walkthrough
+│   ├── planning/
+│   │   ├── prd.md                    # Product requirements
+│   │   └── project-status.md         # ← THIS FILE
+│   └── reference/
+│       └── cli-reference.md          # Complete CLI reference (bobber, bobberd, bobber-tui, Makefile)
 ├── migrations/001_initial_schema.sql  # Full DB schema
 ├── migrations/002_email_verification.sql # User email verification columns/index
 ├── migrations/003_connections_blacklist.sql # Connection request and blacklist persistence

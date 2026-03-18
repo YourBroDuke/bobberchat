@@ -11,8 +11,8 @@ authors: BobberChat Engineering Team
 This document defines the implementation-level technical design for BobberChat v1.0 and translates architecture decisions from the design spec into concrete package boundaries, data models, API contracts, and operational standards.
 
 References:
-- Design Spec: [`docs/design-spec.md`](./design-spec.md)
-- PRD: [`docs/prd.md`](./prd.md)
+- Design Spec: [`docs/architecture/design-spec.md`](./design-spec.md)
+- PRD: [`docs/planning/prd.md`](../planning/prd.md)
 
 ## 1. Overview & Architecture Summary
 

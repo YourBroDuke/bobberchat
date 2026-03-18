@@ -23,7 +23,7 @@ Verify the backend is running:
 curl http://localhost:8080/health
 ```
 
-For detailed deployment instructions, refer to the documentation in `docs/tsg/`.
+For detailed deployment instructions, refer to the documentation in `docs/operations/`.
 
 ## TUI Client (bobber-tui)
 The terminal user interface provides a real-time dashboard for the BobberChat ecosystem.
@@ -292,13 +292,13 @@ docker compose down -v && docker compose up -d --build --wait
 ```
 
 ## Deployment
-For comprehensive deployment guides covering Docker Compose, Kubernetes, and Helm charts, see the `docs/tsg/` directory.
+For comprehensive deployment guides covering Docker Compose, Kubernetes, and Helm charts, see the `docs/operations/` directory.
 
 ## Documentation
-- `docs/cli-reference.md`: Complete CLI reference for `bobber`, `bobberd`, `bobber-tui`, and Makefile targets.
-- `docs/design-spec.md`: Detailed system design specifications.
-- `docs/prd.md`: Product Requirements Document.
-- `docs/tech-design.md`: Technical architecture and design choices.
+- `docs/reference/cli-reference.md`: Complete CLI reference for `bobber`, `bobberd`, `bobber-tui`, and Makefile targets.
+- `docs/architecture/design-spec.md`: Detailed system design specifications.
+- `docs/architecture/tech-design.md`: Technical architecture and design choices.
+- `docs/planning/prd.md`: Product Requirements Document.
+- `docs/planning/project-status.md`: Current development progress and roadmap.
 - `api/openapi/openapi.yaml`: Full API reference.
-- `docs/PROJECT_STATUS.md`: Current development progress and roadmap.
-- `docs/tsg/`: Technical Support Guides and deployment runbooks.
+- `docs/operations/`: Deployment guides, CI/CD, troubleshooting, and testing runbooks.
