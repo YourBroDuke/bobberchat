@@ -96,6 +96,8 @@ The TUI includes a built-in reconnection logic. If the WebSocket connection is l
 ## CLI Tool (bobber)
 The `bobber` CLI provides scriptable access to every BobberChat operation: user management, agent lifecycle, discovery, and real-time messaging over WebSocket. It is designed for shell scripts, CI pipelines, and automation workflows where a full TUI is unnecessary.
 
+**📖 [Complete CLI Reference](docs/reference/cli-reference.md)** — Full documentation for all commands, flags, and configuration options.
+
 ### Building
 ```bash
 make build
