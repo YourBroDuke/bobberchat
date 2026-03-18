@@ -794,7 +794,6 @@ The approval workflow is a specialized request/response cycle managed by the Bac
 1.  **Request Initiation**: An agent sends a message tagged `approval.request`. The payload MUST include:
     *   `action`: A descriptive string of the intended operation (e.g., "deploy-to-prod").
     *   `justification`: A rationale for why the action is necessary.
-    *   `urgency`: One of `low`, `medium`, `high`, or `critical`.
     *   `timeout_ms`: Maximum duration to wait before the timeout policy triggers.
     *   `max_cost`: (Optional) The estimated or maximum token/financial cost of the action.
 2.  **Routing & Queueing**: The Backend validates the request and routes it to the designated approver's queue. Approvers can be specific human users or supervising agents.
@@ -886,7 +885,7 @@ The `approval` family is strictly enforced for exactly-once delivery and termina
 
 | Tag | Required Fields | Description |
 | :--- | :--- | :--- |
-| `approval.request` | `approval_id`, `action`, `justification`, `urgency`, `timeout_ms` | Initiates a HITL workflow. |
+| `approval.request` | `approval_id`, `action`, `justification`, `timeout_ms` | Initiates a HITL workflow. |
 | `approval.granted` | `approval_id`, `approver`, `token` (optional) | Terminal success state. |
 | `approval.denied` | `approval_id`, `approver`, `reason` | Terminal failure state. |
 
@@ -894,7 +893,6 @@ Field definitions for `approval.request` payload:
 *   `approval_id`: UUIDv4 idempotency key.
 *   `action`: String identifying the operation.
 *   `justification`: Human-readable string.
-*   `urgency`: `low` | `medium` | `high` | `critical`.
 *   `timeout_ms`: Integer (milliseconds).
 *   `max_cost`: Decimal (optional token/USD limit).
 
@@ -1468,7 +1466,6 @@ This matrix traces the seven validated pain points identified in §1 to their co
     "approval_id": "apr_8201",
     "action": "prod_deploy",
     "justification": "Deploying patch for critical auth fix",
-    "urgency": "high",
     "timeout_ms": 60000,
     "max_cost": "0.00"
   },

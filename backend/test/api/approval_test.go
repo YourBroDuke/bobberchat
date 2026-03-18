@@ -35,9 +35,9 @@ func seedPendingApproval(t *testing.T, env *testEnv, approverUserID string) stri
 	}
 
 	_, err = env.db.Pool().Exec(context.Background(), `
-		INSERT INTO approval_requests (approval_id, agent_id, action, justification, urgency, status, approver_id, decided_at, timeout_ms, created_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
-	`, approvalID, agentID, "deploy", "needs approval", "medium", "PENDING", nil, nil, 60000)
+		INSERT INTO approval_requests (approval_id, agent_id, action, justification, status, approver_id, decided_at, timeout_ms, created_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NOW())
+	`, approvalID, agentID, "deploy", "needs approval", "PENDING", nil, nil, 60000)
 	if err != nil {
 		t.Fatalf("insert approval request: %v", err)
 	}

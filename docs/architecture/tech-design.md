@@ -115,8 +115,6 @@ Schema follows Design Spec §4, §5, §6, §7, §10, §11 and PRD acceptance cri
 ```sql
 CREATE TYPE approval_status AS ENUM ('PENDING', 'GRANTED', 'DENIED', 'TIMED_OUT', 'ESCALATED');
 
-CREATE TYPE urgency AS ENUM ('low', 'medium', 'high', 'critical');
-
 CREATE TYPE participant_type AS ENUM ('user', 'agent');
 
 CREATE TYPE conversation_type AS ENUM ('direct', 'group');
@@ -188,7 +186,6 @@ CREATE TABLE approval_requests (
   agent_id UUID NOT NULL REFERENCES agents(agent_id) ON DELETE CASCADE,
   action TEXT NOT NULL,
   justification TEXT NOT NULL,
-  urgency urgency NOT NULL,
   status approval_status NOT NULL DEFAULT 'PENDING',
   approver_id UUID,
   decided_at TIMESTAMPTZ,
@@ -227,7 +224,7 @@ CREATE INDEX idx_agents_owner ON agents (owner_user_id);
 CREATE INDEX idx_messages_trace ON messages (trace_id, "timestamp" DESC);
 CREATE INDEX idx_messages_conv_tag_time ON messages (conversation_id, tag, "timestamp" DESC);
 
-CREATE INDEX idx_approvals_pending ON approval_requests (status, urgency, created_at)
+CREATE INDEX idx_approvals_pending ON approval_requests (status, created_at)
 WHERE status = 'PENDING';
 
 CREATE INDEX idx_audit_time ON audit_log (created_at DESC);
@@ -328,7 +325,7 @@ Authentication model:
 
 | Method | Path | Auth | Request JSON | Response JSON | Status codes |
 |---|---|---|---|---|---|
-| GET | `/v1/approvals/pending` | JWT | n/a | `{ "approvals": [{ "approval_id": "uuid", "agent_id": "uuid", "action": "deploy", "justification": "...", "urgency": "high", "timeout_ms": 60000, "created_at": "..." }], "total": 2 }` | 200, 401, 403 |
+| GET | `/v1/approvals/pending` | JWT | n/a | `{ "approvals": [{ "approval_id": "uuid", "agent_id": "uuid", "action": "deploy", "justification": "...", "timeout_ms": 60000, "created_at": "..." }], "total": 2 }` | 200, 401, 403 |
 | POST | `/v1/approvals/{id}/decide` | JWT | `{ "decision": "granted|denied", "reason": "optional" }` | `{ "approval_id": "uuid", "status": "GRANTED|DENIED", "approver_id": "uuid", "decided_at": "..." }` | 200, 400, 401, 403, 404, 409 |
 
 #### 5.1.8 Health

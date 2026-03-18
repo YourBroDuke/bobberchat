@@ -34,7 +34,7 @@ func setupDB(t *testing.T) (*persistence.DB, func()) {
 	// Drop existing schema before re-applying migration (handles pre-populated databases)
 	_, _ = db.Pool().Exec(ctx, `
 		DROP TABLE IF EXISTS blacklist_entries, connection_requests, audit_log, approval_requests, messages_default, messages, chat_group_members, chat_groups, agents, users CASCADE;
-		DROP TYPE IF EXISTS connection_request_status, participant_type, urgency, approval_status, group_visibility CASCADE;
+		DROP TYPE IF EXISTS connection_request_status, participant_type, approval_status, group_visibility CASCADE;
 	`)
 
 	migrationFiles, err := filepath.Glob("../../../migrations/*.sql")
@@ -60,9 +60,9 @@ func setupDB(t *testing.T) (*persistence.DB, func()) {
 	cleanup := func() {
 		cleanupCtx := context.Background()
 		_, _ = db.Pool().Exec(cleanupCtx, `
-			DROP TABLE IF EXISTS blacklist_entries, connection_requests, audit_log, approval_requests, messages_default, messages, chat_group_members, chat_groups, agents, users CASCADE;
-			DROP TYPE IF EXISTS connection_request_status, participant_type, urgency, approval_status, group_visibility CASCADE;
-		`)
+		DROP TABLE IF EXISTS blacklist_entries, connection_requests, audit_log, approval_requests, messages_default, messages, chat_group_members, chat_groups, agents, users CASCADE;
+		DROP TYPE IF EXISTS connection_request_status, participant_type, approval_status, group_visibility CASCADE;
+	`)
 		db.Close()
 	}
 
@@ -258,7 +258,6 @@ func TestApprovalRepository_CreateDecide(t *testing.T) {
 		AgentID:       agent.AgentID,
 		Action:        "deploy",
 		Justification: "integration approval test",
-		Urgency:       persistence.UrgencyMedium,
 		Status:        persistence.ApprovalStatusPending,
 		TimeoutMS:     60000,
 	})

@@ -23,15 +23,6 @@ const (
 	ApprovalStatusEscalated ApprovalStatus = "ESCALATED"
 )
 
-type Urgency string
-
-const (
-	UrgencyLow      Urgency = "low"
-	UrgencyMedium   Urgency = "medium"
-	UrgencyHigh     Urgency = "high"
-	UrgencyCritical Urgency = "critical"
-)
-
 type ParticipantType string
 
 const (
@@ -100,7 +91,6 @@ type ApprovalRequest struct {
 	AgentID       uuid.UUID      `json:"agent_id"`
 	Action        string         `json:"action"`
 	Justification string         `json:"justification"`
-	Urgency       Urgency        `json:"urgency"`
 	Status        ApprovalStatus `json:"status"`
 	ApproverID    *uuid.UUID     `json:"approver_id,omitempty"`
 	DecidedAt     *time.Time     `json:"decided_at,omitempty"`

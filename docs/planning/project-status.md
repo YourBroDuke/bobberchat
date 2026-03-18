@@ -252,11 +252,11 @@ Backend config: `configs/backend.yaml`
 
 - PostgreSQL 15+
 - 7 tables: `users`, `agents`, `chat_groups`, `conversations`, `conversation_participants`, `messages`, `approval_requests`, `audit_log`
-- 4 enum types: `approval_status`, `urgency`, `participant_type`, `conversation_type`
+- 3 enum types: `approval_status`, `participant_type`, `conversation_type`
 - `conversations` table unifies DMs and groups; DMs identified by canonical `(id_low, id_high)` pair (generic UUIDs, no FK constraint)
 - `conversation_participants` replaces `chat_group_members` and handles both DM and group membership with `muted`, `last_read_message_id` fields
 - `messages` table uses `conversation_id` FK (replaced `to_id`), time-based partitioning by `timestamp` (monthly ranges)
-- Migration: `migrations/001_initial_schema.sql` through `migrations/010_remove_group_visibility.sql`
+- Migration: `migrations/001_initial_schema.sql` through `migrations/011_remove_approval_urgency.sql`
 
 ### NATS JetStream Streams
 

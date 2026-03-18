@@ -1218,7 +1218,6 @@ components:
         - agent_id
         - action
         - justification
-        - urgency
         - status
         - created_at
       properties:
@@ -1232,9 +1231,6 @@ components:
           type: string
         justification:
           type: string
-        urgency:
-          type: string
-          enum: [low, medium, high, critical]
         status:
           type: string
           enum: [PENDING, GRANTED, DENIED, TIMED_OUT, ESCALATED]

@@ -36,7 +36,7 @@ func (s *Service) SubmitRequest(ctx context.Context, req *persistence.ApprovalRe
 		From:      created.AgentID.String(),
 		To:        "approval_queue",
 		Tag:       protocol.TagApprovalRequest,
-		Payload:   map[string]any{"approval_id": created.ApprovalID.String(), "action": created.Action, "urgency": string(created.Urgency), "justification": created.Justification},
+		Payload:   map[string]any{"approval_id": created.ApprovalID.String(), "action": created.Action, "justification": created.Justification},
 		Metadata:  map[string]any{"timeout_ms": created.TimeoutMS},
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 		TraceID:   created.ApprovalID.String(),

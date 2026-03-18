@@ -779,14 +779,14 @@ func (r *pgApprovalRepository) Create(ctx context.Context, approval ApprovalRequ
 
 	row := r.db.Pool().QueryRow(ctx, `
 		INSERT INTO approval_requests (
-			approval_id, agent_id, action, justification, urgency,
+			approval_id, agent_id, action, justification,
 			status, approver_id, decided_at, timeout_ms, created_at
 		)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-		RETURNING approval_id, agent_id, action, justification, urgency,
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+		RETURNING approval_id, agent_id, action, justification,
 			status, approver_id, decided_at, timeout_ms, created_at
 	`, approval.ApprovalID, approval.AgentID, approval.Action,
-		approval.Justification, string(approval.Urgency), string(approval.Status), approval.ApproverID,
+		approval.Justification, string(approval.Status), approval.ApproverID,
 		approval.DecidedAt, approval.TimeoutMS, approval.CreatedAt)
 
 	out, err := scanApprovalRequest(row)
@@ -798,11 +798,11 @@ func (r *pgApprovalRepository) Create(ctx context.Context, approval ApprovalRequ
 
 func (r *pgApprovalRepository) GetPending(ctx context.Context) ([]ApprovalRequest, error) {
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT approval_id, agent_id, action, justification, urgency,
+		SELECT approval_id, agent_id, action, justification,
 			status, approver_id, decided_at, timeout_ms, created_at
 		FROM approval_requests
 		WHERE status = 'PENDING'
-		ORDER BY urgency DESC, created_at ASC
+		ORDER BY created_at ASC
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("get pending approvals: %w", err)
@@ -1158,14 +1158,12 @@ func scanConversationParticipant(scanner rowScanner) (*ConversationParticipant, 
 
 func scanApprovalRequest(scanner rowScanner) (*ApprovalRequest, error) {
 	out := ApprovalRequest{}
-	var urgency string
 	var status string
 	err := scanner.Scan(
 		&out.ApprovalID,
 		&out.AgentID,
 		&out.Action,
 		&out.Justification,
-		&urgency,
 		&status,
 		&out.ApproverID,
 		&out.DecidedAt,
@@ -1178,7 +1176,6 @@ func scanApprovalRequest(scanner rowScanner) (*ApprovalRequest, error) {
 		}
 		return nil, fmt.Errorf("scan approval request: %w", err)
 	}
-	out.Urgency = Urgency(urgency)
 	out.Status = ApprovalStatus(status)
 	return &out, nil
 }
