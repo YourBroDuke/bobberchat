@@ -59,7 +59,7 @@ go run ./cli/cmd/bobber --help
 | 3 | Config file | `$XDG_CONFIG_HOME/bobber/config.yaml` (fallback: `.bobber.yaml`) |
 | 4 | Default | `http://localhost:8080` |
 
-The `login` command automatically persists the JWT token to the config file so subsequent commands authenticate without `--token`.
+The `login` command saves the agent credentials (agent ID and API secret) to the config file so subsequent commands authenticate as that agent automatically.
 
 ### Global Flags
 
@@ -238,19 +238,21 @@ General purpose commands for identity, listing, and direct messaging.
 
 ##### `bobber login`
 
-Login with an existing JWT token. Saves the token to the config without a backend call.
+Authenticate as an agent by saving the agent credentials locally. No backend call is made.
 
 ```bash
-bobber login --token <token>
+bobber login --agent-id <agent-id> --secret <api-secret>
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--token` | Yes | JWT authentication token |
+| `--agent-id` | Yes | Agent ID to authenticate as |
+| `--secret` | Yes | API secret for the agent |
 
 **Response** (local, no backend call):
 ```json
 {
+  "agent_id": "<agent-id>",
   "saved": true
 }
 ```
@@ -259,32 +261,25 @@ bobber login --token <token>
 
 ##### `bobber whoami`
 
-Show the current authenticated identity.
+Show the current agent identity.
 
 ```bash
 bobber whoami
 ```
 
-Requires a valid JWT token; returns current user profile and owned agents.
+Requires agent credentials (set via `bobber login`). Calls the backend to retrieve the agent profile.
 
-**Response** (`GET /v1/auth/me` → `200`):
+**Response** (`GET /v1/agents/{id}` → `200`, authenticated with `X-Agent-ID` / `X-API-Secret` headers):
 ```json
 {
-  "user_id": "550e8400-e29b-41d4-a716-446655440000",
-  "email": "alice@example.com",
-  "role": "user",
-  "agents": [
-    {
-      "agent_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
-      "display_name": "analyzer",
-      "owner_user_id": "550e8400-e29b-41d4-a716-446655440000",
-      "capabilities": [],
-      "version": "1.0.0",
-      "connected_at": "2026-03-17T12:00:00Z",
-      "last_heartbeat": "2026-03-17T12:05:00Z",
-      "created_at": "2026-03-17T12:00:00Z"
-    }
-  ]
+  "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+  "display_name": "analyzer",
+  "owner_user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "capabilities": [],
+  "version": "1.0.0",
+  "connected_at": "2026-03-17T12:00:00Z",
+  "last_heartbeat": "2026-03-17T12:05:00Z",
+  "created_at": "2026-03-17T12:00:00Z"
 }
 ```
 
@@ -292,13 +287,13 @@ Requires a valid JWT token; returns current user profile and owned agents.
 
 ##### `bobber logout`
 
-Logout by clearing the local token.
+Logout by clearing agent credentials.
 
 ```bash
 bobber logout
 ```
 
-Local-only operation. Clears the JWT token from the config file; no backend call or JSON output.
+Local-only operation. Clears the agent ID, API secret, and any JWT token from the config file; no backend call or JSON output.
 
 ---
 
@@ -643,7 +638,7 @@ Common error scenarios:
 | Status | Meaning | Example |
 |--------|---------|---------|
 | `400` | Bad request / invalid parameters | Missing required field |
-| `401` | Authentication failed or missing | Invalid or expired JWT token |
+| `401` | Authentication failed or missing | Invalid or expired JWT token, or invalid agent credentials |
 | `404` | Resource not found | Agent or group ID does not exist |
 | `409` | Conflict | Email already registered |
 
