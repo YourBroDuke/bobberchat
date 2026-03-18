@@ -226,8 +226,8 @@ func (s *Service) ValidateJWT(tokenStr string) (*JWTClaims, error) {
 	return &JWTClaims{UserID: claims.UserID, Role: claims.Role}, nil
 }
 
-func (s *Service) CreateAgent(ctx context.Context, ownerUserID, displayName string, capabilities []string, version string) (agent *persistence.Agent, apiSecret string, err error) {
-	if s == nil || s.db == nil || ownerUserID == "" || displayName == "" || version == "" {
+func (s *Service) CreateAgent(ctx context.Context, ownerUserID, displayName string, capabilities []string) (agent *persistence.Agent, apiSecret string, err error) {
+	if s == nil || s.db == nil || ownerUserID == "" || displayName == "" {
 		return nil, "", persistence.ErrInvalidInput
 	}
 
@@ -250,7 +250,6 @@ func (s *Service) CreateAgent(ctx context.Context, ownerUserID, displayName stri
 		OwnerUserID:   ownerID,
 		DisplayName:   displayName,
 		Capabilities:  capabilities,
-		Version:       version,
 		APISecretHash: hash,
 	})
 	if err != nil {
@@ -356,13 +355,13 @@ func (s *Service) getAgentByID(ctx context.Context, agentID string) (*persistenc
 	}
 
 	row := s.db.Pool().QueryRow(ctx, `
-		SELECT agent_id, display_name, owner_user_id, capabilities, version, api_secret_hash, connected_at, last_heartbeat, created_at
+		SELECT agent_id, display_name, owner_user_id, capabilities, api_secret_hash, created_at
 		FROM agents
 		WHERE agent_id = $1
 	`, id)
 
 	a := persistence.Agent{}
-	if err := row.Scan(&a.AgentID, &a.DisplayName, &a.OwnerUserID, &a.Capabilities, &a.Version, &a.APISecretHash, &a.ConnectedAt, &a.LastHeartbeat, &a.CreatedAt); err != nil {
+	if err := row.Scan(&a.AgentID, &a.DisplayName, &a.OwnerUserID, &a.Capabilities, &a.APISecretHash, &a.CreatedAt); err != nil {
 		return nil, err
 	}
 	return &a, nil

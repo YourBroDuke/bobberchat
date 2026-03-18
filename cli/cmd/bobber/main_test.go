@@ -737,7 +737,7 @@ func TestAgentCreate(t *testing.T) {
 			t.Fatalf("execute failed: %v", err)
 		}
 
-		if got["display_name"] != "agent-x" || got["version"] != "1.0.0" {
+		if got["display_name"] != "agent-x" {
 			t.Fatalf("unexpected payload: %v", got)
 		}
 		caps, ok := got["capabilities"].([]any)

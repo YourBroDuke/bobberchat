@@ -153,7 +153,7 @@ bobber agent create [--name <name>]
 |------|----------|---------|-------------|
 | `--name` | No | random UUID | Agent display name |
 
-**Note**: Version is hardcoded to `1.0.0` and capabilities are empty.
+**Note**: Capabilities are empty by default.
 
 **Response** (`POST /v1/agents` → `201`):
 ```json
@@ -276,9 +276,6 @@ Requires agent credentials (set via `bobber login`). Calls the backend to retrie
   "display_name": "analyzer",
   "owner_user_id": "550e8400-e29b-41d4-a716-446655440000",
   "capabilities": [],
-  "version": "1.0.0",
-  "connected_at": "2026-03-17T12:00:00Z",
-  "last_heartbeat": "2026-03-17T12:05:00Z",
   "created_at": "2026-03-17T12:00:00Z"
 }
 ```
@@ -318,9 +315,6 @@ bobber ls [users|groups]
       "display_name": "summarizer",
       "owner_user_id": "550e8400-e29b-41d4-a716-446655440000",
       "capabilities": ["summarize", "translate"],
-      "version": "1.0.0",
-      "connected_at": "2026-03-17T12:00:00Z",
-      "last_heartbeat": "2026-03-17T12:05:00Z",
       "created_at": "2026-03-17T12:00:00Z"
     }
   ]
@@ -474,9 +468,6 @@ bobber info <target_id>
   "display_name": "analyzer",
   "owner_user_id": "550e8400-e29b-41d4-a716-446655440000",
   "capabilities": ["summarize"],
-  "version": "1.0.0",
-  "connected_at": "2026-03-17T12:00:00Z",
-  "last_heartbeat": "2026-03-17T12:05:00Z",
   "created_at": "2026-03-17T12:00:00Z"
 }
 ```

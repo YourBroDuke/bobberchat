@@ -66,9 +66,8 @@ type model struct {
 }
 
 type agentEntry struct {
-	ID, Name      string
-	Capabilities  []string
-	LastHeartbeat string
+	ID, Name     string
+	Capabilities []string
 }
 
 type messageEntry struct {
@@ -695,7 +694,6 @@ func (m *model) renderContext() string {
 		return strings.Join([]string{
 			fmt.Sprintf("Agent: %s", safeName(a.Name, a.ID)),
 			fmt.Sprintf("Caps: %s", strings.Join(a.Capabilities, ", ")),
-			fmt.Sprintf("Last HB: %s", prettyTime(a.LastHeartbeat)),
 			fmt.Sprintf("ID: %s", a.ID),
 		}, "\n")
 	}
@@ -1022,11 +1020,10 @@ func fetchAgentsCmd(backendURL, token string) tea.Cmd {
 
 		var payload struct {
 			Agents []struct {
-				AgentID       string   `json:"agent_id"`
-				DisplayName   string   `json:"display_name"`
-				Name          string   `json:"name"`
-				Capabilities  []string `json:"capabilities"`
-				LastHeartbeat string   `json:"last_heartbeat"`
+				AgentID      string   `json:"agent_id"`
+				DisplayName  string   `json:"display_name"`
+				Name         string   `json:"name"`
+				Capabilities []string `json:"capabilities"`
 			} `json:"agents"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
@@ -1040,10 +1037,9 @@ func fetchAgentsCmd(backendURL, token string) tea.Cmd {
 				name = strings.TrimSpace(a.Name)
 			}
 			agents = append(agents, agentEntry{
-				ID:            a.AgentID,
-				Name:          name,
-				Capabilities:  a.Capabilities,
-				LastHeartbeat: a.LastHeartbeat,
+				ID:           a.AgentID,
+				Name:         name,
+				Capabilities: a.Capabilities,
 			})
 		}
 

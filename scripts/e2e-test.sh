@@ -111,7 +111,7 @@ else
 fi
 
 print_step "4/31 Create agent"
-request "POST" "/v1/agents" "{\"display_name\":\"test-agent\",\"capabilities\":[\"test\"],\"version\":\"1.0.0\"}" "$TOKEN"
+request "POST" "/v1/agents" "{\"display_name\":\"test-agent\",\"capabilities\":[\"test\"]}" "$TOKEN"
 AGENT_ID="$(echo "$LAST_BODY" | grep -o '"agent_id":"[^"]*"' | cut -d'"' -f4 || true)"
 API_SECRET="$(echo "$LAST_BODY" | grep -o '"api_secret":"[^"]*"' | cut -d'"' -f4 || true)"
 if [ "$LAST_STATUS" -eq 201 ] && [ -n "$AGENT_ID" ] && [ -n "$API_SECRET" ] && [[ "$LAST_BODY" == *'"status":"REGISTERED"'* ]]; then
@@ -184,7 +184,7 @@ request "POST" "/v1/auth/login" "{\"email\":\"nonexistent@example.com\",\"passwo
 assert_status "Login non-existent user" 401 "$LAST_STATUS"
 
 print_step "18/31 Create agent no auth"
-request "POST" "/v1/agents" "{\"display_name\":\"test-agent\",\"capabilities\":[\"test\"],\"version\":\"1.0.0\"}"
+request "POST" "/v1/agents" "{\"display_name\":\"test-agent\",\"capabilities\":[\"test\"]}"
 assert_status "Create agent no auth" 401 "$LAST_STATUS"
 
 print_step "19/31 Get agent not found"

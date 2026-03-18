@@ -238,7 +238,6 @@ paths:
               required:
                 - display_name
                 - capabilities
-                - version
               properties:
                 display_name:
                   type: string
@@ -246,8 +245,6 @@ paths:
                   type: array
                   items:
                     type: string
-                version:
-                  type: string
       responses:
         '201':
           description: Agent registered
@@ -1082,7 +1079,6 @@ components:
         - agent_id
         - display_name
         - capabilities
-        - version
         - created_at
       properties:
         agent_id:
@@ -1097,16 +1093,6 @@ components:
           type: array
           items:
             type: string
-        version:
-          type: string
-        connected_at:
-          type: string
-          format: date-time
-          nullable: true
-        last_heartbeat:
-          type: string
-          format: date-time
-          nullable: true
         created_at:
           type: string
           format: date-time

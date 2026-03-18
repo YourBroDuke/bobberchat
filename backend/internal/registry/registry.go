@@ -2,7 +2,6 @@ package registry
 
 import (
 	"context"
-	"time"
 
 	"github.com/bobberchat/bobberchat/backend/internal/persistence"
 	"github.com/google/uuid"
@@ -44,19 +43,7 @@ func (s *Service) Deregister(ctx context.Context, agentID string) error {
 }
 
 func (s *Service) Heartbeat(ctx context.Context, agentID string) error {
-	if s == nil || s.db == nil || agentID == "" {
-		return persistence.ErrInvalidInput
-	}
-	id, err := uuid.Parse(agentID)
-	if err != nil {
-		return err
-	}
-	_, err = s.db.Pool().Exec(ctx, `
-		UPDATE agents
-		SET last_heartbeat = $2
-		WHERE agent_id = $1
-	`, id, time.Now().UTC())
-	return err
+	return nil
 }
 
 func (s *Service) Discover(ctx context.Context, query DiscoveryQuery) ([]persistence.Agent, error) {
@@ -94,13 +81,13 @@ func (s *Service) GetAgent(ctx context.Context, agentID string) (*persistence.Ag
 		return nil, err
 	}
 	row := s.db.Pool().QueryRow(ctx, `
-		SELECT agent_id, display_name, owner_user_id, capabilities, version,
-			api_secret_hash, connected_at, last_heartbeat, created_at
+		SELECT agent_id, display_name, owner_user_id, capabilities,
+			api_secret_hash, created_at
 		FROM agents WHERE agent_id = $1
 	`, id)
 
 	a := persistence.Agent{}
-	if err := row.Scan(&a.AgentID, &a.DisplayName, &a.OwnerUserID, &a.Capabilities, &a.Version, &a.APISecretHash, &a.ConnectedAt, &a.LastHeartbeat, &a.CreatedAt); err != nil {
+	if err := row.Scan(&a.AgentID, &a.DisplayName, &a.OwnerUserID, &a.Capabilities, &a.APISecretHash, &a.CreatedAt); err != nil {
 		return nil, err
 	}
 	return &a, nil

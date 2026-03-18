@@ -16,7 +16,6 @@ func TestCreateAgent_Success(t *testing.T) {
 	resp := env.doRequest(t, http.MethodPost, "/v1/agents", map[string]any{
 		"display_name": "agent-create-success",
 		"capabilities": []string{"test"},
-		"version":      "1.0.0",
 	}, token)
 	assertStatus(t, resp, http.StatusCreated)
 	body := env.readJSON(t, resp)
@@ -32,7 +31,6 @@ func TestCreateAgent_NoAuth(t *testing.T) {
 	resp := env.doRequest(t, http.MethodPost, "/v1/agents", map[string]any{
 		"display_name": "agent-no-auth",
 		"capabilities": []string{"test"},
-		"version":      "1.0.0",
 	}, "")
 	assertStatus(t, resp, http.StatusUnauthorized)
 }
@@ -43,15 +41,13 @@ func TestCreateAgent_MissingFields(t *testing.T) {
 
 	respNoName := env.doRequest(t, http.MethodPost, "/v1/agents", map[string]any{
 		"capabilities": []string{"test"},
-		"version":      "1.0.0",
 	}, token)
 	assertStatus(t, respNoName, http.StatusBadRequest)
 
-	respNoVersion := env.doRequest(t, http.MethodPost, "/v1/agents", map[string]any{
+	respNoCaps := env.doRequest(t, http.MethodPost, "/v1/agents", map[string]any{
 		"display_name": "agent-create-missing",
-		"capabilities": []string{"test"},
 	}, token)
-	assertStatus(t, respNoVersion, http.StatusBadRequest)
+	assertStatus(t, respNoCaps, http.StatusBadRequest)
 }
 
 func TestGetAgent_Success(t *testing.T) {
@@ -67,7 +63,6 @@ func TestGetAgent_Success(t *testing.T) {
 	assertJSONFieldEquals(t, body, "display_name", "agent-get-success")
 	assertJSONField(t, body, "owner_user_id")
 	assertJSONField(t, body, "capabilities")
-	assertJSONField(t, body, "version")
 	assertJSONField(t, body, "status")
 	assertJSONField(t, body, "created_at")
 }

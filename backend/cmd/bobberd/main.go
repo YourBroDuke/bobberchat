@@ -464,7 +464,6 @@ func (a *app) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		DisplayName  string   `json:"display_name"`
 		Capabilities []string `json:"capabilities"`
-		Version      string   `json:"version"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -472,7 +471,7 @@ func (a *app) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := contextString(r.Context(), ctxUserID)
-	agent, secret, err := a.authSvc.CreateAgent(r.Context(), userID, req.DisplayName, req.Capabilities, req.Version)
+	agent, secret, err := a.authSvc.CreateAgent(r.Context(), userID, req.DisplayName, req.Capabilities)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -494,14 +493,11 @@ func (a *app) handleGetAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"agent_id":       agent.AgentID,
-		"display_name":   agent.DisplayName,
-		"owner_user_id":  agent.OwnerUserID,
-		"capabilities":   agent.Capabilities,
-		"version":        agent.Version,
-		"connected_at":   agent.ConnectedAt,
-		"last_heartbeat": agent.LastHeartbeat,
-		"created_at":     agent.CreatedAt,
+		"agent_id":      agent.AgentID,
+		"display_name":  agent.DisplayName,
+		"owner_user_id": agent.OwnerUserID,
+		"capabilities":  agent.Capabilities,
+		"created_at":    agent.CreatedAt,
 	})
 }
 

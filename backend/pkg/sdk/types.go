@@ -38,9 +38,7 @@ type AgentProfile struct {
 	DisplayName       string   `json:"display_name"`
 	Capabilities      []string `json:"capabilities"`
 	Status            string   `json:"status"`
-	Version           string   `json:"version"`
 	LatencyEstimateMS int      `json:"latency_estimate_ms"`
-	LastHeartbeat     string   `json:"last_heartbeat"`
 }
 
 type MessageHandler func(ctx context.Context, msg Message) error

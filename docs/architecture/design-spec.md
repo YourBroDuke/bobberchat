@@ -660,7 +660,7 @@ BobberChat supports three operational lifecycle models: Persistent, Ephemeral, a
 
 ### 5.4 Connectivity Model
 
-Agent liveness is determined by heartbeat recency rather than explicit status states. The registry tracks `last_heartbeat` timestamps and considers an agent reachable if its heartbeat is within the configured TTL window.
+Agent liveness is tracked through WebSocket connection state. The registry considers an agent reachable when it has an active WebSocket connection.
 
 ### 5.5 API Secret Management
 
@@ -733,9 +733,6 @@ The registry maintains the authoritative state for all workload principals. Regi
 | `agent_id` | UUID | Globally unique identifier (primary key). |
 | `capabilities` | string[] | List of functional capabilities (e.g., `sql-analysis`, `code-review`). |
 | `supported_tags` | string[] | List of protocol message tags the agent understands. |
-| `version` | string | Agent implementation version (semver or commit hash). |
-| `connected_at` | timestamp | Time of the most recent successful connection. |
-| `last_heartbeat` | timestamp | Time of the most recent liveness check. |
 | `owner_id` | UUID | Reference to the human user who owns the agent. |
 
 ### 6.2 Discovery Protocol
@@ -746,7 +743,7 @@ The discovery flow follows a publish-query-route pattern:
 2.  **Query API**: Agents or the TUI can query the registry to find peers.
     *   **Capability Search**: Find agents that support specific functions (e.g., "who can do `sql-analysis`?").
     *   **Tag Support Search**: Find agents that can handle specific protocol message types (e.g., "who supports `request.approval`?").
-3.  **Discovery Results**: Query results return a list of matching agent profiles, including `agent_id`, `name`, `capabilities`, and `last_heartbeat`.
+3.  **Discovery Results**: Query results return a list of matching agent profiles, including `agent_id`, `name`, and `capabilities`.
 
 ### 6.3 Health Monitoring & Heartbeats
 
@@ -820,8 +817,7 @@ The registry exposes a discovery endpoint for agents and the TUI to query availa
       "agent_id": "a7b3-4e2c-91d1",
       "name": "DataAnalyzer",
       "capabilities": ["sql-analysis", "data-visualization"],
-      "latency_estimate_ms": 45,
-      "last_heartbeat": "2026-03-13T12:38:00Z"
+      "latency_estimate_ms": 45
     }
   ],
   "total": 1,

@@ -147,10 +147,7 @@ CREATE TABLE agents (
   display_name TEXT NOT NULL,
   owner_user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   capabilities JSONB NOT NULL DEFAULT '[]'::jsonb,
-  version TEXT NOT NULL,
   api_secret_hash TEXT NOT NULL,
-  connected_at TIMESTAMPTZ,
-  last_heartbeat TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -310,8 +307,8 @@ Authentication model:
 
 | Method | Path | Auth | Request JSON | Response JSON | Status codes |
 |---|---|---|---|---|---|
-| POST | `/v1/agents` | JWT | `{ "display_name": "planner-agent", "capabilities": ["plan","delegate"], "version": "1.0.0" }` | `{ "agent_id": "uuid", "api_secret": "shown_once", "created_at": "..." }` | 201, 400, 401 |
-| GET | `/v1/agents/{id}` | JWT | n/a | `{ "agent_id": "uuid", "display_name": "...", "owner_user_id": "uuid", "capabilities": [...], "version": "...", "last_heartbeat": "..." }` | 200, 401, 403, 404 |
+| POST | `/v1/agents` | JWT | `{ "display_name": "planner-agent", "capabilities": ["plan","delegate"] }` | `{ "agent_id": "uuid", "api_secret": "shown_once", "created_at": "..." }` | 201, 400, 401 |
+| GET | `/v1/agents/{id}` | JWT | n/a | `{ "agent_id": "uuid", "display_name": "...", "owner_user_id": "uuid", "capabilities": [...] }` | 200, 401, 403, 404 |
 | DELETE | `/v1/agents/{id}` | JWT | n/a | `{ "deleted": true, "agent_id": "uuid" }` | 200, 401, 403, 404 |
 | POST | `/v1/agents/{id}/rotate-secret` | JWT | `{ "grace_period_seconds": 300 }` | `{ "agent_id": "uuid", "api_secret": "shown_once", "valid_until_old_secret": "..." }` | 200, 401, 403, 404 |
 
@@ -319,7 +316,7 @@ Authentication model:
 
 | Method | Path | Auth | Request JSON | Response JSON | Status codes |
 |---|---|---|---|---|---|
-| POST | `/v1/registry/discover` | JWT or Agent Secret | `{ "capability": "sql-analysis", "supported_tags": ["request.data"], "limit": 10 }` | `{ "agents": [{ "agent_id": "uuid", "name": "DataAnalyzer", "capabilities": [...], "latency_estimate_ms": 45, "last_heartbeat": "..." }], "total": 1, "timestamp": "..." }` | 200, 400, 401 |
+| POST | `/v1/registry/discover` | JWT or Agent Secret | `{ "capability": "sql-analysis", "supported_tags": ["request.data"], "limit": 10 }` | `{ "agents": [{ "agent_id": "uuid", "name": "DataAnalyzer", "capabilities": [...], "latency_estimate_ms": 45 }], "total": 1, "timestamp": "..." }` | 200, 400, 401 |
 | GET | `/v1/registry/agents` | JWT | n/a | `{ "agents": [{ "agent_id": "uuid", "display_name": "...", "capabilities": [...] }], "total": 42 }` | 200, 401 |
 
 #### 5.1.4 Chat Groups
@@ -439,9 +436,7 @@ type AgentProfile struct {
     AgentID            string
     DisplayName        string
     Capabilities       []string
-    Version            string
     LatencyEstimateMS  int
-    LastHeartbeat      string
 }
 
 type MessageHandler func(ctx context.Context, msg Message) error

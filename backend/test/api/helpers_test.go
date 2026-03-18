@@ -221,7 +221,6 @@ func (e *testEnv) createAgent(t *testing.T, token, displayName string, capabilit
 	resp := e.doRequest(t, http.MethodPost, "/v1/agents", map[string]any{
 		"display_name": displayName,
 		"capabilities": capabilities,
-		"version":      "1.0.0",
 	}, token)
 	assertStatus(t, resp, http.StatusCreated)
 	body := e.readJSON(t, resp)

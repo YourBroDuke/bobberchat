@@ -1,6 +1,6 @@
 # BobberChat Project Status & Continuation Guide
 
-> Last updated: 2026-03-17
+> Last updated: 2026-03-18
 > Branch: `master`
 > Repo: `https://github.com/YourBroDuke/bobberchat.git`
 
@@ -152,6 +152,7 @@ Key implementation details:
 | `migrations/002_email_verification.sql` | Adds `users.email_verified`, verification token columns, and partial token index |
 | `migrations/003_connections_blacklist.sql` | Adds `connection_requests` and `blacklist_entries` tables, enum, and indexes |
 | `migrations/004_remove_agent_status.sql` | Removes `agent_status` enum type, `status` column, and associated index from agents table |
+| `migrations/005_remove_agent_version_heartbeat.sql` | Removes `version`, `connected_at`, `last_heartbeat` columns from agents table |
 | `configs/backend.yaml` | Default backend configuration |
 | `Makefile` | Build, test, lint, migrate, run targets |
 | `scripts/e2e-test.sh` | 31-test curl-based API e2e test script |
@@ -461,6 +462,8 @@ bobberchat/
 ├── migrations/001_initial_schema.sql  # Full DB schema
 ├── migrations/002_email_verification.sql # User email verification columns/index
 ├── migrations/003_connections_blacklist.sql # Connection request and blacklist persistence
+├── migrations/004_remove_agent_status.sql # Removes agent_status enum/column/index
+├── migrations/005_remove_agent_version_heartbeat.sql # Removes version, connected_at, last_heartbeat from agents
 ├── scripts/
 │   ├── e2e-test.sh                  # 31-test API e2e test
 │   └── smoke-test.sh                # Quick deployment smoke test

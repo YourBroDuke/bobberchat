@@ -61,10 +61,6 @@ func TestRegistryMethods_InvalidInput(t *testing.T) {
 			err:  (&Service{}).Deregister(context.Background(), ""),
 		},
 		{
-			name: "Heartbeat with empty agentID",
-			err:  (&Service{}).Heartbeat(context.Background(), ""),
-		},
-		{
 			name: "Discover nil db",
 			err: func() error {
 				_, err := (&Service{}).Discover(context.Background(), DiscoveryQuery{})
@@ -90,13 +86,6 @@ func TestRegistryMethods_InvalidInput(t *testing.T) {
 			err: func() error {
 				var s *Service
 				return s.Deregister(context.Background(), "agent")
-			}(),
-		},
-		{
-			name: "nil service Heartbeat",
-			err: func() error {
-				var s *Service
-				return s.Heartbeat(context.Background(), "agent")
 			}(),
 		},
 		{

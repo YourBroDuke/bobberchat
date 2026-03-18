@@ -60,15 +60,12 @@ type User struct {
 }
 
 type Agent struct {
-	AgentID       uuid.UUID  `json:"agent_id"`
-	DisplayName   string     `json:"display_name"`
-	OwnerUserID   uuid.UUID  `json:"owner_user_id"`
-	Capabilities  []string   `json:"capabilities"`
-	Version       string     `json:"version"`
-	APISecretHash string     `json:"-"`
-	ConnectedAt   *time.Time `json:"connected_at,omitempty"`
-	LastHeartbeat *time.Time `json:"last_heartbeat,omitempty"`
-	CreatedAt     time.Time  `json:"created_at"`
+	AgentID       uuid.UUID `json:"agent_id"`
+	DisplayName   string    `json:"display_name"`
+	OwnerUserID   uuid.UUID `json:"owner_user_id"`
+	Capabilities  []string  `json:"capabilities"`
+	APISecretHash string    `json:"-"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 type ChatGroup struct {
