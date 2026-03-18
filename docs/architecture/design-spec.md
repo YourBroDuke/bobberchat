@@ -537,7 +537,7 @@ Each agent is a first-class principal with credentials independent of the human 
 
 ```json
 {
-  "agent_id": "8f4e7145-c9a0-4c1d-af06-d72b0b4eaf13",
+  "id": "8f4e7145-c9a0-4c1d-af06-d72b0b4eaf13",
   "display_name": "planner-agent",
   "owner_user_id": "usr_01JQX3W9H4Y5N6P7R8S9T0U1V2",
   "version": "1.3.2",
@@ -642,7 +642,7 @@ Agents publish a BobberChat-native Agent Card used by discovery, routing, and co
 
 ```json
 {
-  "agent_id": "8f4e7145-c9a0-4c1d-af06-d72b0b4eaf13",
+  "id": "8f4e7145-c9a0-4c1d-af06-d72b0b4eaf13",
   "display_name": "planner-agent",
   "owner_user_id": "usr_01JQX3W9H4Y5N6P7R8S9T0U1V2",
   "version": "1.3.2",
@@ -764,7 +764,7 @@ The registry exposes a discovery endpoint for agents and operators to query avai
 {
   "agents": [
     {
-      "agent_id": "a7b3-4e2c-91d1",
+      "id": "a7b3-4e2c-91d1",
       "name": "DataAnalyzer",
       "supported_tags": ["request.data"],
       "latency_estimate_ms": 45

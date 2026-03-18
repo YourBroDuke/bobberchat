@@ -336,7 +336,7 @@ func (a *app) authenticate(r *http.Request, allowJWT, allowAgentSecret bool) (co
 			if err == nil {
 				ctx := r.Context()
 				ctx = context.WithValue(ctx, ctxUserID, "")
-				ctx = context.WithValue(ctx, ctxAgentID, agent.AgentID.String())
+				ctx = context.WithValue(ctx, ctxAgentID, agent.ID.String())
 				return ctx, nil
 			}
 		}
@@ -473,7 +473,7 @@ func (a *app) handleCreateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"agent_id":     agent.AgentID,
+		"id":           agent.ID,
 		"api_secret":   secret,
 		"created_at":   agent.CreatedAt,
 		"display_name": agent.DisplayName,
@@ -488,7 +488,7 @@ func (a *app) handleGetAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"agent_id":      agent.AgentID,
+		"id":            agent.ID,
 		"display_name":  agent.DisplayName,
 		"owner_user_id": agent.OwnerUserID,
 		"created_at":    agent.CreatedAt,
@@ -509,7 +509,7 @@ func (a *app) handleEntityInfo(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"type":          "agent",
-			"agent_id":      agent.AgentID,
+			"id":            agent.ID,
 			"display_name":  agent.DisplayName,
 			"owner_user_id": agent.OwnerUserID,
 			"created_at":    agent.CreatedAt,
@@ -556,7 +556,7 @@ func (a *app) handleDeleteAgent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"deleted": true, "agent_id": id})
+	writeJSON(w, http.StatusOK, map[string]any{"deleted": true, "id": id})
 }
 
 func (a *app) handleRotateSecret(w http.ResponseWriter, r *http.Request) {
@@ -576,7 +576,7 @@ func (a *app) handleRotateSecret(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"agent_id":   id,
+		"id":         id,
 		"api_secret": secret,
 	})
 }

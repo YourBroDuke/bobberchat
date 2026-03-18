@@ -1396,7 +1396,7 @@ func TestInfoCommand(t *testing.T) {
 			if r.Method != http.MethodGet || r.URL.Path != "/v1/info/a1" {
 				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"type": "agent", "agent_id": "a1"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"type": "agent", "id": "a1"})
 		}))
 		defer srv.Close()
 

@@ -32,7 +32,7 @@ type DiscoveryQuery struct {
 }
 
 type AgentProfile struct {
-	AgentID           string `json:"agent_id"`
+	ID                string `json:"id"`
 	DisplayName       string `json:"display_name"`
 	Status            string `json:"status"`
 	LatencyEstimateMS int    `json:"latency_estimate_ms"`

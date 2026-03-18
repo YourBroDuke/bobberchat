@@ -122,8 +122,8 @@ func NewPostgresRepositories(db *DB) *PostgresRepositories {
 type pgAgentRepository struct{ db *DB }
 
 func (r *pgAgentRepository) Create(ctx context.Context, agent Agent) (*Agent, error) {
-	if agent.AgentID == uuid.Nil {
-		agent.AgentID = uuid.New()
+	if agent.ID == uuid.Nil {
+		agent.ID = uuid.New()
 	}
 	if agent.CreatedAt.IsZero() {
 		agent.CreatedAt = time.Now().UTC()
@@ -137,7 +137,7 @@ func (r *pgAgentRepository) Create(ctx context.Context, agent Agent) (*Agent, er
 		RETURNING agent_id, display_name, owner_user_id,
 			api_secret_hash, created_at
 	`,
-		agent.AgentID, agent.DisplayName, agent.OwnerUserID,
+		agent.ID, agent.DisplayName, agent.OwnerUserID,
 		agent.APISecretHash, agent.CreatedAt,
 	)
 
@@ -1047,7 +1047,7 @@ func scanAgent(scanner rowScanner) (*Agent, error) {
 	out := Agent{}
 
 	err := scanner.Scan(
-		&out.AgentID,
+		&out.ID,
 		&out.DisplayName,
 		&out.OwnerUserID,
 		&out.APISecretHash,

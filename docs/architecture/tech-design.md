@@ -292,17 +292,17 @@ Authentication model:
 
 | Method | Path | Auth | Request JSON | Response JSON | Status codes |
 |---|---|---|---|---|---|
-| POST | `/v1/agents` | JWT | `{ "display_name": "planner-agent" }` | `{ "agent_id": "uuid", "api_secret": "shown_once", "created_at": "..." }` | 201, 400, 401 |
-| GET | `/v1/agents/{id}` | JWT | n/a | `{ "agent_id": "uuid", "display_name": "...", "owner_user_id": "uuid" }` | 200, 401, 403, 404 |
-| DELETE | `/v1/agents/{id}` | JWT | n/a | `{ "deleted": true, "agent_id": "uuid" }` | 200, 401, 403, 404 |
-| POST | `/v1/agents/{id}/rotate-secret` | JWT | `{ "grace_period_seconds": 300 }` | `{ "agent_id": "uuid", "api_secret": "shown_once", "valid_until_old_secret": "..." }` | 200, 401, 403, 404 |
+| POST | `/v1/agents` | JWT | `{ "display_name": "planner-agent" }` | `{ "id": "uuid", "api_secret": "shown_once", "created_at": "..." }` | 201, 400, 401 |
+| GET | `/v1/agents/{id}` | JWT | n/a | `{ "id": "uuid", "display_name": "...", "owner_user_id": "uuid" }` | 200, 401, 403, 404 |
+| DELETE | `/v1/agents/{id}` | JWT | n/a | `{ "deleted": true, "id": "uuid" }` | 200, 401, 403, 404 |
+| POST | `/v1/agents/{id}/rotate-secret` | JWT | `{ "grace_period_seconds": 300 }` | `{ "id": "uuid", "api_secret": "shown_once", "valid_until_old_secret": "..." }` | 200, 401, 403, 404 |
 
 #### 5.1.3 Registry/Discovery
 
 | Method | Path | Auth | Request JSON | Response JSON | Status codes |
 |---|---|---|---|---|---|
-| POST | `/v1/registry/discover` | JWT or Agent Secret | `{ "name": "DataAnalyzer", "supported_tags": ["request.data"], "limit": 10 }` | `{ "agents": [{ "agent_id": "uuid", "name": "DataAnalyzer", "latency_estimate_ms": 45 }], "total": 1, "timestamp": "..." }` | 200, 400, 401 |
-| GET | `/v1/registry/agents` | JWT | n/a | `{ "agents": [{ "agent_id": "uuid", "display_name": "..." }], "total": 42 }` | 200, 401 |
+| POST | `/v1/registry/discover` | JWT or Agent Secret | `{ "name": "DataAnalyzer", "supported_tags": ["request.data"], "limit": 10 }` | `{ "agents": [{ "id": "uuid", "name": "DataAnalyzer", "latency_estimate_ms": 45 }], "total": 1, "timestamp": "..." }` | 200, 400, 401 |
+| GET | `/v1/registry/agents` | JWT | n/a | `{ "agents": [{ "id": "uuid", "display_name": "..." }], "total": 42 }` | 200, 401 |
 
 #### 5.1.4 Chat Groups
 
@@ -410,7 +410,7 @@ type DiscoveryQuery struct {
 }
 
 type AgentProfile struct {
-    AgentID            string
+    ID                 string
     DisplayName        string
     LatencyEstimateMS  int
 }

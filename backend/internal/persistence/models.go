@@ -41,7 +41,7 @@ type User struct {
 }
 
 type Agent struct {
-	AgentID       uuid.UUID `json:"agent_id"`
+	ID            uuid.UUID `json:"id"`
 	DisplayName   string    `json:"display_name"`
 	OwnerUserID   uuid.UUID `json:"owner_user_id"`
 	APISecretHash string    `json:"-"`

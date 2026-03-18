@@ -224,10 +224,10 @@ func (e *testEnv) createAgent(t *testing.T, token, displayName string) (agentID,
 	assertStatus(t, resp, http.StatusCreated)
 	body := e.readJSON(t, resp)
 
-	agentID, _ = body["agent_id"].(string)
+	agentID, _ = body["id"].(string)
 	apiSecret, _ = body["api_secret"].(string)
 	if agentID == "" || apiSecret == "" {
-		t.Fatalf("create agent response missing agent_id/api_secret: %#v", body)
+		t.Fatalf("create agent response missing id/api_secret: %#v", body)
 	}
 
 	return agentID, apiSecret

@@ -124,12 +124,12 @@ func TestAgentRepository_CRUD(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := repos.Agents.GetByID(ctx, created.AgentID)
+	got, err := repos.Agents.GetByID(ctx, created.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.AgentID != created.AgentID {
-		t.Errorf("agent id mismatch: got %s want %s", got.AgentID, created.AgentID)
+	if got.ID != created.ID {
+		t.Errorf("agent id mismatch: got %s want %s", got.ID, created.ID)
 	}
 	if got.OwnerUserID != owner.ID {
 		t.Errorf("owner mismatch: got %s want %s", got.OwnerUserID, owner.ID)
@@ -143,11 +143,11 @@ func TestAgentRepository_CRUD(t *testing.T) {
 		t.Errorf("list length mismatch: got %d want 1", len(list))
 	}
 
-	if err := repos.Agents.Delete(ctx, created.AgentID); err != nil {
+	if err := repos.Agents.Delete(ctx, created.ID); err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = repos.Agents.GetByID(ctx, created.AgentID)
+	_, err = repos.Agents.GetByID(ctx, created.ID)
 	if !errors.Is(err, persistence.ErrNotFound) {
 		t.Errorf("expected ErrNotFound after delete, got %v", err)
 	}
@@ -251,7 +251,7 @@ func TestApprovalRepository_CreateDecide(t *testing.T) {
 	approvalID := uuid.New()
 	created, err := repos.Approvals.Create(ctx, persistence.ApprovalRequest{
 		ApprovalID:    approvalID,
-		AgentID:       agent.AgentID,
+		AgentID:       agent.ID,
 		Action:        "deploy",
 		Justification: "integration approval test",
 		Status:        persistence.ApprovalStatusPending,

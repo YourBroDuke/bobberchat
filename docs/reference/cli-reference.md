@@ -149,7 +149,7 @@ bobber agent create [--name <name>]
 **Response** (`POST /v1/agents` → `201`):
 ```json
 {
-  "agent_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+  "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
   "api_secret": "generated-secret-string",
   "created_at": "2026-03-17T12:00:00Z",
   "display_name": "analyzer"
@@ -194,7 +194,7 @@ bobber agent rotate-secret <agent_id> [--grace-period <seconds>]
 **Response** (`POST /v1/agents/{id}/rotate-secret` → `200`):
 ```json
 {
-  "agent_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+  "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
   "api_secret": "new-rotated-secret-string"
 }
 ```
@@ -217,7 +217,7 @@ bobber agent delete <agent_id>
 ```json
 {
   "deleted": true,
-  "agent_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+  "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901"
 }
 ```
 
@@ -456,7 +456,7 @@ Agent example:
 ```json
 {
   "type": "agent",
-  "agent_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+  "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
   "display_name": "analyzer",
   "owner_user_id": "550e8400-e29b-41d4-a716-446655440000",
   "created_at": "2026-03-17T12:00:00Z"

@@ -242,7 +242,7 @@ paths:
               schema:
                 type: object
                 properties:
-                  agent_id:
+                  id:
                     type: string
                     format: uuid
                   api_secret:
@@ -296,7 +296,7 @@ paths:
                 properties:
                   deleted:
                     type: boolean
-                  agent_id:
+                  id:
                     type: string
         '404':
           $ref: '#/components/responses/NotFound'
@@ -328,7 +328,7 @@ paths:
                       type:
                         type: string
                         enum: [agent]
-                      agent_id:
+                      id:
                         type: string
                         format: uuid
                       display_name:
@@ -414,7 +414,7 @@ paths:
               schema:
                 type: object
                 properties:
-                  agent_id:
+                  id:
                     type: string
                   api_secret:
                     type: string
@@ -1106,11 +1106,11 @@ components:
     Agent:
       type: object
       required:
-        - agent_id
+        - id
         - display_name
         - created_at
       properties:
-        agent_id:
+        id:
           type: string
           format: uuid
         display_name:

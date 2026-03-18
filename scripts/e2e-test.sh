@@ -112,13 +112,13 @@ fi
 
 print_step "4/31 Create agent"
 request "POST" "/v1/agents" "{\"display_name\":\"test-agent\",\"capabilities\":[\"test\"]}" "$TOKEN"
-AGENT_ID="$(echo "$LAST_BODY" | grep -o '"agent_id":"[^"]*"' | cut -d'"' -f4 || true)"
+AGENT_ID="$(echo "$LAST_BODY" | grep -o '"id":"[^"]*"' | cut -d'"' -f4 || true)"
 API_SECRET="$(echo "$LAST_BODY" | grep -o '"api_secret":"[^"]*"' | cut -d'"' -f4 || true)"
 if [ "$LAST_STATUS" -eq 201 ] && [ -n "$AGENT_ID" ] && [ -n "$API_SECRET" ] && [[ "$LAST_BODY" == *'"status":"REGISTERED"'* ]]; then
   echo "  PASS: Create agent (HTTP $LAST_STATUS)"
   PASS=$((PASS + 1))
 else
-  echo "  FAIL: Create agent (expected 201 with agent_id, api_secret, and status, got HTTP $LAST_STATUS)"
+  echo "  FAIL: Create agent (expected 201 with id, api_secret, and status, got HTTP $LAST_STATUS)"
   FAIL=$((FAIL + 1))
 fi
 

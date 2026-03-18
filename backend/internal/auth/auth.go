@@ -293,7 +293,7 @@ func (s *Service) RotateSecret(ctx context.Context, agentID string, gracePeriodS
 		return "", err
 	}
 
-	_, err = s.db.Pool().Exec(ctx, `UPDATE agents SET api_secret_hash = $2 WHERE agent_id = $1`, a.AgentID, newHash)
+	_, err = s.db.Pool().Exec(ctx, `UPDATE agents SET api_secret_hash = $2 WHERE agent_id = $1`, a.ID, newHash)
 	if err != nil {
 		return "", err
 	}
@@ -355,7 +355,7 @@ func (s *Service) getAgentByID(ctx context.Context, agentID string) (*persistenc
 	`, id)
 
 	a := persistence.Agent{}
-	if err := row.Scan(&a.AgentID, &a.DisplayName, &a.OwnerUserID, &a.APISecretHash, &a.CreatedAt); err != nil {
+	if err := row.Scan(&a.ID, &a.DisplayName, &a.OwnerUserID, &a.APISecretHash, &a.CreatedAt); err != nil {
 		return nil, err
 	}
 	return &a, nil

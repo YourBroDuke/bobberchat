@@ -19,7 +19,7 @@ func TestCreateAgent_Success(t *testing.T) {
 	assertStatus(t, resp, http.StatusCreated)
 	body := env.readJSON(t, resp)
 
-	assertJSONField(t, body, "agent_id")
+	assertJSONField(t, body, "id")
 	assertJSONField(t, body, "api_secret")
 	assertJSONFieldEquals(t, body, "display_name", "agent-create-success")
 }
@@ -54,7 +54,7 @@ func TestGetAgent_Success(t *testing.T) {
 	assertStatus(t, resp, http.StatusOK)
 	body := env.readJSON(t, resp)
 
-	assertJSONFieldEquals(t, body, "agent_id", agentID)
+	assertJSONFieldEquals(t, body, "id", agentID)
 	assertJSONFieldEquals(t, body, "display_name", "agent-get-success")
 	assertJSONField(t, body, "owner_user_id")
 	assertJSONField(t, body, "created_at")
@@ -107,7 +107,7 @@ func TestRotateSecret_Success(t *testing.T) {
 	}, token)
 	assertStatus(t, resp, http.StatusOK)
 	body := env.readJSON(t, resp)
-	assertJSONFieldEquals(t, body, "agent_id", agentID)
+	assertJSONFieldEquals(t, body, "id", agentID)
 	newSecret, _ := assertJSONField(t, body, "api_secret").(string)
 	if newSecret == "" || newSecret == oldSecret {
 		t.Fatalf("expected new api secret different from old")
