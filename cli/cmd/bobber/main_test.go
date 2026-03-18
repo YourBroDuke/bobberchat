@@ -25,6 +25,14 @@ func testConfig(backendURL, token string) *cliConfig {
 	return &cliConfig{v: v}
 }
 
+func testAgentConfig(backendURL, agentID, apiSecret string) *cliConfig {
+	v := viper.New()
+	v.Set("backend_url", backendURL)
+	v.Set("agent_id", agentID)
+	v.Set("api_secret", apiSecret)
+	return &cliConfig{v: v}
+}
+
 func buildRootCmdForTest(cfg *cliConfig) *cobra.Command {
 	root := &cobra.Command{
 		Use:   "bobber",
@@ -158,6 +166,27 @@ func TestCLIConfigToken(t *testing.T) {
 			cfg := testConfig("http://localhost:8080", tc.val)
 			if got := cfg.token(); got != tc.want {
 				t.Fatalf("token mismatch: got=%q want=%q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestCLIConfigAPISecret(t *testing.T) {
+	tests := []struct {
+		name string
+		val  string
+		want string
+	}{
+		{name: "empty when not set", val: "", want: ""},
+		{name: "trimmed whitespace", val: "  secret123  ", want: "secret123"},
+		{name: "exact value", val: "my-secret", want: "my-secret"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := testAgentConfig("http://localhost:8080", "agent-1", tc.val)
+			if got := cfg.apiSecret(); got != tc.want {
+				t.Fatalf("apiSecret mismatch: got=%q want=%q", got, tc.want)
 			}
 		})
 	}
@@ -349,16 +378,155 @@ func TestDoJSON(t *testing.T) {
 	})
 }
 
-func TestClearToken(t *testing.T) {
+func TestDoJSONAgent(t *testing.T) {
+	t.Run("GET success: correct method, returns parsed JSON", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				t.Fatalf("method mismatch: got=%s want=GET", r.Method)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+		}))
+		defer srv.Close()
+
+		resp, err := doJSONAgent(http.MethodGet, srv.URL+"/x", "a1", "s1", nil)
+		if err != nil {
+			t.Fatalf("doJSONAgent failed: %v", err)
+		}
+		if got, _ := resp["ok"].(bool); !got {
+			t.Fatalf("expected ok=true, got %v", resp["ok"])
+		}
+	})
+
+	t.Run("POST success: sends JSON body, receives parsed response", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				t.Fatalf("method mismatch: got=%s want=POST", r.Method)
+			}
+			b, _ := io.ReadAll(r.Body)
+			got := mustJSONMap(t, string(b))
+			if got["name"] != "bob" {
+				t.Fatalf("unexpected body: %v", got)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "1"})
+		}))
+		defer srv.Close()
+
+		resp, err := doJSONAgent(http.MethodPost, srv.URL+"/create", "a1", "s1", map[string]any{"name": "bob"})
+		if err != nil {
+			t.Fatalf("doJSONAgent failed: %v", err)
+		}
+		if resp["id"] != "1" {
+			t.Fatalf("unexpected response: %v", resp)
+		}
+	})
+
+	t.Run("Agent headers present", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if got := r.Header.Get("X-Agent-ID"); got != "agent-42" {
+				t.Fatalf("X-Agent-ID mismatch: %q", got)
+			}
+			if got := r.Header.Get("X-API-Secret"); got != "supersecret" {
+				t.Fatalf("X-API-Secret mismatch: %q", got)
+			}
+			if got := r.Header.Get("Content-Type"); got != "application/json" {
+				t.Fatalf("Content-Type mismatch: %q", got)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+		}))
+		defer srv.Close()
+
+		_, err := doJSONAgent(http.MethodGet, srv.URL, "agent-42", "supersecret", nil)
+		if err != nil {
+			t.Fatalf("doJSONAgent failed: %v", err)
+		}
+	})
+
+	t.Run("No Authorization header present", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if got := r.Header.Get("Authorization"); got != "" {
+				t.Fatalf("expected no Authorization header, got=%q", got)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+		}))
+		defer srv.Close()
+
+		_, err := doJSONAgent(http.MethodGet, srv.URL, "a1", "s1", nil)
+		if err != nil {
+			t.Fatalf("doJSONAgent failed: %v", err)
+		}
+	})
+
+	t.Run("4xx with error field returns that message", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusForbidden)
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": "invalid secret"})
+		}))
+		defer srv.Close()
+
+		_, err := doJSONAgent(http.MethodGet, srv.URL, "a1", "bad", nil)
+		if err == nil || err.Error() != "invalid secret" {
+			t.Fatalf("expected error 'invalid secret', got %v", err)
+		}
+	})
+
+	t.Run("4xx without error field returns status message", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+			_ = json.NewEncoder(w).Encode(map[string]any{"oops": "x"})
+		}))
+		defer srv.Close()
+
+		_, err := doJSONAgent(http.MethodGet, srv.URL, "a1", "s1", nil)
+		if err == nil || !strings.Contains(err.Error(), "request failed with status 401") {
+			t.Fatalf("expected status error, got %v", err)
+		}
+	})
+
+	t.Run("Connection refused returns error", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+		url := srv.URL
+		srv.Close()
+
+		_, err := doJSONAgent(http.MethodGet, url, "a1", "s1", nil)
+		if err == nil {
+			t.Fatal("expected connection error, got nil")
+		}
+	})
+
+	t.Run("nil body sends empty request body", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			b, _ := io.ReadAll(r.Body)
+			if len(b) != 0 {
+				t.Fatalf("expected empty body, got=%q", string(b))
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+		}))
+		defer srv.Close()
+
+		_, err := doJSONAgent(http.MethodPost, srv.URL, "a1", "s1", nil)
+		if err != nil {
+			t.Fatalf("doJSONAgent failed: %v", err)
+		}
+	})
+}
+
+func TestClearAgentCreds(t *testing.T) {
 	tmp := t.TempDir()
-	cfg := testConfig("http://localhost:8080", "has-token")
+	cfg := testAgentConfig("http://localhost:8080", "agent-1", "secret-1")
+	cfg.v.Set("token", "has-token")
 	cfg.v.SetConfigFile(filepath.Join(tmp, "config.yaml"))
 
-	if err := clearToken(cfg); err != nil {
-		t.Fatalf("clearToken failed: %v", err)
+	if err := clearAgentCreds(cfg); err != nil {
+		t.Fatalf("clearAgentCreds failed: %v", err)
 	}
 	if got := cfg.token(); got != "" {
 		t.Fatalf("expected empty token, got %q", got)
+	}
+	if got := cfg.agentID(); got != "" {
+		t.Fatalf("expected empty agent_id, got %q", got)
+	}
+	if got := cfg.apiSecret(); got != "" {
+		t.Fatalf("expected empty api_secret, got %q", got)
 	}
 }
 
@@ -740,7 +908,7 @@ func TestAgentSubcommands(t *testing.T) {
 }
 
 func TestLoginCommand(t *testing.T) {
-	t.Run("Success: saves token to config", func(t *testing.T) {
+	t.Run("Success: saves agent_id and api_secret to config", func(t *testing.T) {
 		tmp := t.TempDir()
 		cfgPath := filepath.Join(tmp, "config.yaml")
 		cfg := testConfig("http://localhost:8080", "")
@@ -749,38 +917,85 @@ func TestLoginCommand(t *testing.T) {
 		cmd := loginCmd(cfg)
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"--token", "saved-token"})
+		cmd.SetArgs([]string{"--agent-id", "agent-1", "--secret", "s3cret"})
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("execute failed: %v", err)
 		}
-		if got := cfg.token(); got != "saved-token" {
-			t.Fatalf("expected saved token, got %q", got)
+		if got := cfg.agentID(); got != "agent-1" {
+			t.Fatalf("expected saved agent_id, got %q", got)
+		}
+		if got := cfg.apiSecret(); got != "s3cret" {
+			t.Fatalf("expected saved api_secret, got %q", got)
 		}
 	})
 
-	t.Run("Missing token", func(t *testing.T) {
+	t.Run("Missing agent-id", func(t *testing.T) {
 		cmd := loginCmd(testConfig("http://localhost:8080", ""))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"--token", ""})
+		cmd.SetArgs([]string{"--agent-id", "", "--secret", "s3cret"})
 		err := cmd.Execute()
-		if err == nil || !strings.Contains(err.Error(), "--token is required") {
+		if err == nil || !strings.Contains(err.Error(), "--agent-id is required") {
 			t.Fatalf("unexpected err: %v", err)
+		}
+	})
+
+	t.Run("Missing secret", func(t *testing.T) {
+		cmd := loginCmd(testConfig("http://localhost:8080", ""))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"--agent-id", "agent-1", "--secret", ""})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "--secret is required") {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	})
+
+	t.Run("Credentials persisted to config file", func(t *testing.T) {
+		tmp := t.TempDir()
+		cfgPath := filepath.Join(tmp, "bobber", "config.yaml")
+		cfg := testConfig("http://localhost:8080", "")
+		cfg.v.SetConfigFile(cfgPath)
+
+		cmd := loginCmd(cfg)
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"--agent-id", "persist-agent", "--secret", "persist-secret"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("execute failed: %v", err)
+		}
+
+		b, err := os.ReadFile(cfgPath)
+		if err != nil {
+			t.Fatalf("reading config failed: %v", err)
+		}
+		s := string(b)
+		if !strings.Contains(s, "persist-agent") {
+			t.Fatalf("expected agent_id in config file, got: %s", s)
+		}
+		if !strings.Contains(s, "persist-secret") {
+			t.Fatalf("expected api_secret in config file, got: %s", s)
 		}
 	})
 }
 
 func TestWhoamiCommand(t *testing.T) {
-	t.Run("Success: GET /v1/auth/me", func(t *testing.T) {
+	t.Run("Success: GET /v1/agents/{id} with agent secret headers", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet || r.URL.Path != "/v1/auth/me" {
+			if r.Method != http.MethodGet || r.URL.Path != "/v1/agents/agent-1" {
 				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"id": "u1"})
+			if got := r.Header.Get("X-Agent-ID"); got != "agent-1" {
+				t.Fatalf("expected X-Agent-ID header, got %q", got)
+			}
+			if got := r.Header.Get("X-API-Secret"); got != "s3cret" {
+				t.Fatalf("expected X-API-Secret header, got %q", got)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "agent-1", "display_name": "test-agent"})
 		}))
 		defer srv.Close()
 
-		cmd := whoamiCmd(testConfig(srv.URL, "tok"))
+		cmd := whoamiCmd(testAgentConfig(srv.URL, "agent-1", "s3cret"))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
 		if err := cmd.Execute(); err != nil {
@@ -788,12 +1003,40 @@ func TestWhoamiCommand(t *testing.T) {
 		}
 	})
 
-	t.Run("No token", func(t *testing.T) {
+	t.Run("No agent credentials", func(t *testing.T) {
 		cmd := whoamiCmd(testConfig("http://localhost:8080", ""))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
 		err := cmd.Execute()
-		if err == nil || !strings.Contains(err.Error(), "token required") {
+		if err == nil || !strings.Contains(err.Error(), "not logged in as agent") {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	})
+
+	t.Run("Missing api_secret only", func(t *testing.T) {
+		cfg := testConfig("http://localhost:8080", "")
+		cfg.v.Set("agent_id", "agent-1")
+		cmd := whoamiCmd(cfg)
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "not logged in as agent") {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	})
+
+	t.Run("Backend error propagated", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": "invalid agent secret"})
+		}))
+		defer srv.Close()
+
+		cmd := whoamiCmd(testAgentConfig(srv.URL, "agent-1", "bad-secret"))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "invalid agent secret") {
 			t.Fatalf("unexpected err: %v", err)
 		}
 	})
@@ -801,7 +1044,8 @@ func TestWhoamiCommand(t *testing.T) {
 
 func TestLogoutCommand(t *testing.T) {
 	tmp := t.TempDir()
-	cfg := testConfig("http://localhost:8080", "tok")
+	cfg := testAgentConfig("http://localhost:8080", "agent-1", "s3cret")
+	cfg.v.Set("token", "some-token")
 	cfg.v.SetConfigFile(filepath.Join(tmp, "config.yaml"))
 
 	cmd := logoutCmd(cfg)
@@ -809,6 +1053,12 @@ func TestLogoutCommand(t *testing.T) {
 	cmd.SetErr(io.Discard)
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("execute failed: %v", err)
+	}
+	if got := cfg.agentID(); got != "" {
+		t.Fatalf("expected agent_id cleared, got %q", got)
+	}
+	if got := cfg.apiSecret(); got != "" {
+		t.Fatalf("expected api_secret cleared, got %q", got)
 	}
 	if got := cfg.token(); got != "" {
 		t.Fatalf("expected token cleared, got %q", got)

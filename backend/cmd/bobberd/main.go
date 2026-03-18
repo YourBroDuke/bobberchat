@@ -263,7 +263,7 @@ func (a *app) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/auth/me", a.requireJWT(a.handleWhoAmI))
 
 	mux.HandleFunc("POST /v1/agents", a.requireJWT(a.handleCreateAgent))
-	mux.HandleFunc("GET /v1/agents/{id}", a.requireJWT(a.handleGetAgent))
+	mux.HandleFunc("GET /v1/agents/{id}", a.requireAuth(true, true, a.handleGetAgent))
 	mux.HandleFunc("DELETE /v1/agents/{id}", a.requireJWT(a.handleDeleteAgent))
 	mux.HandleFunc("POST /v1/agents/{id}/rotate-secret", a.requireJWT(a.handleRotateSecret))
 

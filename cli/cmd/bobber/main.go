@@ -1,3 +1,23 @@
+// Package main implements the bobber CLI.
+//
+// # Design Principle: Agent-First CLI
+//
+// BobberChat has two participant types: agents and user accounts.
+// Agents are the primary citizens of the platform — they are the autonomous
+// workloads that communicate, discover peers, and coordinate actions.
+// User accounts exist to own and manage agents.
+//
+// The top-level CLI commands (login, whoami, logout, send, poll, connect, etc.)
+// operate on the agent identity by default. The "bobber account" subcommand
+// tree is reserved for user-account operations (register, login with
+// email/password, etc.).
+//
+//	bobber login --agent-id <ID> --secret <SECRET>   # authenticate as an agent
+//	bobber whoami                                      # show current agent identity
+//	bobber logout                                      # clear agent credentials
+//
+//	bobber account register ...                        # user account operations
+//	bobber account login ...                           # user account operations
 package main
 
 import (
@@ -233,36 +253,44 @@ func agentRotateSecretCmd(cfg *cliConfig) *cobra.Command {
 }
 
 func loginCmd(cfg *cliConfig) *cobra.Command {
-	var token string
+	var agentID, secret string
 	cmd := &cobra.Command{
 		Use:   "login",
-		Short: "Login with existing token",
+		Short: "Login as an agent using API secret",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			if strings.TrimSpace(token) == "" {
-				return errors.New("--token is required")
+			if strings.TrimSpace(agentID) == "" {
+				return errors.New("--agent-id is required")
 			}
-			cfg.v.Set("token", token)
+			if strings.TrimSpace(secret) == "" {
+				return errors.New("--secret is required")
+			}
+			cfg.v.Set("agent_id", agentID)
+			cfg.v.Set("api_secret", secret)
 			if err := saveConfig(cfg.v); err != nil {
 				return err
 			}
-			prettyPrint(map[string]any{"saved": true})
+			prettyPrint(map[string]any{"agent_id": agentID, "saved": true})
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&token, "token", "", "jwt token")
-	_ = cmd.MarkFlagRequired("token")
+	cmd.Flags().StringVar(&agentID, "agent-id", "", "agent ID")
+	cmd.Flags().StringVar(&secret, "secret", "", "agent API secret")
+	_ = cmd.MarkFlagRequired("agent-id")
+	_ = cmd.MarkFlagRequired("secret")
 	return cmd
 }
 
 func whoamiCmd(cfg *cliConfig) *cobra.Command {
 	return &cobra.Command{
 		Use:   "whoami",
-		Short: "Show current authenticated identity",
+		Short: "Show current agent identity",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			if cfg.token() == "" {
-				return errors.New("token required")
+			aid := cfg.agentID()
+			sec := cfg.apiSecret()
+			if aid == "" || sec == "" {
+				return errors.New("not logged in as agent (run bobber login --agent-id <ID> --secret <SECRET>)")
 			}
-			resp, err := doJSON(http.MethodGet, cfg.backendURL()+"/v1/auth/me", cfg.token(), nil)
+			resp, err := doJSONAgent(http.MethodGet, cfg.backendURL()+"/v1/agents/"+aid, aid, sec, nil)
 			if err != nil {
 				return err
 			}
@@ -275,9 +303,9 @@ func whoamiCmd(cfg *cliConfig) *cobra.Command {
 func logoutCmd(cfg *cliConfig) *cobra.Command {
 	return &cobra.Command{
 		Use:   "logout",
-		Short: "Logout by clearing local token",
+		Short: "Logout by clearing agent credentials",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			return clearToken(cfg)
+			return clearAgentCreds(cfg)
 		},
 	}
 }
@@ -644,7 +672,9 @@ func prettyPrint(v any) {
 	fmt.Println(string(b))
 }
 
-func clearToken(cfg *cliConfig) error {
+func clearAgentCreds(cfg *cliConfig) error {
+	cfg.v.Set("agent_id", "")
+	cfg.v.Set("api_secret", "")
 	cfg.v.Set("token", "")
 	return saveConfig(cfg.v)
 }
@@ -663,6 +693,50 @@ func (c *cliConfig) token() string {
 
 func (c *cliConfig) agentID() string {
 	return strings.TrimSpace(c.v.GetString("agent_id"))
+}
+
+func (c *cliConfig) apiSecret() string {
+	return strings.TrimSpace(c.v.GetString("api_secret"))
+}
+
+func doJSONAgent(method, url, agentID, apiSecret string, body any) (map[string]any, error) {
+	var payload []byte
+	var err error
+	if body != nil {
+		payload, err = json.Marshal(body)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	req, err := http.NewRequest(method, url, bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Agent-ID", agentID)
+	req.Header.Set("X-API-Secret", apiSecret)
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	res, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	resp := map[string]any{}
+	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
+		return nil, err
+	}
+
+	if res.StatusCode >= 400 {
+		if msg, ok := resp["error"].(string); ok {
+			return nil, fmt.Errorf("%s", msg)
+		}
+		return nil, fmt.Errorf("request failed with status %d", res.StatusCode)
+	}
+
+	return resp, nil
 }
 
 func splitCSV(s string) []string {
