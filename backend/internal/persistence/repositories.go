@@ -36,19 +36,33 @@ type UserRepository interface {
 	GetByVerificationToken(ctx context.Context, token string) (*User, error)
 }
 
+type ConversationRepository interface {
+	Create(ctx context.Context, conv Conversation) (*Conversation, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*Conversation, error)
+	GetDirectByPair(ctx context.Context, idLow, idHigh uuid.UUID) (*Conversation, error)
+	ListByParticipant(ctx context.Context, participantID uuid.UUID, kind ParticipantType) ([]Conversation, error)
+}
+
+type ConversationParticipantRepository interface {
+	Add(ctx context.Context, p ConversationParticipant) error
+	Remove(ctx context.Context, conversationID, participantID uuid.UUID, kind ParticipantType) error
+	ListByConversation(ctx context.Context, conversationID uuid.UUID) ([]ConversationParticipant, error)
+	UpdateMuted(ctx context.Context, conversationID, participantID uuid.UUID, kind ParticipantType, muted bool) error
+	UpdateLastRead(ctx context.Context, conversationID, participantID uuid.UUID, kind ParticipantType, messageID uuid.UUID) error
+}
+
 type ChatGroupRepository interface {
 	Create(ctx context.Context, group ChatGroup) (*ChatGroup, error)
 	GetByID(ctx context.Context, groupID uuid.UUID) (*ChatGroup, error)
 	ListAll(ctx context.Context) ([]ChatGroup, error)
-	AddMember(ctx context.Context, member ChatGroupMember) error
-	RemoveMember(ctx context.Context, member ChatGroupMember) error
+	SetConversationID(ctx context.Context, groupID, conversationID uuid.UUID) error
 }
 
 type MessageRepository interface {
 	Save(ctx context.Context, message Message) (*Message, error)
 	GetByTraceID(ctx context.Context, traceID uuid.UUID) ([]Message, error)
-	GetByID(ctx context.Context, messageID uuid.UUID, timestamp time.Time) (*Message, error)
-	GetByPeer(ctx context.Context, userID, peerID uuid.UUID, limit int, sinceTS *time.Time, sinceID *uuid.UUID) ([]Message, error)
+	GetByID(ctx context.Context, messageID uuid.UUID) (*Message, error)
+	GetByConversation(ctx context.Context, conversationID uuid.UUID, limit int, sinceTS *time.Time, sinceID *uuid.UUID) ([]Message, error)
 }
 
 type ConnectionRequestRepository interface {
@@ -77,26 +91,30 @@ type AuditLogRepository interface {
 }
 
 type PostgresRepositories struct {
-	Agents             AgentRepository
-	Users              UserRepository
-	Groups             ChatGroupRepository
-	Messages           MessageRepository
-	Approvals          ApprovalRepository
-	AuditLogs          AuditLogRepository
-	ConnectionRequests ConnectionRequestRepository
-	Blacklist          BlacklistRepository
+	Agents                   AgentRepository
+	Users                    UserRepository
+	Conversations            ConversationRepository
+	ConversationParticipants ConversationParticipantRepository
+	Groups                   ChatGroupRepository
+	Messages                 MessageRepository
+	Approvals                ApprovalRepository
+	AuditLogs                AuditLogRepository
+	ConnectionRequests       ConnectionRequestRepository
+	Blacklist                BlacklistRepository
 }
 
 func NewPostgresRepositories(db *DB) *PostgresRepositories {
 	return &PostgresRepositories{
-		Agents:             &pgAgentRepository{db: db},
-		Users:              &pgUserRepository{db: db},
-		Groups:             &pgChatGroupRepository{db: db},
-		Messages:           &pgMessageRepository{db: db},
-		Approvals:          &pgApprovalRepository{db: db},
-		AuditLogs:          &pgAuditLogRepository{db: db},
-		ConnectionRequests: &pgConnectionRequestRepository{db: db},
-		Blacklist:          &pgBlacklistRepository{db: db},
+		Agents:                   &pgAgentRepository{db: db},
+		Users:                    &pgUserRepository{db: db},
+		Conversations:            &pgConversationRepository{db: db},
+		ConversationParticipants: &pgConversationParticipantRepository{db: db},
+		Groups:                   &pgChatGroupRepository{db: db},
+		Messages:                 &pgMessageRepository{db: db},
+		Approvals:                &pgApprovalRepository{db: db},
+		AuditLogs:                &pgAuditLogRepository{db: db},
+		ConnectionRequests:       &pgConnectionRequestRepository{db: db},
+		Blacklist:                &pgBlacklistRepository{db: db},
 	}
 }
 
@@ -383,6 +401,163 @@ func (r *pgUserRepository) GetByVerificationToken(ctx context.Context, token str
 	return &u, nil
 }
 
+type pgConversationRepository struct{ db *DB }
+
+func (r *pgConversationRepository) Create(ctx context.Context, conv Conversation) (*Conversation, error) {
+	if conv.ID == uuid.Nil {
+		conv.ID = uuid.New()
+	}
+	if conv.CreatedAt.IsZero() {
+		conv.CreatedAt = time.Now().UTC()
+	}
+
+	row := r.db.Pool().QueryRow(ctx, `
+		INSERT INTO conversations (id, type, agent_id_low, agent_id_high, created_at)
+		VALUES ($1,$2,$3,$4,$5)
+		RETURNING id, type, agent_id_low, agent_id_high, created_at
+	`, conv.ID, string(conv.Type), conv.AgentIDLow, conv.AgentIDHigh, conv.CreatedAt)
+
+	return scanConversation(row)
+}
+
+func (r *pgConversationRepository) GetByID(ctx context.Context, id uuid.UUID) (*Conversation, error) {
+	row := r.db.Pool().QueryRow(ctx, `
+		SELECT id, type, agent_id_low, agent_id_high, created_at
+		FROM conversations
+		WHERE id = $1
+	`, id)
+	return scanConversation(row)
+}
+
+func (r *pgConversationRepository) GetDirectByPair(ctx context.Context, idLow, idHigh uuid.UUID) (*Conversation, error) {
+	row := r.db.Pool().QueryRow(ctx, `
+		SELECT id, type, agent_id_low, agent_id_high, created_at
+		FROM conversations
+		WHERE agent_id_low = $1 AND agent_id_high = $2
+	`, idLow, idHigh)
+	return scanConversation(row)
+}
+
+func (r *pgConversationRepository) ListByParticipant(ctx context.Context, participantID uuid.UUID, kind ParticipantType) ([]Conversation, error) {
+	rows, err := r.db.Pool().Query(ctx, `
+		SELECT c.id, c.type, c.agent_id_low, c.agent_id_high, c.created_at
+		FROM conversations c
+		JOIN conversation_participants cp ON cp.conversation_id = c.id
+		WHERE cp.participant_id = $1 AND cp.participant_kind = $2
+		ORDER BY c.created_at DESC
+	`, participantID, string(kind))
+	if err != nil {
+		return nil, fmt.Errorf("list conversations by participant: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]Conversation, 0)
+	for rows.Next() {
+		conv, err := scanConversation(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *conv)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate conversations by participant: %w", err)
+	}
+
+	return out, nil
+}
+
+type pgConversationParticipantRepository struct{ db *DB }
+
+func (r *pgConversationParticipantRepository) Add(ctx context.Context, p ConversationParticipant) error {
+	if p.JoinedAt.IsZero() {
+		p.JoinedAt = time.Now().UTC()
+	}
+
+	_, err := r.db.Pool().Exec(ctx, `
+		INSERT INTO conversation_participants (
+			conversation_id, participant_id, participant_kind, muted, last_read_message_id, joined_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (conversation_id, participant_id, participant_kind) DO NOTHING
+	`, p.ConversationID, p.ParticipantID, string(p.ParticipantKind), p.Muted, p.LastReadMessageID, p.JoinedAt)
+	if err != nil {
+		return fmt.Errorf("add conversation participant: %w", err)
+	}
+
+	return nil
+}
+
+func (r *pgConversationParticipantRepository) Remove(ctx context.Context, conversationID, participantID uuid.UUID, kind ParticipantType) error {
+	_, err := r.db.Pool().Exec(ctx, `
+		DELETE FROM conversation_participants
+		WHERE conversation_id = $1 AND participant_id = $2 AND participant_kind = $3
+	`, conversationID, participantID, string(kind))
+	if err != nil {
+		return fmt.Errorf("remove conversation participant: %w", err)
+	}
+
+	return nil
+}
+
+func (r *pgConversationParticipantRepository) ListByConversation(ctx context.Context, conversationID uuid.UUID) ([]ConversationParticipant, error) {
+	rows, err := r.db.Pool().Query(ctx, `
+		SELECT conversation_id, participant_id, participant_kind, muted, last_read_message_id, joined_at
+		FROM conversation_participants
+		WHERE conversation_id = $1
+		ORDER BY joined_at ASC
+	`, conversationID)
+	if err != nil {
+		return nil, fmt.Errorf("list conversation participants: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]ConversationParticipant, 0)
+	for rows.Next() {
+		p, err := scanConversationParticipant(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate conversation participants: %w", err)
+	}
+
+	return out, nil
+}
+
+func (r *pgConversationParticipantRepository) UpdateMuted(ctx context.Context, conversationID, participantID uuid.UUID, kind ParticipantType, muted bool) error {
+	res, err := r.db.Pool().Exec(ctx, `
+		UPDATE conversation_participants
+		SET muted = $4
+		WHERE conversation_id = $1 AND participant_id = $2 AND participant_kind = $3
+	`, conversationID, participantID, string(kind), muted)
+	if err != nil {
+		return fmt.Errorf("update conversation participant muted: %w", err)
+	}
+	if res.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *pgConversationParticipantRepository) UpdateLastRead(ctx context.Context, conversationID, participantID uuid.UUID, kind ParticipantType, messageID uuid.UUID) error {
+	res, err := r.db.Pool().Exec(ctx, `
+		UPDATE conversation_participants
+		SET last_read_message_id = $4
+		WHERE conversation_id = $1 AND participant_id = $2 AND participant_kind = $3
+	`, conversationID, participantID, string(kind), messageID)
+	if err != nil {
+		return fmt.Errorf("update conversation participant last read: %w", err)
+	}
+	if res.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
 type pgChatGroupRepository struct{ db *DB }
 
 func (r *pgChatGroupRepository) Create(ctx context.Context, group ChatGroup) (*ChatGroup, error) {
@@ -397,14 +572,14 @@ func (r *pgChatGroupRepository) Create(ctx context.Context, group ChatGroup) (*C
 	}
 
 	row := r.db.Pool().QueryRow(ctx, `
-		INSERT INTO chat_groups (id, name, description, visibility, creator_id, created_at)
-		VALUES ($1,$2,$3,$4,$5,$6)
-		RETURNING id, name, description, visibility, creator_id, created_at
-	`, group.ID, group.Name, group.Description, string(group.Visibility), group.CreatorID, group.CreatedAt)
+		INSERT INTO chat_groups (id, name, description, visibility, creator_id, conversation_id, created_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7)
+		RETURNING id, name, description, visibility, creator_id, conversation_id, created_at
+	`, group.ID, group.Name, group.Description, string(group.Visibility), group.CreatorID, group.ConversationID, group.CreatedAt)
 
 	created := ChatGroup{}
 	var visibility string
-	err := row.Scan(&created.ID, &created.Name, &created.Description, &visibility, &created.CreatorID, &created.CreatedAt)
+	err := row.Scan(&created.ID, &created.Name, &created.Description, &visibility, &created.CreatorID, &created.ConversationID, &created.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("create chat group: %w", err)
 	}
@@ -414,14 +589,14 @@ func (r *pgChatGroupRepository) Create(ctx context.Context, group ChatGroup) (*C
 
 func (r *pgChatGroupRepository) GetByID(ctx context.Context, groupID uuid.UUID) (*ChatGroup, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, name, description, visibility, creator_id, created_at
+		SELECT id, name, description, visibility, creator_id, conversation_id, created_at
 		FROM chat_groups
 		WHERE id = $1
 	`, groupID)
 
 	g := ChatGroup{}
 	var visibility string
-	err := row.Scan(&g.ID, &g.Name, &g.Description, &visibility, &g.CreatorID, &g.CreatedAt)
+	err := row.Scan(&g.ID, &g.Name, &g.Description, &visibility, &g.CreatorID, &g.ConversationID, &g.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -434,7 +609,7 @@ func (r *pgChatGroupRepository) GetByID(ctx context.Context, groupID uuid.UUID) 
 
 func (r *pgChatGroupRepository) ListAll(ctx context.Context) ([]ChatGroup, error) {
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT id, name, description, visibility, creator_id, created_at
+		SELECT id, name, description, visibility, creator_id, conversation_id, created_at
 		FROM chat_groups
 		ORDER BY created_at DESC
 	`)
@@ -447,7 +622,7 @@ func (r *pgChatGroupRepository) ListAll(ctx context.Context) ([]ChatGroup, error
 	for rows.Next() {
 		g := ChatGroup{}
 		var visibility string
-		if err := rows.Scan(&g.ID, &g.Name, &g.Description, &visibility, &g.CreatorID, &g.CreatedAt); err != nil {
+		if err := rows.Scan(&g.ID, &g.Name, &g.Description, &visibility, &g.CreatorID, &g.ConversationID, &g.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan chat group: %w", err)
 		}
 		g.Visibility = GroupVisibility(visibility)
@@ -460,26 +635,19 @@ func (r *pgChatGroupRepository) ListAll(ctx context.Context) ([]ChatGroup, error
 	return groups, nil
 }
 
-func (r *pgChatGroupRepository) AddMember(ctx context.Context, member ChatGroupMember) error {
-	_, err := r.db.Pool().Exec(ctx, `
-		INSERT INTO chat_group_members (group_id, participant_id, participant_kind, joined_at)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (group_id, participant_id, participant_kind) DO NOTHING
-	`, member.GroupID, member.ParticipantID, string(member.ParticipantKind), member.JoinedAt)
+func (r *pgChatGroupRepository) SetConversationID(ctx context.Context, groupID, conversationID uuid.UUID) error {
+	res, err := r.db.Pool().Exec(ctx, `
+		UPDATE chat_groups
+		SET conversation_id = $2
+		WHERE id = $1
+	`, groupID, conversationID)
 	if err != nil {
-		return fmt.Errorf("add group member: %w", err)
+		return fmt.Errorf("set chat group conversation id: %w", err)
 	}
-	return nil
-}
+	if res.RowsAffected() == 0 {
+		return ErrNotFound
+	}
 
-func (r *pgChatGroupRepository) RemoveMember(ctx context.Context, member ChatGroupMember) error {
-	_, err := r.db.Pool().Exec(ctx, `
-		DELETE FROM chat_group_members
-		WHERE group_id = $1 AND participant_id = $2 AND participant_kind = $3
-	`, member.GroupID, member.ParticipantID, string(member.ParticipantKind))
-	if err != nil {
-		return fmt.Errorf("remove group member: %w", err)
-	}
 	return nil
 }
 
@@ -500,10 +668,10 @@ func (r *pgMessageRepository) Save(ctx context.Context, message Message) (*Messa
 	}
 
 	row := r.db.Pool().QueryRow(ctx, `
-		INSERT INTO messages (id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id)
+		INSERT INTO messages (id, from_id, conversation_id, tag, payload, metadata, "timestamp", trace_id)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-		RETURNING id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id
-	`, message.ID, message.FromID, message.ToID, message.Tag, payload, metadata, message.Timestamp, message.TraceID)
+		RETURNING id, from_id, conversation_id, tag, payload, metadata, "timestamp", trace_id
+	`, message.ID, message.FromID, message.ConversationID, message.Tag, payload, metadata, message.Timestamp, message.TraceID)
 
 	out, err := scanMessage(row)
 	if err != nil {
@@ -514,7 +682,7 @@ func (r *pgMessageRepository) Save(ctx context.Context, message Message) (*Messa
 
 func (r *pgMessageRepository) GetByTraceID(ctx context.Context, traceID uuid.UUID) ([]Message, error) {
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id
+		SELECT id, from_id, conversation_id, tag, payload, metadata, "timestamp", trace_id
 		FROM messages
 		WHERE trace_id = $1
 		ORDER BY "timestamp" ASC
@@ -538,31 +706,31 @@ func (r *pgMessageRepository) GetByTraceID(ctx context.Context, traceID uuid.UUI
 	return messages, nil
 }
 
-func (r *pgMessageRepository) GetByID(ctx context.Context, messageID uuid.UUID, timestamp time.Time) (*Message, error) {
+func (r *pgMessageRepository) GetByID(ctx context.Context, messageID uuid.UUID) (*Message, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id
+		SELECT id, from_id, conversation_id, tag, payload, metadata, "timestamp", trace_id
 		FROM messages
-		WHERE id = $1 AND "timestamp" = $2
-	`, messageID, timestamp)
+		WHERE id = $1
+	`, messageID)
 	return scanMessage(row)
 }
 
-func (r *pgMessageRepository) GetByPeer(ctx context.Context, userID, peerID uuid.UUID, limit int, sinceTS *time.Time, sinceID *uuid.UUID) ([]Message, error) {
+func (r *pgMessageRepository) GetByConversation(ctx context.Context, conversationID uuid.UUID, limit int, sinceTS *time.Time, sinceID *uuid.UUID) ([]Message, error) {
 	if limit <= 0 {
 		limit = 50
 	}
 
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id
+		SELECT id, from_id, conversation_id, tag, payload, metadata, "timestamp", trace_id
 		FROM messages
-		WHERE ((from_id = $1 AND to_id = $2) OR (from_id = $2 AND to_id = $1))
-			AND ($3::timestamptz IS NULL OR "timestamp" > $3)
-			AND ($4::uuid IS NULL OR id > $4)
+		WHERE conversation_id = $1
+			AND ($2::timestamptz IS NULL OR "timestamp" > $2)
+			AND ($3::uuid IS NULL OR id > $3)
 		ORDER BY "timestamp" DESC
-		LIMIT $5
-	`, userID, peerID, sinceTS, sinceID, limit)
+		LIMIT $4
+	`, conversationID, sinceTS, sinceID, limit)
 	if err != nil {
-		return nil, fmt.Errorf("get messages by peer: %w", err)
+		return nil, fmt.Errorf("get messages by conversation: %w", err)
 	}
 	defer rows.Close()
 
@@ -575,7 +743,7 @@ func (r *pgMessageRepository) GetByPeer(ctx context.Context, userID, peerID uuid
 		messages = append(messages, *m)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate messages by peer: %w", err)
+		return nil, fmt.Errorf("iterate messages by conversation: %w", err)
 	}
 	return messages, nil
 }
@@ -893,7 +1061,7 @@ func scanMessage(scanner rowScanner) (*Message, error) {
 	err := scanner.Scan(
 		&out.ID,
 		&out.FromID,
-		&out.ToID,
+		&out.ConversationID,
 		&out.Tag,
 		&payloadRaw,
 		&metadataRaw,
@@ -921,6 +1089,51 @@ func scanMessage(scanner rowScanner) (*Message, error) {
 		}
 	}
 
+	return &out, nil
+}
+
+func scanConversation(scanner rowScanner) (*Conversation, error) {
+	out := Conversation{}
+	var conversationType string
+
+	err := scanner.Scan(
+		&out.ID,
+		&conversationType,
+		&out.AgentIDLow,
+		&out.AgentIDHigh,
+		&out.CreatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("scan conversation: %w", err)
+	}
+
+	out.Type = ConversationType(conversationType)
+	return &out, nil
+}
+
+func scanConversationParticipant(scanner rowScanner) (*ConversationParticipant, error) {
+	out := ConversationParticipant{}
+	var participantKind string
+
+	err := scanner.Scan(
+		&out.ConversationID,
+		&out.ParticipantID,
+		&participantKind,
+		&out.Muted,
+		&out.LastReadMessageID,
+		&out.JoinedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("scan conversation participant: %w", err)
+	}
+
+	out.ParticipantKind = ParticipantType(participantKind)
 	return &out, nil
 }
 

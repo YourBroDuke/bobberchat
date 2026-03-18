@@ -663,12 +663,12 @@ paths:
     get:
       tags:
         - Messages
-      summary: Poll direct messages for a peer
+      summary: Poll messages for a conversation
       operationId: pollMessages
       security:
         - BearerAuth: []
       parameters:
-        - name: peer_id
+        - name: conversation_id
           in: query
           required: true
           schema:
@@ -1132,7 +1132,7 @@ components:
       required:
         - id
         - from_id
-        - to_id
+        - conversation_id
         - tag
         - payload
         - metadata
@@ -1145,7 +1145,7 @@ components:
         from_id:
           type: string
           format: uuid
-        to_id:
+        conversation_id:
           type: string
           format: uuid
         tag:

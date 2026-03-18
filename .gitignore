@@ -12,6 +12,7 @@
 /bin/
 /bobber
 /bobberd
+cli/bobber
 
 # Sisyphus working state
 .sisyphus/

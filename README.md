@@ -100,8 +100,8 @@ bobber info <target-id>
 # Send a message
 bobber send <target-id> --tag "request.action" --content "hello world"
 
-# Poll direct messages with a peer
-bobber poll <target-id> --limit 50
+# Poll messages in a conversation
+bobber poll <conversation-id> --limit 50
 
 # Connection request lifecycle
 bobber connect <target-id>

@@ -13,6 +13,13 @@ const (
 	GroupVisibilityPrivate GroupVisibility = "private"
 )
 
+type ConversationType string
+
+const (
+	ConversationTypeDirect ConversationType = "direct"
+	ConversationTypeGroup  ConversationType = "group"
+)
+
 type ApprovalStatus string
 
 const (
@@ -58,31 +65,42 @@ type Agent struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
-type ChatGroup struct {
-	ID          uuid.UUID       `json:"id"`
-	Name        string          `json:"name"`
-	Description *string         `json:"description,omitempty"`
-	Visibility  GroupVisibility `json:"visibility"`
-	CreatorID   uuid.UUID       `json:"creator_id"`
-	CreatedAt   time.Time       `json:"created_at"`
+type Conversation struct {
+	ID          uuid.UUID        `json:"id"`
+	Type        ConversationType `json:"type"`
+	AgentIDLow  *uuid.UUID       `json:"agent_id_low,omitempty"`
+	AgentIDHigh *uuid.UUID       `json:"agent_id_high,omitempty"`
+	CreatedAt   time.Time        `json:"created_at"`
 }
 
-type ChatGroupMember struct {
-	GroupID         uuid.UUID       `json:"group_id"`
-	ParticipantID   uuid.UUID       `json:"participant_id"`
-	ParticipantKind ParticipantType `json:"participant_kind"`
-	JoinedAt        time.Time       `json:"joined_at"`
+type ConversationParticipant struct {
+	ConversationID    uuid.UUID       `json:"conversation_id"`
+	ParticipantID     uuid.UUID       `json:"participant_id"`
+	ParticipantKind   ParticipantType `json:"participant_kind"`
+	Muted             bool            `json:"muted"`
+	LastReadMessageID *uuid.UUID      `json:"last_read_message_id,omitempty"`
+	JoinedAt          time.Time       `json:"joined_at"`
+}
+
+type ChatGroup struct {
+	ID             uuid.UUID       `json:"id"`
+	Name           string          `json:"name"`
+	Description    *string         `json:"description,omitempty"`
+	Visibility     GroupVisibility `json:"visibility"`
+	CreatorID      uuid.UUID       `json:"creator_id"`
+	ConversationID *uuid.UUID      `json:"conversation_id,omitempty"`
+	CreatedAt      time.Time       `json:"created_at"`
 }
 
 type Message struct {
-	ID        uuid.UUID      `json:"id"`
-	FromID    uuid.UUID      `json:"from_id"`
-	ToID      uuid.UUID      `json:"to_id"`
-	Tag       string         `json:"tag"`
-	Payload   map[string]any `json:"payload"`
-	Metadata  map[string]any `json:"metadata"`
-	Timestamp time.Time      `json:"timestamp"`
-	TraceID   uuid.UUID      `json:"trace_id"`
+	ID             uuid.UUID      `json:"id"`
+	FromID         uuid.UUID      `json:"from_id"`
+	ConversationID uuid.UUID      `json:"conversation_id"`
+	Tag            string         `json:"tag"`
+	Payload        map[string]any `json:"payload"`
+	Metadata       map[string]any `json:"metadata"`
+	Timestamp      time.Time      `json:"timestamp"`
+	TraceID        uuid.UUID      `json:"trace_id"`
 }
 
 type ApprovalRequest struct {

@@ -97,7 +97,7 @@ bobberchat/
 | `backend/internal/registry` | Manages agent registration, heartbeat liveness, and discovery query execution (Design Spec §6). |
 | `backend/internal/auth` | Handles human auth (JWT) and machine auth (API secret verification, rotation, revocation) (Design Spec §5, §11). |
 | `backend/internal/protocol` | Defines canonical envelope structs, tag taxonomy constants, payload validators, and protocol version negotiation logic (Design Spec §3.6). |
-| `backend/internal/conversation` | Implements private chat, chat groups, membership policies, and message ordering context (Design Spec §4). |
+| `backend/internal/conversation` | Implements conversations (DM & group), conversation participants, membership policies, and message ordering context (Design Spec §4). |
 | `backend/internal/approval` | Implements `approval.request/granted/denied` state machine, timeout policy (`auto-deny`, `auto-approve`, `escalate`), and idempotency gates (Design Spec §7). |
 | `backend/internal/persistence` | PostgreSQL repositories, message archival orchestration (hot/warm/cold boundaries), and migration integration (Design Spec §4.4). |
 | `backend/internal/adapter/mcp` | Translates MCP JSON-RPC primitives to/from BobberChat envelope and tags (Design Spec §8.2). |
@@ -120,6 +120,8 @@ CREATE TYPE approval_status AS ENUM ('PENDING', 'GRANTED', 'DENIED', 'TIMED_OUT'
 CREATE TYPE urgency AS ENUM ('low', 'medium', 'high', 'critical');
 
 CREATE TYPE participant_type AS ENUM ('user', 'agent');
+
+CREATE TYPE conversation_type AS ENUM ('direct', 'group');
 ```
 
 ### 3.2 Core tables
@@ -141,27 +143,42 @@ CREATE TABLE agents (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE conversations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  type conversation_type NOT NULL,
+  agent_id_low UUID,
+  agent_id_high UUID,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT chk_direct_ids CHECK (
+    type != 'direct' OR (agent_id_low IS NOT NULL AND agent_id_high IS NOT NULL AND agent_id_low < agent_id_high)
+  ),
+  CONSTRAINT uq_direct_pair UNIQUE (agent_id_low, agent_id_high)
+);
+
+CREATE TABLE conversation_participants (
+  conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  participant_id UUID NOT NULL,
+  participant_kind participant_type NOT NULL,
+  muted BOOLEAN NOT NULL DEFAULT FALSE,
+  last_read_message_id UUID,
+  joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (conversation_id, participant_id, participant_kind)
+);
+
 CREATE TABLE chat_groups (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL UNIQUE,
   description TEXT,
   visibility group_visibility NOT NULL DEFAULT 'private',
   creator_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  conversation_id UUID REFERENCES conversations(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE chat_group_members (
-  group_id UUID NOT NULL REFERENCES chat_groups(id) ON DELETE CASCADE,
-  participant_id UUID NOT NULL,
-  participant_kind participant_type NOT NULL,
-  joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (group_id, participant_id, participant_kind)
 );
 
 CREATE TABLE messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   from_id UUID NOT NULL,
-  to_id UUID NOT NULL,
+  conversation_id UUID NOT NULL REFERENCES conversations(id),
   tag TEXT NOT NULL,
   payload JSONB NOT NULL,
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -211,7 +228,7 @@ FOR VALUES FROM ('2026-03-01T00:00:00Z') TO ('2026-04-01T00:00:00Z');
 CREATE INDEX idx_agents_owner ON agents (owner_user_id);
 
 CREATE INDEX idx_messages_trace ON messages (trace_id, "timestamp" DESC);
-CREATE INDEX idx_messages_to_tag_time ON messages (to_id, tag, "timestamp" DESC);
+CREATE INDEX idx_messages_conv_tag_time ON messages (conversation_id, tag, "timestamp" DESC);
 
 CREATE INDEX idx_approvals_pending ON approval_requests (status, urgency, created_at)
 WHERE status = 'PENDING';
@@ -307,7 +324,7 @@ Authentication model:
 
 | Method | Path | Auth | Request JSON | Response JSON | Status codes |
 |---|---|---|---|---|---|
-| GET | `/v1/messages?trace_id={uuid}` | JWT | n/a | `{ "messages": [{ "id": "uuid", "from": "agent.a", "to": "agent.b", "tag": "request.data", "payload": {}, "metadata": {}, "timestamp": "...", "trace_id": "uuid" }], "total": 14 }` | 200, 400, 401 |
+| GET | `/v1/messages?trace_id={uuid}` | JWT | n/a | `{ "messages": [{ "id": "uuid", "from": "agent.a", "conversation_id": "uuid", "tag": "request.data", "payload": {}, "metadata": {}, "timestamp": "...", "trace_id": "uuid" }], "total": 14 }` | 200, 400, 401 |
 | POST | `/v1/messages/{id}/replay` | JWT | `{ "reason": "debug-replay" }` | `{ "replayed": true, "new_message_id": "uuid", "original_message_id": "uuid", "trace_id": "uuid" }` | 202, 401, 403, 404 |
 
 #### 5.1.7 Approvals

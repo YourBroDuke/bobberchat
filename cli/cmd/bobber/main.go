@@ -515,14 +515,14 @@ func pollCmd(cfg *cliConfig) *cobra.Command {
 	var limit int
 	var sinceTS, sinceID string
 	cmd := &cobra.Command{
-		Use:   "poll <target_id>",
-		Short: "Poll messages from target",
+		Use:   "poll <conversation_id>",
+		Short: "Poll messages from conversation",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			if cfg.token() == "" {
 				return errors.New("token required")
 			}
-			endpoint := cfg.backendURL() + "/v1/messages/poll?peer_id=" + args[0]
+			endpoint := cfg.backendURL() + "/v1/messages/poll?conversation_id=" + args[0]
 			if limit > 0 {
 				endpoint += "&limit=" + strconv.Itoa(limit)
 			}

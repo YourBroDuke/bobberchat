@@ -1319,13 +1319,13 @@ func TestBlacklistCommand(t *testing.T) {
 }
 
 func TestPollCommand(t *testing.T) {
-	t.Run("Success: GET /v1/messages/poll?peer_id={id}", func(t *testing.T) {
+	t.Run("Success: GET /v1/messages/poll?conversation_id={id}", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodGet || r.URL.Path != "/v1/messages/poll" {
 				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 			}
-			if got := r.URL.Query().Get("peer_id"); got != "user-id" {
-				t.Fatalf("unexpected peer_id query: %q", got)
+			if got := r.URL.Query().Get("conversation_id"); got != "conv-id" {
+				t.Fatalf("unexpected conversation_id query: %q", got)
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"messages": []any{}})
 		}))
@@ -1334,7 +1334,7 @@ func TestPollCommand(t *testing.T) {
 		cmd := pollCmd(testConfig(srv.URL, "tok"))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"user-id"})
+		cmd.SetArgs([]string{"conv-id"})
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("execute failed: %v", err)
 		}

@@ -52,13 +52,13 @@ BOBBERCHAT_TEST_DSN="postgres://bobberchat:bobberchat@localhost:5432/bobberchat?
 | Package | File | Lines | Description |
 |---------|------|-------|-------------|
 | `backend/internal/protocol` | `envelope.go`, `tags.go`, `version.go` | ~350 | Wire envelope, 8-family tag taxonomy, version negotiation |
-| `backend/internal/persistence` | `postgres.go`, `models.go`, `repositories.go` | ~1,195 | 9 repository interfaces with PostgreSQL implementations, including connection requests and blacklist persistence |
+| `backend/internal/persistence` | `postgres.go`, `models.go`, `repositories.go` | ~1,195 | 11 repository interfaces with PostgreSQL implementations, including conversations, conversation participants, connection requests and blacklist persistence |
 | `backend/internal/auth` | `auth.go` | ~503 | Argon2id hashing, JWT (HS256, 1hr TTL), bcrypt for passwords, email verification and resend flows |
 | `backend/internal/email` | `email.go`, `azurecs/azurecs.go`, `console/console.go` | ~214 | Provider-agnostic email sender interface with console and Azure Communication Services (ACS) sender implementations. ACS sender uses HMAC-SHA256 signed REST API calls (`/emails:send`) with connection-string auth |
 | `backend/internal/registry` | `registry.go` | ~115 | Agent discovery and listing |
 | `backend/internal/broker` | `broker.go` | ~232 | NATS JetStream message routing, 3 streams, subject mapping |
 | `backend/internal/approval` | `approval.go` | ~123 | Human-in-the-loop approval workflows with escalation |
-| `backend/internal/conversation` | `conversation.go` | ~202 | Chat groups, membership, message history |
+| `backend/internal/conversation` | `conversation.go` | ~202 | Conversations (DM & group), membership via conversation_participants, message history |
 | `backend/internal/observability` | `observability.go` | ~110 | Prometheus metrics (incl. rate limit, audit, active WS conn gauges), structured logging |
 
 ### Protocol Adapters (3 packages — Design Spec §8)
@@ -251,10 +251,12 @@ Backend config: `configs/backend.yaml`
 ### Database
 
 - PostgreSQL 15+
-- 7 tables: `users`, `agents`, `chat_groups`, `chat_group_members`, `messages`, `approval_requests`, `audit_log`
-- 4 enum types: `group_visibility`, `approval_status`, `urgency`, `participant_type`
-- `messages` table uses time-based partitioning by `timestamp` (monthly ranges)
-- Migration: `migrations/001_initial_schema.sql`
+- 7 tables: `users`, `agents`, `chat_groups`, `conversations`, `conversation_participants`, `messages`, `approval_requests`, `audit_log`
+- 5 enum types: `group_visibility`, `approval_status`, `urgency`, `participant_type`, `conversation_type`
+- `conversations` table unifies DMs and groups; DMs identified by canonical `(agent_id_low, agent_id_high)` pair
+- `conversation_participants` replaces `chat_group_members` and handles both DM and group membership with `muted`, `last_read_message_id` fields
+- `messages` table uses `conversation_id` FK (replaced `to_id`), time-based partitioning by `timestamp` (monthly ranges)
+- Migration: `migrations/001_initial_schema.sql` through `migrations/008_conversations.sql`
 
 ### NATS JetStream Streams
 
@@ -435,6 +437,8 @@ bobberchat/
 ├── migrations/004_remove_agent_status.sql # Removes agent_status enum/column/index
 ├── migrations/005_remove_agent_version_heartbeat.sql # Removes version, connected_at, last_heartbeat from agents
 ├── migrations/006_remove_topics.sql # Removes topics table, topic_id column, and topic_status enum
+├── migrations/007_blacklist.sql     # Adds agent blacklist table
+├── migrations/008_conversations.sql # Adds conversations, conversation_participants; migrates chat_group_members; messages.to_id→conversation_id
 ├── scripts/
 │   ├── e2e-test.sh                  # 29-test API e2e test
 │   └── smoke-test.sh                # Quick deployment smoke test

@@ -2,6 +2,7 @@ package conversation
 
 import (
 	"context"
+	"errors"
 
 	"github.com/bobberchat/bobberchat/backend/internal/persistence"
 	"github.com/google/uuid"
@@ -34,12 +35,34 @@ func (s *Service) CreateGroup(ctx context.Context, name, description, visibility
 	}
 
 	repos := persistence.NewPostgresRepositories(s.db)
-	return repos.Groups.Create(ctx, persistence.ChatGroup{
-		Name:        name,
-		Description: desc,
-		Visibility:  v,
-		CreatorID:   cid,
+
+	conv, err := repos.Conversations.Create(ctx, persistence.Conversation{
+		Type: persistence.ConversationTypeGroup,
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	group, err := repos.Groups.Create(ctx, persistence.ChatGroup{
+		Name:           name,
+		Description:    desc,
+		Visibility:     v,
+		CreatorID:      cid,
+		ConversationID: &conv.ID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if err := repos.ConversationParticipants.Add(ctx, persistence.ConversationParticipant{
+		ConversationID:  conv.ID,
+		ParticipantID:   cid,
+		ParticipantKind: persistence.ParticipantTypeUser,
+	}); err != nil {
+		return nil, err
+	}
+
+	return group, nil
 }
 
 func (s *Service) GetGroup(ctx context.Context, groupID string) (*persistence.ChatGroup, error) {
@@ -76,8 +99,16 @@ func (s *Service) JoinGroup(ctx context.Context, groupID, participantID string, 
 	}
 
 	repos := persistence.NewPostgresRepositories(s.db)
-	return repos.Groups.AddMember(ctx, persistence.ChatGroupMember{
-		GroupID:         gid,
+	group, err := repos.Groups.GetByID(ctx, gid)
+	if err != nil {
+		return err
+	}
+	if group.ConversationID == nil {
+		return errors.New("group has no conversation")
+	}
+
+	return repos.ConversationParticipants.Add(ctx, persistence.ConversationParticipant{
+		ConversationID:  *group.ConversationID,
 		ParticipantID:   pid,
 		ParticipantKind: kind,
 	})
@@ -97,9 +128,67 @@ func (s *Service) LeaveGroup(ctx context.Context, groupID, participantID string,
 	}
 
 	repos := persistence.NewPostgresRepositories(s.db)
-	return repos.Groups.RemoveMember(ctx, persistence.ChatGroupMember{
-		GroupID:         gid,
-		ParticipantID:   pid,
-		ParticipantKind: kind,
+	group, err := repos.Groups.GetByID(ctx, gid)
+	if err != nil {
+		return err
+	}
+	if group.ConversationID == nil {
+		return errors.New("group has no conversation")
+	}
+
+	return repos.ConversationParticipants.Remove(ctx, *group.ConversationID, pid, kind)
+}
+
+// GetOrCreateDirect finds or creates a DM conversation between two participants.
+// IDs are canonically ordered (low < high) for the unique constraint.
+func (s *Service) GetOrCreateDirect(ctx context.Context, id1, id2 uuid.UUID, kind1, kind2 persistence.ParticipantType) (*persistence.Conversation, error) {
+	if s == nil || s.db == nil {
+		return nil, persistence.ErrInvalidInput
+	}
+	if id1 == uuid.Nil || id2 == uuid.Nil {
+		return nil, persistence.ErrInvalidInput
+	}
+
+	idLow, idHigh := id1, id2
+	kindLow, kindHigh := kind1, kind2
+	if id1.String() > id2.String() {
+		idLow, idHigh = id2, id1
+		kindLow, kindHigh = kind2, kind1
+	}
+
+	repos := persistence.NewPostgresRepositories(s.db)
+
+	conv, err := repos.Conversations.GetDirectByPair(ctx, idLow, idHigh)
+	if err == nil {
+		return conv, nil
+	}
+	if !errors.Is(err, persistence.ErrNotFound) {
+		return nil, err
+	}
+
+	conv, err = repos.Conversations.Create(ctx, persistence.Conversation{
+		Type:        persistence.ConversationTypeDirect,
+		AgentIDLow:  &idLow,
+		AgentIDHigh: &idHigh,
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	if err := repos.ConversationParticipants.Add(ctx, persistence.ConversationParticipant{
+		ConversationID:  conv.ID,
+		ParticipantID:   idLow,
+		ParticipantKind: kindLow,
+	}); err != nil {
+		return nil, err
+	}
+	if err := repos.ConversationParticipants.Add(ctx, persistence.ConversationParticipant{
+		ConversationID:  conv.ID,
+		ParticipantID:   idHigh,
+		ParticipantKind: kindHigh,
+	}); err != nil {
+		return nil, err
+	}
+
+	return conv, nil
 }

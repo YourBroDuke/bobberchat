@@ -725,20 +725,14 @@ func (a *app) handleMessagesByTraceID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handlePollMessages(w http.ResponseWriter, r *http.Request) {
-	peerRaw := strings.TrimSpace(r.URL.Query().Get("peer_id"))
-	if peerRaw == "" {
-		writeError(w, http.StatusBadRequest, "peer_id is required")
+	convRaw := strings.TrimSpace(r.URL.Query().Get("conversation_id"))
+	if convRaw == "" {
+		writeError(w, http.StatusBadRequest, "conversation_id is required")
 		return
 	}
-	peerID, err := uuid.Parse(peerRaw)
+	convID, err := uuid.Parse(convRaw)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid peer_id")
-		return
-	}
-
-	userID, err := uuid.Parse(contextString(r.Context(), ctxUserID))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid user context")
+		writeError(w, http.StatusBadRequest, "invalid conversation_id")
 		return
 	}
 
@@ -772,7 +766,7 @@ func (a *app) handlePollMessages(w http.ResponseWriter, r *http.Request) {
 		sinceID = &parsed
 	}
 
-	msgs, err := persistence.NewPostgresRepositories(a.db).Messages.GetByPeer(r.Context(), userID, peerID, limit, sinceTS, sinceID)
+	msgs, err := persistence.NewPostgresRepositories(a.db).Messages.GetByConversation(r.Context(), convID, limit, sinceTS, sinceID)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -930,13 +924,13 @@ func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
 	var payloadRaw []byte
 	var metadataRaw []byte
 	err = a.db.Pool().QueryRow(r.Context(), `
-		SELECT id, from_id, to_id, tag, payload, metadata, "timestamp", trace_id
+		SELECT id, from_id, conversation_id, tag, payload, metadata, "timestamp", trace_id
 		FROM messages
 		WHERE id = $1
 	`, originalID).Scan(
 		&original.ID,
 		&original.FromID,
-		&original.ToID,
+		&original.ConversationID,
 		&original.Tag,
 		&payloadRaw,
 		&metadataRaw,
@@ -986,7 +980,7 @@ func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
 	env := &protocol.Envelope{
 		ID:        newMessageID,
 		From:      original.FromID.String(),
-		To:        original.ToID.String(),
+		To:        original.ConversationID.String(),
 		Tag:       original.Tag,
 		Payload:   payload,
 		Metadata:  metadata,
