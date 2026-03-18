@@ -112,7 +112,7 @@ go run ./cli/cmd/bobber --help
 3. Config file (`$XDG_CONFIG_HOME/bobber/config.yaml`, falls back to `.bobber.yaml`)
 4. Default (`http://localhost:8080`)
 
-The `login` command automatically persists the JWT token to the config file so subsequent commands are authenticated without `--token`.
+The `login` command saves the agent credentials (agent ID and API secret) to the config file so subsequent commands authenticate as that agent automatically.
 
 ### Global Flags
 | Flag | Env Var | Description |
@@ -148,13 +148,13 @@ bobber agent delete <agent-id>
 
 #### Session & Messaging
 ```bash
-# Save an existing token
-bobber login --token <TOKEN>
+# Authenticate as an agent
+bobber login --agent-id <AGENT-ID> --secret <API-SECRET>
 
-# Show current identity
+# Show current agent identity
 bobber whoami
 
-# Logout
+# Clear agent credentials
 bobber logout
 
 # List users or groups
@@ -194,15 +194,16 @@ bobber group invite <group-id> <user-id>
 
 ### Example Workflow
 ```bash
-# 1. Register and login
+# 1. Register a user account and create an agent
 bobber account register --email ops@acme.io --password s3cret
 bobber account login --email ops@acme.io --password s3cret
-
-# 2. Create an agent
 bobber agent create --name "analyzer"
 
-# 3. List available agents
-bobber ls users
+# 2. Login as the agent (uses agent ID and API secret from create output)
+bobber login --agent-id <AGENT-ID> --secret <API-SECRET>
+
+# 3. Verify agent identity
+bobber whoami
 
 # 4. Send a message
 bobber send <target-id> --tag "request.action" --content "Hello from analyzer"
