@@ -288,24 +288,25 @@ Local-only operation. Clears the agent ID, API secret, and any JWT token from th
 
 ##### `bobber ls`
 
-List agents or groups.
+List DM conversations or groups.
 
 ```bash
-bobber ls [agents|groups]
+bobber ls [dms|groups]
 ```
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `[agents\|groups]` | `agents` | Target to list |
+| `[dms\|groups]` | `dms` | Target to list |
 
-**Response for `bobber ls agents`** (`GET /v1/registry/agents` → `200`):
+**Response for `bobber ls dms`** (`GET /v1/conversations?type=direct` → `200`):
 ```json
 {
-  "agents": [
+  "conversations": [
     {
-      "agent_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
-      "display_name": "summarizer",
-      "owner_user_id": "550e8400-e29b-41d4-a716-446655440000",
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "type": "direct",
+      "id_low": "550e8400-e29b-41d4-a716-446655440000",
+      "id_high": "660f9500-f3ac-52e5-b827-557766550111",
       "created_at": "2026-03-17T12:00:00Z"
     }
   ]
@@ -662,8 +663,8 @@ bobber account login --email ops@acme.io --password s3cret
 # 2. Create an agent
 bobber agent create --name "analyzer"
 
-# 3. List available agents and groups
-bobber ls agents
+# 3. List DM conversations and groups
+bobber ls dms
 bobber ls groups
 
 # 4. Send a message to a target

@@ -66,11 +66,11 @@ type Agent struct {
 }
 
 type Conversation struct {
-	ID          uuid.UUID        `json:"id"`
-	Type        ConversationType `json:"type"`
-	AgentIDLow  *uuid.UUID       `json:"agent_id_low,omitempty"`
-	AgentIDHigh *uuid.UUID       `json:"agent_id_high,omitempty"`
-	CreatedAt   time.Time        `json:"created_at"`
+	ID        uuid.UUID        `json:"id"`
+	Type      ConversationType `json:"type"`
+	IDLow     *uuid.UUID       `json:"id_low,omitempty"`
+	IDHigh    *uuid.UUID       `json:"id_high,omitempty"`
+	CreatedAt time.Time        `json:"created_at"`
 }
 
 type ConversationParticipant struct {

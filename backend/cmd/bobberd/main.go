@@ -272,6 +272,8 @@ func (a *app) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/registry/discover", a.requireAuth(true, true, a.handleDiscover))
 	mux.HandleFunc("GET /v1/registry/agents", a.requireJWT(a.handleListAgents))
 
+	mux.HandleFunc("GET /v1/conversations", a.requireJWT(a.handleListConversations))
+
 	mux.HandleFunc("POST /v1/groups", a.requireJWT(a.handleCreateGroup))
 	mux.HandleFunc("GET /v1/groups", a.requireJWT(a.handleListGroups))
 	mux.HandleFunc("POST /v1/groups/{id}/join", a.requireAuth(true, true, a.handleJoinGroup))
@@ -615,6 +617,32 @@ func (a *app) handleListAgents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"agents": agents})
+}
+
+func (a *app) handleListConversations(w http.ResponseWriter, r *http.Request) {
+	convType := r.URL.Query().Get("type")
+	if convType == "" {
+		writeError(w, http.StatusBadRequest, "query parameter 'type' is required (direct or group)")
+		return
+	}
+	ct := persistence.ConversationType(convType)
+	if ct != persistence.ConversationTypeDirect && ct != persistence.ConversationTypeGroup {
+		writeError(w, http.StatusBadRequest, "type must be 'direct' or 'group'")
+		return
+	}
+
+	userID, err := uuid.Parse(contextString(r.Context(), ctxUserID))
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "invalid user context")
+		return
+	}
+
+	convs, err := a.convSvc.ListConversationsByType(r.Context(), userID, persistence.ParticipantTypeUser, ct)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"conversations": convs})
 }
 
 func (a *app) handleCreateGroup(w http.ResponseWriter, r *http.Request) {

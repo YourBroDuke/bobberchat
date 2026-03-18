@@ -58,7 +58,7 @@ BOBBERCHAT_TEST_DSN="postgres://bobberchat:bobberchat@localhost:5432/bobberchat?
 | `backend/internal/registry` | `registry.go` | ~115 | Agent discovery and listing |
 | `backend/internal/broker` | `broker.go` | ~232 | NATS JetStream message routing, 3 streams, subject mapping |
 | `backend/internal/approval` | `approval.go` | ~123 | Human-in-the-loop approval workflows with escalation |
-| `backend/internal/conversation` | `conversation.go` | ~202 | Conversations (DM & group), membership via conversation_participants, message history |
+| `backend/internal/conversation` | `conversation.go` | ~202 | Conversations (DM & group), membership via conversation_participants, message history, list by type |
 | `backend/internal/observability` | `observability.go` | ~110 | Prometheus metrics (incl. rate limit, audit, active WS conn gauges), structured logging |
 
 ### Protocol Adapters (3 packages — Design Spec §8)
@@ -108,7 +108,7 @@ Key implementation details:
 | Binary | Source | Lines | Description |
 |--------|--------|-------|-------------|
 | `bobberd` | `backend/cmd/bobberd/main.go` | ~1,370 | Backend server — 34 REST endpoints + WebSocket + message replay + adapter ingest + production hardening |
-| `bobber` | `cli/cmd/bobber/main.go` | ~700 | CLI tool — account, agent, session, connection, messaging, and group management commands. Tests in `main_test.go` |
+| `bobber` | `cli/cmd/bobber/main.go` | ~700 | CLI tool — account, agent, session, connection, messaging, conversation, and group management commands. Tests in `main_test.go` |
 
 ### SDK
 
@@ -253,10 +253,10 @@ Backend config: `configs/backend.yaml`
 - PostgreSQL 15+
 - 7 tables: `users`, `agents`, `chat_groups`, `conversations`, `conversation_participants`, `messages`, `approval_requests`, `audit_log`
 - 5 enum types: `group_visibility`, `approval_status`, `urgency`, `participant_type`, `conversation_type`
-- `conversations` table unifies DMs and groups; DMs identified by canonical `(agent_id_low, agent_id_high)` pair
+- `conversations` table unifies DMs and groups; DMs identified by canonical `(id_low, id_high)` pair (generic UUIDs, no FK constraint)
 - `conversation_participants` replaces `chat_group_members` and handles both DM and group membership with `muted`, `last_read_message_id` fields
 - `messages` table uses `conversation_id` FK (replaced `to_id`), time-based partitioning by `timestamp` (monthly ranges)
-- Migration: `migrations/001_initial_schema.sql` through `migrations/008_conversations.sql`
+- Migration: `migrations/001_initial_schema.sql` through `migrations/009_rename_dm_ids.sql`
 
 ### NATS JetStream Streams
 
@@ -439,6 +439,7 @@ bobberchat/
 ├── migrations/006_remove_topics.sql # Removes topics table, topic_id column, and topic_status enum
 ├── migrations/007_blacklist.sql     # Adds agent blacklist table
 ├── migrations/008_conversations.sql # Adds conversations, conversation_participants; migrates chat_group_members; messages.to_id→conversation_id
+├── migrations/009_rename_dm_ids.sql # Renames agent_id_low/agent_id_high → id_low/id_high in conversations
 ├── scripts/
 │   ├── e2e-test.sh                  # 29-test API e2e test
 │   └── smoke-test.sh                # Quick deployment smoke test

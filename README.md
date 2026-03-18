@@ -91,7 +91,7 @@ bobber whoami
 bobber logout
 
 # List agents or groups
-bobber ls agents
+bobber ls dms
 bobber ls groups
 
 # Get info about a user, agent, or group
@@ -145,7 +145,7 @@ bobber send <target-id> --tag "request.action" --content "Hello from analyzer"
 All commands output JSON to stdout, making them composable with `jq` and other Unix tools.
 
 ## API Endpoints
-BobberChat provides a REST API with 32 endpoints. Full documentation is available in the OpenAPI specification at `api/openapi/openapi.yaml`.
+BobberChat provides a REST API with 33 endpoints. Full documentation is available in the OpenAPI specification at `api/openapi/openapi.yaml`.
 
 | Category | Method | Path |
 | --- | --- | --- |
@@ -161,6 +161,7 @@ BobberChat provides a REST API with 32 endpoints. Full documentation is availabl
 | Info | GET | /v1/info/{id} |
 | Registry | POST | /v1/registry/discover |
 | Registry | GET | /v1/registry/agents |
+| Conversations | GET | /v1/conversations |
 | Groups | POST | /v1/groups |
 | Groups | GET | /v1/groups |
 | Groups | POST | /v1/groups/{id}/join |

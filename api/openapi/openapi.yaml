@@ -23,6 +23,8 @@ tags:
     description: Agent discovery and status tracking
   - name: Groups
     description: Chat group orchestration
+  - name: Conversations
+    description: Unified conversation management (DMs and groups)
   - name: Messages
     description: Asynchronous communication and message replays
   - name: Approvals
@@ -484,6 +486,39 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Agent'
+
+  /v1/conversations:
+    get:
+      tags:
+        - Conversations
+      summary: List conversations by type for the authenticated user
+      operationId: listConversations
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [direct, group]
+          description: Conversation type to filter by
+      responses:
+        '200':
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Conversation'
+        '400':
+          description: Missing or invalid type parameter
+        '401':
+          description: Unauthorized
 
   /v1/groups:
     post:
@@ -1123,6 +1158,31 @@ components:
         creator_id:
           type: string
           format: uuid
+        created_at:
+          type: string
+          format: date-time
+
+    Conversation:
+      type: object
+      required:
+        - id
+        - type
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [direct, group]
+        id_low:
+          type: string
+          format: uuid
+          nullable: true
+        id_high:
+          type: string
+          format: uuid
+          nullable: true
         created_at:
           type: string
           format: date-time

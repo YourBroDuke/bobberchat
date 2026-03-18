@@ -41,6 +41,7 @@ type ConversationRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*Conversation, error)
 	GetDirectByPair(ctx context.Context, idLow, idHigh uuid.UUID) (*Conversation, error)
 	ListByParticipant(ctx context.Context, participantID uuid.UUID, kind ParticipantType) ([]Conversation, error)
+	ListByParticipantAndType(ctx context.Context, participantID uuid.UUID, kind ParticipantType, convType ConversationType) ([]Conversation, error)
 }
 
 type ConversationParticipantRepository interface {
@@ -412,17 +413,17 @@ func (r *pgConversationRepository) Create(ctx context.Context, conv Conversation
 	}
 
 	row := r.db.Pool().QueryRow(ctx, `
-		INSERT INTO conversations (id, type, agent_id_low, agent_id_high, created_at)
+		INSERT INTO conversations (id, type, id_low, id_high, created_at)
 		VALUES ($1,$2,$3,$4,$5)
-		RETURNING id, type, agent_id_low, agent_id_high, created_at
-	`, conv.ID, string(conv.Type), conv.AgentIDLow, conv.AgentIDHigh, conv.CreatedAt)
+		RETURNING id, type, id_low, id_high, created_at
+	`, conv.ID, string(conv.Type), conv.IDLow, conv.IDHigh, conv.CreatedAt)
 
 	return scanConversation(row)
 }
 
 func (r *pgConversationRepository) GetByID(ctx context.Context, id uuid.UUID) (*Conversation, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, type, agent_id_low, agent_id_high, created_at
+		SELECT id, type, id_low, id_high, created_at
 		FROM conversations
 		WHERE id = $1
 	`, id)
@@ -431,16 +432,16 @@ func (r *pgConversationRepository) GetByID(ctx context.Context, id uuid.UUID) (*
 
 func (r *pgConversationRepository) GetDirectByPair(ctx context.Context, idLow, idHigh uuid.UUID) (*Conversation, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, type, agent_id_low, agent_id_high, created_at
+		SELECT id, type, id_low, id_high, created_at
 		FROM conversations
-		WHERE agent_id_low = $1 AND agent_id_high = $2
+		WHERE id_low = $1 AND id_high = $2
 	`, idLow, idHigh)
 	return scanConversation(row)
 }
 
 func (r *pgConversationRepository) ListByParticipant(ctx context.Context, participantID uuid.UUID, kind ParticipantType) ([]Conversation, error) {
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT c.id, c.type, c.agent_id_low, c.agent_id_high, c.created_at
+		SELECT c.id, c.type, c.id_low, c.id_high, c.created_at
 		FROM conversations c
 		JOIN conversation_participants cp ON cp.conversation_id = c.id
 		WHERE cp.participant_id = $1 AND cp.participant_kind = $2
@@ -461,6 +462,34 @@ func (r *pgConversationRepository) ListByParticipant(ctx context.Context, partic
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate conversations by participant: %w", err)
+	}
+
+	return out, nil
+}
+
+func (r *pgConversationRepository) ListByParticipantAndType(ctx context.Context, participantID uuid.UUID, kind ParticipantType, convType ConversationType) ([]Conversation, error) {
+	rows, err := r.db.Pool().Query(ctx, `
+		SELECT c.id, c.type, c.id_low, c.id_high, c.created_at
+		FROM conversations c
+		JOIN conversation_participants cp ON cp.conversation_id = c.id
+		WHERE cp.participant_id = $1 AND cp.participant_kind = $2 AND c.type = $3
+		ORDER BY c.created_at DESC
+	`, participantID, string(kind), string(convType))
+	if err != nil {
+		return nil, fmt.Errorf("list conversations by participant and type: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]Conversation, 0)
+	for rows.Next() {
+		conv, err := scanConversation(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *conv)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate conversations by participant and type: %w", err)
 	}
 
 	return out, nil
@@ -1099,8 +1128,8 @@ func scanConversation(scanner rowScanner) (*Conversation, error) {
 	err := scanner.Scan(
 		&out.ID,
 		&conversationType,
-		&out.AgentIDLow,
-		&out.AgentIDHigh,
+		&out.IDLow,
+		&out.IDHigh,
 		&out.CreatedAt,
 	)
 	if err != nil {

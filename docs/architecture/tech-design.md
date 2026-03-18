@@ -146,13 +146,13 @@ CREATE TABLE agents (
 CREATE TABLE conversations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   type conversation_type NOT NULL,
-  agent_id_low UUID,
-  agent_id_high UUID,
+  id_low UUID,
+  id_high UUID,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT chk_direct_ids CHECK (
-    type != 'direct' OR (agent_id_low IS NOT NULL AND agent_id_high IS NOT NULL AND agent_id_low < agent_id_high)
+    type != 'direct' OR (id_low IS NOT NULL AND id_high IS NOT NULL AND id_low < id_high)
   ),
-  CONSTRAINT uq_direct_pair UNIQUE (agent_id_low, agent_id_high)
+  CONSTRAINT uq_direct_pair UNIQUE (id_low, id_high)
 );
 
 CREATE TABLE conversation_participants (

@@ -85,6 +85,17 @@ func (s *Service) ListGroups(ctx context.Context) ([]persistence.ChatGroup, erro
 	return repos.Groups.ListAll(ctx)
 }
 
+func (s *Service) ListConversationsByType(ctx context.Context, participantID uuid.UUID, kind persistence.ParticipantType, convType persistence.ConversationType) ([]persistence.Conversation, error) {
+	if s == nil || s.db == nil {
+		return nil, persistence.ErrInvalidInput
+	}
+	if participantID == uuid.Nil {
+		return nil, persistence.ErrInvalidInput
+	}
+	repos := persistence.NewPostgresRepositories(s.db)
+	return repos.Conversations.ListByParticipantAndType(ctx, participantID, kind, convType)
+}
+
 func (s *Service) JoinGroup(ctx context.Context, groupID, participantID string, kind persistence.ParticipantType) error {
 	if s == nil || s.db == nil || groupID == "" || participantID == "" || kind == "" {
 		return persistence.ErrInvalidInput
@@ -167,9 +178,9 @@ func (s *Service) GetOrCreateDirect(ctx context.Context, id1, id2 uuid.UUID, kin
 	}
 
 	conv, err = repos.Conversations.Create(ctx, persistence.Conversation{
-		Type:        persistence.ConversationTypeDirect,
-		AgentIDLow:  &idLow,
-		AgentIDHigh: &idHigh,
+		Type:   persistence.ConversationTypeDirect,
+		IDLow:  &idLow,
+		IDHigh: &idHigh,
 	})
 	if err != nil {
 		return nil, err
