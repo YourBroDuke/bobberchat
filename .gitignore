@@ -10,6 +10,9 @@
 
 # Built binaries
 /bin/
+/bobber
+/bobber-tui
+/bobberd
 
 # Sisyphus working state
 .sisyphus/
