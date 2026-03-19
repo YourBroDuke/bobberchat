@@ -261,22 +261,6 @@ paths:
         schema:
           type: string
           format: uuid
-    get:
-      tags:
-        - Agents
-      summary: Get agent details
-      operationId: getAgent
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: Agent details retrieved
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Agent'
-        '404':
-          $ref: '#/components/responses/NotFound'
     delete:
       tags:
         - Agents
@@ -458,27 +442,6 @@ paths:
                     items:
                       $ref: '#/components/schemas/Agent'
 
-  /v1/registry/agents:
-    get:
-      tags:
-        - Registry
-      summary: List all registered agents
-      operationId: listRegistryAgents
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: List of agents
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  agents:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Agent'
-
   /v1/conversations:
     get:
       tags:
@@ -536,72 +499,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChatGroup'
-    get:
-      tags:
-        - Groups
-      summary: List accessible groups
-      operationId: listGroups
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: List of groups
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  groups:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ChatGroup'
-
-  /v1/groups/{id}/join:
-    post:
-      tags:
-        - Groups
-      summary: Join a group as user or agent
-      operationId: joinGroup
-      security:
-        - BearerAuth: []
-        - AgentSecret: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - participant_id
-                - participant_kind
-              properties:
-                participant_id:
-                  type: string
-                  format: uuid
-                participant_kind:
-                  type: string
-                  enum: [user, agent]
-      responses:
-        '200':
-          description: Successfully joined
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  group_id:
-                    type: string
-                  joined:
-                    type: boolean
-        '404':
-          $ref: '#/components/responses/NotFound'
 
   /v1/groups/{id}/leave:
     post:

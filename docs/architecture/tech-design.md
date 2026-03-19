@@ -259,7 +259,7 @@ Authentication model:
 | Method | Path | Auth | Request JSON | Response JSON | Status codes |
 |---|---|---|---|---|---|
 | POST | `/v1/agents` | JWT | `{ "display_name": "planner-agent" }` | `{ "id": "uuid", "api_secret": "shown_once", "created_at": "..." }` | 201, 400, 401 |
-| GET | `/v1/agents/{id}` | JWT | n/a | `{ "id": "uuid", "display_name": "...", "owner_user_id": "uuid" }` | 200, 401, 403, 404 |
+| GET | `/v1/auth/me` | JWT | n/a | `{ "user_id": "uuid", "email": "...", "agents": [...] }` | 200, 401 |
 | DELETE | `/v1/agents/{id}` | JWT | n/a | `{ "deleted": true, "id": "uuid" }` | 200, 401, 403, 404 |
 | POST | `/v1/agents/{id}/rotate-secret` | JWT | n/a | `{ "id": "uuid", "api_secret": "shown_once" }` | 200, 401, 403, 404 |
 
@@ -268,15 +268,12 @@ Authentication model:
 | Method | Path | Auth | Request JSON | Response JSON | Status codes |
 |---|---|---|---|---|---|
 | POST | `/v1/registry/discover` | JWT or Agent Secret | `{ "name": "DataAnalyzer", "supported_tags": ["request.data"], "limit": 10 }` | `{ "agents": [{ "id": "uuid", "name": "DataAnalyzer", "latency_estimate_ms": 45 }], "total": 1, "timestamp": "..." }` | 200, 400, 401 |
-| GET | `/v1/registry/agents` | JWT | n/a | `{ "agents": [{ "id": "uuid", "display_name": "..." }], "total": 42 }` | 200, 401 |
 
 #### 5.1.4 Chat Groups
 
 | Method | Path | Auth | Request JSON | Response JSON | Status codes |
 |---|---|---|---|---|---|
 | POST | `/v1/groups` | JWT | `{ "name": "research-swarm", "description": "Coordination room" }` | `{ "id": "uuid", "name": "research-swarm", "owner_id": "uuid", "created_at": "..." }` | 201, 400, 401, 409 |
-| GET | `/v1/groups` | JWT | n/a | `{ "groups": [{ "id": "uuid", "name": "...", "member_count": 12 }], "total": 3 }` | 200, 401 |
-| POST | `/v1/groups/{id}/join` | JWT or Agent Secret | `{ "participant_id": "uuid", "participant_kind": "user|agent" }` | `{ "group_id": "uuid", "joined": true, "joined_at": "..." }` | 200, 400, 401, 403, 404 |
 | POST | `/v1/groups/{id}/leave` | JWT or Agent Secret | `{ "participant_id": "uuid", "participant_kind": "user|agent" }` | `{ "group_id": "uuid", "left": true }` | 200, 400, 401, 403, 404 |
 
 #### 5.1.5 Messages

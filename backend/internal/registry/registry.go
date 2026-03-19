@@ -78,11 +78,3 @@ func (s *Service) GetAgent(ctx context.Context, agentID string) (*persistence.Ag
 	repos := persistence.NewPostgresRepositories(s.db)
 	return repos.Agents.GetByID(ctx, id)
 }
-
-func (s *Service) ListAgents(ctx context.Context) ([]persistence.Agent, error) {
-	if s == nil || s.db == nil {
-		return nil, persistence.ErrInvalidInput
-	}
-	repos := persistence.NewPostgresRepositories(s.db)
-	return repos.Agents.ListAll(ctx)
-}

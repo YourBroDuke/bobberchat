@@ -3,6 +3,7 @@
 > Last updated: 2026-03-19
 > Branch: `master`
 > Repo: `https://github.com/YourBroDuke/bobberchat.git`
+> API Status: 27 REST endpoints (Redundancy Cleanup Complete)
 
 ---
 
@@ -36,10 +37,10 @@ go test -tags=integration ./backend/test/integration/ -v    # ✅ 3/3 pass
 |------|-------|-------------|
 | `docs/architecture/design-spec.md` | 1,693 | Authoritative design spec — 13 sections + glossary + 4 appendices |
 | `docs/planning/prd.md` | 212 | Product requirements document |
-| `docs/architecture/tech-design.md` | 721 | Technical design document |
-| `api/openapi/openapi.yaml` | ~1,530 | OpenAPI 3.1.0 spec — 31 endpoint paths |
-| `README.md` | ~280 | Comprehensive project README |
-| `docs/reference/cli-reference.md` | ~770 | Complete CLI reference for bobber and bobberd |
+| `docs/architecture/tech-design.md` | ~710 | Technical design document |
+| `api/openapi/openapi.yaml` | ~1,430 | OpenAPI 3.1.0 spec — 27 endpoint paths |
+| `README.md` | ~270 | Comprehensive project README |
+| `docs/reference/cli-reference.md` | ~750 | Complete CLI reference for bobber and bobberd |
 | `docs/operations/deploy-docker-compose.md` | ~120 | Docker Compose deployment guide |
 | `docs/operations/deploy-kubernetes.md` | ~130 | Raw Kubernetes manifests deployment guide |
 | `docs/operations/deploy-helm.md` | ~170 | Helm chart deployment guide |
@@ -128,7 +129,7 @@ Key implementation details:
 
 | Binary | Source | Lines | Description |
 |--------|--------|-------|-------------|
-| `bobberd` | `backend/cmd/bobberd/main.go` | ~1,374 | Backend server — 36 REST endpoints + WebSocket + message replay + adapter ingest + production hardening |
+| `bobberd` | `backend/cmd/bobberd/main.go` | ~1,350 | Backend server — 28 REST endpoints + WebSocket + message replay + adapter ingest + production hardening |
 | `bobber` | `cli/cmd/bobber/main.go` | ~880 | CLI tool — account, agent (create/use/rotate-secret/delete), session, connection, messaging, conversation, blacklist (add/remove/list), and group management commands. `agent use` fetches info, rotates secret, and saves credentials. Tests in `main_test.go` |
 
 ### SDK
@@ -289,13 +290,13 @@ Backend config: `configs/backend.yaml`
 
 Subject pattern: `bobberchat.msg.{to_id}` for direct messages, `bobberchat.group.{group_id}` for groups
 
-### REST API Endpoints (30 total)
+### REST API Endpoints (27 total)
 
 ```
 Auth:       POST /v1/auth/register, /v1/auth/login, /v1/auth/verify-email, /v1/auth/resend-verification, GET /v1/auth/me
-Agents:     POST /v1/agents, GET/DELETE /v1/agents/:id, POST /v1/agents/:id/rotate-secret
-Registry:   GET /v1/registry/agents, POST /v1/registry/discover
-Groups:     POST/GET /v1/groups, POST /v1/groups/:id/join, /v1/groups/:id/leave
+Agents:     POST /v1/agents, DELETE /v1/agents/:id, POST /v1/agents/:id/rotate-secret
+Registry:   POST /v1/registry/discover
+Groups:     POST /v1/groups, POST /v1/groups/:id/leave
 Messages:   GET /v1/messages/poll, POST /v1/messages/send, POST /v1/messages/:id/replay
 Connections: POST /v1/connections/request, GET /v1/connections/inbox, POST /v1/connections/:id/accept, POST /v1/connections/:id/reject
 Blacklist:  GET /v1/blacklist, POST /v1/blacklist, DELETE /v1/blacklist/:id

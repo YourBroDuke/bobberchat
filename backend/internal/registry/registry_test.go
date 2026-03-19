@@ -75,13 +75,6 @@ func TestRegistryMethods_InvalidInput(t *testing.T) {
 			}(),
 		},
 		{
-			name: "ListAgents nil db",
-			err: func() error {
-				_, err := (&Service{}).ListAgents(context.Background())
-				return err
-			}(),
-		},
-		{
 			name: "nil service Deregister",
 			err: func() error {
 				var s *Service
@@ -101,14 +94,6 @@ func TestRegistryMethods_InvalidInput(t *testing.T) {
 			err: func() error {
 				var s *Service
 				_, err := s.GetAgent(context.Background(), "agent")
-				return err
-			}(),
-		},
-		{
-			name: "nil service ListAgents",
-			err: func() error {
-				var s *Service
-				_, err := s.ListAgents(context.Background())
 				return err
 			}(),
 		},

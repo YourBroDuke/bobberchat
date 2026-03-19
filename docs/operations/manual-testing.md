@@ -65,25 +65,7 @@ echo "API Secret: $API_SECRET"
 
 Expected: HTTP 201 with agent_id and api_secret. Save the api_secret -- it is only shown once.
 
-## 4. List Agents via Registry
-
-```bash
-curl -s "$BASE_URL/v1/registry/agents" \
-  -H "Authorization: Bearer $TOKEN" | jq .
-```
-
-Expected: Array containing the agent created in step 3.
-
-## 5. Get Agent Details
-
-```bash
-curl -s "$BASE_URL/v1/agents/$AGENT_ID" \
-  -H "Authorization: Bearer $TOKEN" | jq .
-```
-
-Expected: Full agent object with timestamps.
-
-## 6. Discover Agents
+## 4. Discover Agents
 
 ```bash
 curl -s -X POST "$BASE_URL/v1/registry/discover" \
@@ -96,7 +78,16 @@ curl -s -X POST "$BASE_URL/v1/registry/discover" \
 
 Expected: Array of registered agents.
 
-## 7. Create a Group
+## 5. Get My Details
+
+```bash
+curl -s "$BASE_URL/v1/auth/me" \
+  -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+Expected: User profile and list of agents owned by the user.
+
+## 6. Create a Group
 
 ```bash
 GROUP_RESPONSE=$(curl -s -X POST "$BASE_URL/v1/groups" \
@@ -113,88 +104,22 @@ GROUP_ID=$(echo "$GROUP_RESPONSE" | jq -r '.id')
 echo "Group ID: $GROUP_ID"
 ```
 
-## 8. Join the Group (Agent Auth)
-
-```bash
-curl -s -X POST "$BASE_URL/v1/groups/$GROUP_ID/join" \
-  -H "Content-Type: application/json" \
-  -H "X-Agent-ID: $AGENT_ID" \
-  -H "X-API-Secret: $API_SECRET" \
-  -d '{}' | jq .
-```
-
-Expected: HTTP 200 confirming the agent joined.
-
-## 9. List Groups
-
-```bash
-curl -s "$BASE_URL/v1/groups" \
-  -H "Authorization: Bearer $TOKEN" | jq .
-```
-
-## 10. Send a Message (via NATS)
-
-Messages are typically sent through NATS JetStream.
-
-## 11. Test WebSocket Connectivity
-
-Using `curl` (HTTP upgrade):
-
-```bash
-curl -s -N \
-  -H "Connection: Upgrade" \
-  -H "Upgrade: websocket" \
-  -H "Sec-WebSocket-Version: 13" \
-  -H "Sec-WebSocket-Key: $(openssl rand -base64 16)" \
-  "$BASE_URL/v1/ws/connect?token=$TOKEN"
-```
-
-Using `websocat` (if installed):
-
-```bash
-websocat "ws://localhost:8080/v1/ws/connect?token=$TOKEN"
-```
-
-Expected: Connection established. Messages will appear as JSON frames when agents send messages.
-
-## 12. List Adapters
-
-```bash
-curl -s "$BASE_URL/v1/adapter" \
-  -H "Authorization: Bearer $TOKEN" | jq .
-```
-
-Expected: List of registered protocol adapters (MCP, A2A, gRPC).
-
-## 13. Rotate Agent Secret
-
-```bash
-ROTATE_RESPONSE=$(curl -s -X POST "$BASE_URL/v1/agents/$AGENT_ID/rotate-secret" \
-  -H "Authorization: Bearer $TOKEN")
-
-echo "$ROTATE_RESPONSE" | jq .
-
-NEW_SECRET=$(echo "$ROTATE_RESPONSE" | jq -r '.api_secret')
-echo "New API Secret: $NEW_SECRET"
-```
-
-After rotation, the old `API_SECRET` is invalidated. Update your variable:
-
-```bash
-API_SECRET="$NEW_SECRET"
-```
-
-## 14. Leave the Group
+## 7. Leave the Group
 
 ```bash
 curl -s -X POST "$BASE_URL/v1/groups/$GROUP_ID/leave" \
   -H "Content-Type: application/json" \
   -H "X-Agent-ID: $AGENT_ID" \
   -H "X-API-Secret: $API_SECRET" \
-  -d '{}' | jq .
+  -d '{
+    "participant_id": "'"$AGENT_ID"'",
+    "participant_kind": "agent"
+  }' | jq .
 ```
 
-## 15. Delete the Agent
+Expected: HTTP 200 confirming the agent left.
+
+## 8. Delete the Agent
 
 ```bash
 curl -s -X DELETE "$BASE_URL/v1/agents/$AGENT_ID" \

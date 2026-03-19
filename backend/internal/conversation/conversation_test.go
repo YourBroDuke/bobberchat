@@ -65,25 +65,6 @@ func TestConversationMethods_InvalidInput(t *testing.T) {
 			}(),
 		},
 		{
-			name: "ListGroups nil db",
-			err: func() error {
-				_, err := (&Service{}).ListGroups(context.Background())
-				return err
-			}(),
-		},
-		{
-			name: "JoinGroup empty groupID",
-			err:  (&Service{}).JoinGroup(context.Background(), "", "participant", persistence.ParticipantTypeUser),
-		},
-		{
-			name: "JoinGroup empty participantID",
-			err:  (&Service{}).JoinGroup(context.Background(), "group", "", persistence.ParticipantTypeUser),
-		},
-		{
-			name: "JoinGroup empty kind",
-			err:  (&Service{}).JoinGroup(context.Background(), "group", "participant", ""),
-		},
-		{
 			name: "LeaveGroup empty groupID",
 			err:  (&Service{}).LeaveGroup(context.Background(), "", "participant", persistence.ParticipantTypeUser),
 		},

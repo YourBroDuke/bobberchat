@@ -255,20 +255,17 @@ func (a *app) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/auth/me", a.requireJWT(a.handleWhoAmI))
 
 	mux.HandleFunc("POST /v1/agents", a.requireJWT(a.handleCreateAgent))
-	mux.HandleFunc("GET /v1/agents/{id}", a.requireAuth(true, true, a.handleGetAgent))
 	mux.HandleFunc("DELETE /v1/agents/{id}", a.requireJWT(a.handleDeleteAgent))
 	mux.HandleFunc("POST /v1/agents/{id}/rotate-secret", a.requireJWT(a.handleRotateSecret))
 
 	mux.HandleFunc("GET /v1/info/{id}", a.requireAuth(true, true, a.handleEntityInfo))
 
 	mux.HandleFunc("POST /v1/registry/discover", a.requireAuth(true, true, a.handleDiscover))
-	mux.HandleFunc("GET /v1/registry/agents", a.requireJWT(a.handleListAgents))
 
 	mux.HandleFunc("GET /v1/conversations", a.requireJWT(a.handleListConversations))
 
 	mux.HandleFunc("POST /v1/groups", a.requireJWT(a.handleCreateGroup))
-	mux.HandleFunc("GET /v1/groups", a.requireJWT(a.handleListGroups))
-	mux.HandleFunc("POST /v1/groups/{id}/join", a.requireAuth(true, true, a.handleJoinGroup))
+
 	mux.HandleFunc("POST /v1/groups/{id}/leave", a.requireAuth(true, true, a.handleLeaveGroup))
 
 	mux.HandleFunc("GET /v1/messages/poll", a.requireJWT(a.handlePollMessages))
@@ -621,15 +618,6 @@ func (a *app) handleDiscover(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"agents": agents})
 }
 
-func (a *app) handleListAgents(w http.ResponseWriter, r *http.Request) {
-	agents, err := a.registrySvc.ListAgents(r.Context())
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"agents": agents})
-}
-
 func (a *app) handleListConversations(w http.ResponseWriter, r *http.Request) {
 	userID, err := uuid.Parse(contextString(r.Context(), ctxUserID))
 	if err != nil {
@@ -674,42 +662,6 @@ func (a *app) handleCreateGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, group)
-}
-
-func (a *app) handleListGroups(w http.ResponseWriter, r *http.Request) {
-	groups, err := a.convSvc.ListGroups(r.Context())
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"groups": groups})
-}
-
-func (a *app) handleJoinGroup(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	var req struct {
-		ParticipantID   string `json:"participant_id"`
-		ParticipantKind string `json:"participant_kind"`
-	}
-	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	if req.ParticipantID == "" {
-		if contextString(r.Context(), ctxAgentID) != "" {
-			req.ParticipantID = contextString(r.Context(), ctxAgentID)
-			req.ParticipantKind = string(persistence.ParticipantTypeAgent)
-		} else {
-			req.ParticipantID = contextString(r.Context(), ctxUserID)
-			req.ParticipantKind = string(persistence.ParticipantTypeUser)
-		}
-	}
-
-	if err := a.convSvc.JoinGroup(r.Context(), id, req.ParticipantID, persistence.ParticipantType(req.ParticipantKind)); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"group_id": id, "joined": true})
 }
 
 func (a *app) handleLeaveGroup(w http.ResponseWriter, r *http.Request) {

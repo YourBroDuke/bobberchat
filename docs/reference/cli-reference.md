@@ -175,7 +175,7 @@ bobber agent create [--name <name>]
 
 ##### `bobber agent use`
 
-Use an agent as the current identity. Fetches agent info from the backend, rotates the API secret, and saves both `agent_id` and `api_secret` to local config.
+Use an agent as the current identity. Rotates the API secret and saves both `agent_id` and `api_secret` to local config.
 
 ```bash
 bobber agent use <agent_id>
@@ -187,7 +187,7 @@ bobber agent use <agent_id>
 
 Requires a valid JWT token (via `bobber account login`).
 
-**Response** (`GET /v1/agents/{id}` + `POST /v1/agents/{id}/rotate-secret`):
+**Response** (printed by CLI):
 ```json
 {
   "agent_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
@@ -289,12 +289,14 @@ bobber whoami
 
 Requires agent credentials (set via `bobber login`). Calls the backend to retrieve the agent profile.
 
-**Response** (`GET /v1/agents/{id}` → `200`, authenticated with `X-Agent-ID` / `X-API-Secret` headers):
+**Response** (`GET /v1/info/{id}` → `200`):
 ```json
 {
+  "type": "agent",
   "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
   "display_name": "analyzer",
   "owner_user_id": "550e8400-e29b-41d4-a716-446655440000",
+  "conversation_id": "d4e5f6a7-b8c9-0123-def0-123456789abc",
   "created_at": "2026-03-17T12:00:00Z"
 }
 ```
@@ -818,7 +820,7 @@ Configuration is loaded from the YAML file and can be overridden with environmen
 
 - Connects to NATS JetStream and PostgreSQL on startup
 - Registers 3 protocol adapters: MCP, A2A, gRPC
-- Serves 32 REST + WebSocket endpoints on the configured address
+- Serves 28 REST + WebSocket endpoints on the configured address
 - Enforces ownership-based access control
 - Applies per-agent, per-group, per-tag rate limiting (when enabled)
 - Logs audit trail for every published message

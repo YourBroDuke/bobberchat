@@ -860,7 +860,7 @@ func TestAgentSubcommands(t *testing.T) {
 	t.Run("agent use: fetches info, rotates secret, saves agent_id and api_secret", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch {
-			case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/a1":
+			case r.Method == http.MethodGet && r.URL.Path == "/v1/info/a1":
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"id": "a1", "display_name": "test-agent",
 				})
@@ -924,7 +924,7 @@ func TestAgentSubcommands(t *testing.T) {
 	t.Run("agent use: rotate-secret fails", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch {
-			case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/a1":
+			case r.Method == http.MethodGet && r.URL.Path == "/v1/info/a1":
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"id": "a1", "display_name": "test-agent",
 				})
@@ -1057,9 +1057,9 @@ func TestLoginCommand(t *testing.T) {
 }
 
 func TestWhoamiCommand(t *testing.T) {
-	t.Run("Success: GET /v1/agents/{id} with agent secret headers", func(t *testing.T) {
+	t.Run("Success: GET /v1/info/{id} with agent secret headers", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet || r.URL.Path != "/v1/agents/agent-1" {
+			if r.Method != http.MethodGet || r.URL.Path != "/v1/info/agent-1" {
 				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 			}
 			if got := r.Header.Get("X-Agent-ID"); got != "agent-1" {

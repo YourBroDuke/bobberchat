@@ -219,7 +219,7 @@ func agentUseCmd(cfg *cliConfig) *cobra.Command {
 			}
 			agentID := args[0]
 
-			info, err := doJSON(http.MethodGet, cfg.backendURL()+"/v1/agents/"+agentID, cfg.token(), nil)
+			info, err := doJSON(http.MethodGet, cfg.backendURL()+"/v1/info/"+agentID, cfg.token(), nil)
 			if err != nil {
 				return fmt.Errorf("failed to get agent info: %w", err)
 			}
@@ -332,7 +332,7 @@ func whoamiCmd(cfg *cliConfig) *cobra.Command {
 			if aid == "" || sec == "" {
 				return errors.New("not logged in as agent (run bobber login --agent-id <ID> --secret <SECRET>)")
 			}
-			resp, err := doJSONAgent(http.MethodGet, cfg.backendURL()+"/v1/agents/"+aid, aid, sec, nil)
+			resp, err := doJSONAgent(http.MethodGet, cfg.backendURL()+"/v1/info/"+aid, aid, sec, nil)
 			if err != nil {
 				return err
 			}
