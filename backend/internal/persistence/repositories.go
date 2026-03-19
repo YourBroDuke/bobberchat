@@ -79,11 +79,6 @@ type BlacklistRepository interface {
 	ListByUser(ctx context.Context, userID uuid.UUID) ([]BlacklistEntry, error)
 }
 
-type AuditLogRepository interface {
-	Append(ctx context.Context, entry AuditLogEntry) (*AuditLogEntry, error)
-	QueryRecent(ctx context.Context, limit int) ([]AuditLogEntry, error)
-}
-
 type PostgresRepositories struct {
 	Agents                   AgentRepository
 	Users                    UserRepository
@@ -91,7 +86,6 @@ type PostgresRepositories struct {
 	ConversationParticipants ConversationParticipantRepository
 	Groups                   ChatGroupRepository
 	Messages                 MessageRepository
-	AuditLogs                AuditLogRepository
 	ConnectionRequests       ConnectionRequestRepository
 	Blacklist                BlacklistRepository
 }
@@ -104,7 +98,6 @@ func NewPostgresRepositories(db *DB) *PostgresRepositories {
 		ConversationParticipants: &pgConversationParticipantRepository{db: db},
 		Groups:                   &pgChatGroupRepository{db: db},
 		Messages:                 &pgMessageRepository{db: db},
-		AuditLogs:                &pgAuditLogRepository{db: db},
 		ConnectionRequests:       &pgConnectionRequestRepository{db: db},
 		Blacklist:                &pgBlacklistRepository{db: db},
 	}
@@ -739,61 +732,6 @@ func (r *pgMessageRepository) GetByConversation(ctx context.Context, conversatio
 	return messages, nil
 }
 
-type pgAuditLogRepository struct{ db *DB }
-
-func (r *pgAuditLogRepository) Append(ctx context.Context, entry AuditLogEntry) (*AuditLogEntry, error) {
-	if entry.CreatedAt.IsZero() {
-		entry.CreatedAt = time.Now().UTC()
-	}
-	details, err := json.Marshal(entry.Details)
-	if err != nil {
-		return nil, fmt.Errorf("marshal audit details: %w", err)
-	}
-
-	row := r.db.Pool().QueryRow(ctx, `
-		INSERT INTO audit_log (event_type, actor_id, agent_id, details, created_at)
-		VALUES ($1,$2,$3,$4,$5)
-		RETURNING id, event_type, actor_id, agent_id, details, created_at
-	`, entry.EventType, entry.ActorID, entry.AgentID, details, entry.CreatedAt)
-
-	out, err := scanAuditLogEntry(row)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (r *pgAuditLogRepository) QueryRecent(ctx context.Context, limit int) ([]AuditLogEntry, error) {
-	if limit <= 0 {
-		limit = 100
-	}
-
-	rows, err := r.db.Pool().Query(ctx, `
-		SELECT id, event_type, actor_id, agent_id, details, created_at
-		FROM audit_log
-		ORDER BY created_at DESC
-		LIMIT $1
-	`, limit)
-	if err != nil {
-		return nil, fmt.Errorf("query recent audit log: %w", err)
-	}
-	defer rows.Close()
-
-	entries := make([]AuditLogEntry, 0)
-	for rows.Next() {
-		entry, err := scanAuditLogEntry(rows)
-		if err != nil {
-			return nil, err
-		}
-		entries = append(entries, *entry)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate audit log entries: %w", err)
-	}
-
-	return entries, nil
-}
-
 type pgConnectionRequestRepository struct{ db *DB }
 
 func (r *pgConnectionRequestRepository) Create(ctx context.Context, req ConnectionRequest) (*ConnectionRequest, error) {
@@ -1047,32 +985,6 @@ func scanConversationParticipant(scanner rowScanner) (*ConversationParticipant, 
 	}
 
 	out.ParticipantKind = ParticipantType(participantKind)
-	return &out, nil
-}
-
-func scanAuditLogEntry(scanner rowScanner) (*AuditLogEntry, error) {
-	out := AuditLogEntry{}
-	var detailsRaw []byte
-	err := scanner.Scan(
-		&out.ID,
-		&out.EventType,
-		&out.ActorID,
-		&out.AgentID,
-		&detailsRaw,
-		&out.CreatedAt,
-	)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNotFound
-		}
-		return nil, fmt.Errorf("scan audit log entry: %w", err)
-	}
-	out.Details = map[string]any{}
-	if len(detailsRaw) > 0 {
-		if err := json.Unmarshal(detailsRaw, &out.Details); err != nil {
-			return nil, fmt.Errorf("unmarshal audit log details: %w", err)
-		}
-	}
 	return &out, nil
 }
 

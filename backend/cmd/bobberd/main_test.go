@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/bobberchat/bobberchat/backend/internal/observability"
-	"github.com/bobberchat/bobberchat/backend/internal/persistence"
 	"github.com/bobberchat/bobberchat/backend/internal/protocol"
 	"github.com/bobberchat/bobberchat/backend/internal/ratelimit"
 	"github.com/google/uuid"
@@ -27,27 +26,8 @@ func (f *fakeBroker) PublishMessage(_ context.Context, env *protocol.Envelope) e
 	return nil
 }
 
-type fakeAuditRepo struct {
-	entries []persistence.AuditLogEntry
-}
-
-func (f *fakeAuditRepo) Append(_ context.Context, entry persistence.AuditLogEntry) (*persistence.AuditLogEntry, error) {
-	entry.ID = int64(len(f.entries) + 1)
-	entry.CreatedAt = time.Now().UTC()
-	f.entries = append(f.entries, entry)
-	return &entry, nil
-}
-
-func (f *fakeAuditRepo) QueryRecent(_ context.Context, limit int) ([]persistence.AuditLogEntry, error) {
-	if limit > len(f.entries) {
-		limit = len(f.entries)
-	}
-	return f.entries[:limit], nil
-}
-
-func newTestApp(limiterCfg *ratelimit.Config) (*app, *fakeBroker, *fakeAuditRepo) {
+func newTestApp(limiterCfg *ratelimit.Config) (*app, *fakeBroker) {
 	fb := &fakeBroker{}
-	fa := &fakeAuditRepo{}
 
 	var lim *ratelimit.Limiter
 	if limiterCfg != nil {
@@ -59,11 +39,10 @@ func newTestApp(limiterCfg *ratelimit.Config) (*app, *fakeBroker, *fakeAuditRepo
 
 	a := &app{
 		limiter:   lim,
-		auditRepo: fa,
 		metrics:   metrics,
 		publisher: fb,
 	}
-	return a, fb, fa
+	return a, fb
 }
 
 func makeEnvelope(from, to, tag string) *protocol.Envelope {
@@ -87,7 +66,7 @@ func TestPublishAndAudit_RateLimited(t *testing.T) {
 		CleanupSecs: 60,
 		Enabled:     true,
 	}
-	a, _, _ := newTestApp(&cfg)
+	a, _ := newTestApp(&cfg)
 
 	env := makeEnvelope("agent1", "agent2", "chat.message")
 
@@ -110,7 +89,7 @@ func TestPublishAndAudit_RateLimitDisabled(t *testing.T) {
 		CleanupSecs: 60,
 		Enabled:     false,
 	}
-	a, _, _ := newTestApp(&cfg)
+	a, _ := newTestApp(&cfg)
 
 	for i := 0; i < 100; i++ {
 		env := makeEnvelope("agent1", "agent2", "chat.message")
@@ -130,7 +109,7 @@ func TestPublishAndAudit_GroupRateLimit(t *testing.T) {
 		CleanupSecs: 60,
 		Enabled:     true,
 	}
-	a, _, _ := newTestApp(&cfg)
+	a, _ := newTestApp(&cfg)
 
 	env := makeEnvelope("agent1", "group:g1", "chat.message")
 	err := a.publishAndAudit(context.Background(), env)
@@ -154,7 +133,7 @@ func TestPublishAndAudit_TagRateLimit(t *testing.T) {
 		CleanupSecs: 60,
 		Enabled:     true,
 	}
-	a, _, _ := newTestApp(&cfg)
+	a, _ := newTestApp(&cfg)
 
 	env := makeEnvelope("agent1", "agent2", "request.action")
 	err := a.publishAndAudit(context.Background(), env)
@@ -166,46 +145,5 @@ func TestPublishAndAudit_TagRateLimit(t *testing.T) {
 	err = a.publishAndAudit(context.Background(), env2)
 	if !errors.Is(err, errRateLimited) {
 		t.Fatalf("second call should be rate-limited by tag, got %v", err)
-	}
-}
-
-func TestPublishAndAudit_AuditDetails(t *testing.T) {
-	a, _, fa := newTestApp(nil)
-
-	env := makeEnvelope("from-agent", "to-agent", "chat.message")
-
-	err := a.publishAndAudit(context.Background(), env)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if len(fa.entries) != 1 {
-		t.Fatalf("expected 1 audit entry, got %d", len(fa.entries))
-	}
-
-	entry := fa.entries[0]
-	if entry.Details["from"] != "from-agent" {
-		t.Fatalf("expected from=from-agent, got %v", entry.Details["from"])
-	}
-	if entry.Details["to"] != "to-agent" {
-		t.Fatalf("expected to=to-agent, got %v", entry.Details["to"])
-	}
-	if entry.Details["tag"] != "chat.message" {
-		t.Fatalf("expected tag=chat.message, got %v", entry.Details["tag"])
-	}
-}
-
-func TestPublishAndAudit_NoAuditRepo(t *testing.T) {
-	fb := &fakeBroker{}
-	a := &app{
-		auditRepo: nil,
-		limiter:   nil,
-		publisher: fb,
-	}
-
-	env := makeEnvelope("agent1", "agent2", "chat.message")
-	err := a.publishAndAudit(context.Background(), env)
-	if err != nil {
-		t.Fatalf("should succeed without audit repo: %v", err)
 	}
 }

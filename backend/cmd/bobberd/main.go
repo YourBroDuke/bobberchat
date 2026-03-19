@@ -95,7 +95,6 @@ type app struct {
 	metricsReg   *prometheus.Registry
 	metrics      *observability.Metrics
 	limiter      *ratelimit.Limiter
-	auditRepo    persistence.AuditLogRepository
 	wsUpgrader   websocket.Upgrader
 	heartbeatTTL time.Duration
 	activeConns  sync.WaitGroup
@@ -136,8 +135,6 @@ func main() {
 		"grpc": grpcadapter.NewGRPCAdapter(),
 	}
 
-	repos := persistence.NewPostgresRepositories(db)
-
 	var emailSender email.Sender
 	switch cfg.Email.Provider {
 	case "azure":
@@ -166,7 +163,6 @@ func main() {
 		metricsReg:  metricsReg,
 		metrics:     metrics,
 		limiter:     ratelimit.New(rlCfg),
-		auditRepo:   repos.AuditLogs,
 		wsUpgrader: websocket.Upgrader{
 			ReadBufferSize:  4096,
 			WriteBufferSize: 4096,
@@ -1213,26 +1209,6 @@ func (a *app) publishAndAudit(ctx context.Context, env *protocol.Envelope) error
 
 	if err := a.publisher.PublishMessage(ctx, env); err != nil {
 		return err
-	}
-
-	if a.auditRepo != nil {
-		fromID, _ := uuid.Parse(env.From)
-		toID, _ := uuid.Parse(env.To)
-		entry := persistence.AuditLogEntry{
-			EventType: "message.published",
-			AgentID:   &fromID,
-			Details: map[string]any{
-				"message_id":  env.ID,
-				"from":        env.From,
-				"to":          env.To,
-				"tag":         protocol.EffectiveTag(env),
-				"receiver_id": toID.String(),
-			},
-		}
-		_, _ = a.auditRepo.Append(ctx, entry)
-		if a.metrics != nil {
-			a.metrics.AuditLogged.Inc()
-		}
 	}
 
 	return nil

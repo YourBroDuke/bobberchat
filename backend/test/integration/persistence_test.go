@@ -33,7 +33,7 @@ func setupDB(t *testing.T) (*persistence.DB, func()) {
 
 	// Drop existing schema before re-applying migration (handles pre-populated databases)
 	_, _ = db.Pool().Exec(ctx, `
-		DROP TABLE IF EXISTS blacklist_entries, connection_requests, audit_log, messages_default, messages, chat_group_members, chat_groups, agents, users CASCADE;
+		DROP TABLE IF EXISTS blacklist_entries, connection_requests, messages_default, messages, chat_group_members, chat_groups, agents, users CASCADE;
 		DROP TYPE IF EXISTS connection_request_status, participant_type, group_visibility CASCADE;
 	`)
 
@@ -60,7 +60,7 @@ func setupDB(t *testing.T) (*persistence.DB, func()) {
 	cleanup := func() {
 		cleanupCtx := context.Background()
 		_, _ = db.Pool().Exec(cleanupCtx, `
-		DROP TABLE IF EXISTS blacklist_entries, connection_requests, audit_log, messages_default, messages, chat_group_members, chat_groups, agents, users CASCADE;
+		DROP TABLE IF EXISTS blacklist_entries, connection_requests, messages_default, messages, chat_group_members, chat_groups, agents, users CASCADE;
 		DROP TYPE IF EXISTS connection_request_status, participant_type, group_visibility CASCADE;
 	`)
 		db.Close()

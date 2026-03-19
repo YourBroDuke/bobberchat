@@ -173,15 +173,6 @@ CREATE TABLE messages (
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   "timestamp" TIMESTAMPTZ NOT NULL
 );
-
-CREATE TABLE audit_log (
-  id BIGSERIAL PRIMARY KEY,
-  event_type TEXT NOT NULL,
-  actor_id UUID,
-  agent_id UUID,
-  details JSONB NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
 ```
 
 ### 3.3 Partitioning strategy (`messages`)
@@ -203,9 +194,6 @@ FOR VALUES FROM ('2026-03-01T00:00:00Z') TO ('2026-04-01T00:00:00Z');
 CREATE INDEX idx_agents_owner ON agents (owner_user_id);
 
 CREATE INDEX idx_messages_conv_tag_time ON messages (conversation_id, tag, "timestamp" DESC);
-
-CREATE INDEX idx_audit_time ON audit_log (created_at DESC);
-CREATE INDEX idx_audit_event_type ON audit_log (event_type, created_at DESC);
 ```
 
 ## 4. NATS JetStream Subject & Stream Design

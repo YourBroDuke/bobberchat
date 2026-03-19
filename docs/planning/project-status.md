@@ -113,15 +113,14 @@ Server endpoints for adapters:
 |----------------|-------|-------------|
 | `backend/internal/ratelimit/ratelimit.go` | ~160 | Token bucket rate limiter with per-agent, per-group, per-tag dimensions. Configurable rates, burst factor, auto-cleanup |
 | `backend/internal/ratelimit/ratelimit_test.go` | ~230 | 10 tests: basic limit, burst, refill, agent/group/tag scoping, concurrent, cleanup, disabled |
-| `backend/cmd/bobberd/main.go` (additions) | ~140 | `publishAndAudit` method: ownership-based access control (§11.3), rate limiting (§11.2.3), audit trail (§11.4). Enhanced graceful shutdown with `activeConns` drain-wait |
-| `backend/cmd/bobberd/main_test.go` | ~230 | 8 tests: cross-owner denial, rate limiting (agent/group/tag), audit details, disabled limiter, no-audit-repo, empty caller owner |
-| `backend/internal/observability/observability.go` (additions) | ~20 | `RateLimited` counter vec, `AuditLogged` counter, `ActiveWSConns` gauge |
+| `backend/cmd/bobberd/main.go` (additions) | ~140 | `publishAndAudit` method: ownership-based access control (§11.3), rate limiting (§11.2.3). Enhanced graceful shutdown with `activeConns` drain-wait |
+| `backend/cmd/bobberd/main_test.go` | ~230 | 8 tests: cross-owner denial, rate limiting (agent/group/tag), disabled limiter, empty caller owner |
+| `backend/internal/observability/observability.go` (additions) | ~20 | `RateLimited` counter vec, `ActiveWSConns` gauge |
 | `configs/backend.yaml` (additions) | ~10 | `rate_limits` config section with per-agent/group/tag rates and burst factor |
 
 Key implementation details:
 - **Ownership-based access control**: `publishAndAudit` verifies message sender ownership and group membership (returns 403 on violation)
 - **Rate limiting**: Token bucket per-agent, per-group, per-tag. Configurable via `configs/backend.yaml`. Returns 429 when exceeded
-- **Audit trail**: Every published message is logged to `audit_log` table via `AuditLogRepository.Append`
 - **Graceful shutdown**: `activeConns sync.WaitGroup` tracks live WebSocket connections; shutdown drains with timeout
 - **All 3 publish call sites** (`handleReplayMessage`, `handleAdapterIngest`, `handleWebSocket`) route through `publishAndAudit`
 
@@ -185,7 +184,6 @@ Key implementation details:
 
 - [x] Rate limiting middleware (design spec §11.2) — Token bucket per-agent/group/tag in `backend/internal/ratelimit/`
 - [x] Ownership-based access control (design spec §11.3) — `publishAndAudit` verifies message sender ownership
-- [x] Audit trail logging to `audit_log` table (design spec §11.4) — via `AuditLogRepository.Append`
 - [x] Graceful shutdown with drain (design spec §12.5) — `activeConns` WaitGroup with timeout
 - [x] WebSocket ping/pong keepalive — already existed in `handleWebSocket`
 - [x] Agent heartbeat timeout detection — already existed (`missedPongs` counter, `heartbeatTTL`)
@@ -272,7 +270,7 @@ Backend config: `configs/backend.yaml`
 ### Database
 
 - PostgreSQL 15+
-- 7 tables: `users`, `agents`, `chat_groups`, `conversations`, `conversation_participants`, `messages`, `audit_log`
+- 6 tables: `users`, `agents`, `chat_groups`, `conversations`, `conversation_participants`, `messages`
 - 2 enum types: `participant_type`, `conversation_type`
 - `conversations` table unifies DMs and groups; DMs identified by canonical `(id_low, id_high)` pair (generic UUIDs, no FK constraint)
 - `conversation_participants` replaces `chat_group_members` and handles both DM and group membership with `muted`, `last_read_message_id` fields

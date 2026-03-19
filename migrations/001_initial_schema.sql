@@ -96,15 +96,6 @@ CREATE TABLE IF NOT EXISTS approval_requests (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS audit_log (
-  id BIGSERIAL PRIMARY KEY,
-  event_type TEXT NOT NULL,
-  actor_id UUID,
-  agent_id UUID,
-  details JSONB NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 CREATE INDEX IF NOT EXISTS idx_agents_owner ON agents (owner_user_id);
 CREATE INDEX IF NOT EXISTS idx_agents_capabilities_gin ON agents USING GIN (capabilities jsonb_path_ops);
 
@@ -116,6 +107,3 @@ CREATE INDEX IF NOT EXISTS idx_messages_to_tag_time ON messages (to_id, tag, "ti
 
 CREATE INDEX IF NOT EXISTS idx_approvals_pending ON approval_requests (status, urgency, created_at)
 WHERE status = 'PENDING';
-
-CREATE INDEX IF NOT EXISTS idx_audit_time ON audit_log (created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_audit_event_type ON audit_log (event_type, created_at DESC);

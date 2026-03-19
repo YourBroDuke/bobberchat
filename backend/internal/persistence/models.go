@@ -76,15 +76,6 @@ type Message struct {
 	Timestamp      time.Time      `json:"timestamp"`
 }
 
-type AuditLogEntry struct {
-	ID        int64          `json:"id"`
-	EventType string         `json:"event_type"`
-	ActorID   *uuid.UUID     `json:"actor_id,omitempty"`
-	AgentID   *uuid.UUID     `json:"agent_id,omitempty"`
-	Details   map[string]any `json:"details,omitempty"`
-	CreatedAt time.Time      `json:"created_at"`
-}
-
 type ConnectionRequestStatus string
 
 const (

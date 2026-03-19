@@ -14,7 +14,6 @@ type Metrics struct {
 	AgentsOnline    prometheus.Gauge
 	ErrorsCount     *prometheus.CounterVec
 	RateLimited     *prometheus.CounterVec
-	AuditLogged     prometheus.Counter
 	ActiveWSConns   prometheus.Gauge
 }
 
@@ -55,12 +54,6 @@ func NewMetrics(registry *prometheus.Registry) *Metrics {
 			},
 			[]string{"dimension", "key"},
 		),
-		AuditLogged: prometheus.NewCounter(
-			prometheus.CounterOpts{
-				Name: "bobberchat_audit_logged_total",
-				Help: "Total audit log entries written",
-			},
-		),
 		ActiveWSConns: prometheus.NewGauge(
 			prometheus.GaugeOpts{
 				Name: "bobberchat_active_ws_connections",
@@ -76,7 +69,6 @@ func NewMetrics(registry *prometheus.Registry) *Metrics {
 			m.AgentsOnline,
 			m.ErrorsCount,
 			m.RateLimited,
-			m.AuditLogged,
 			m.ActiveWSConns,
 		)
 	}
