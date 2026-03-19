@@ -1,6 +1,6 @@
 # BobberChat Project Status & Continuation Guide
 
-> Last updated: 2026-03-18
+> Last updated: 2026-03-19
 > Branch: `master`
 > Repo: `https://github.com/YourBroDuke/bobberchat.git`
 
@@ -270,14 +270,14 @@ Backend config: `configs/backend.yaml`
 
 Subject pattern: `bobberchat.msg.{to_id}` for direct messages, `bobberchat.group.{group_id}` for groups
 
-### REST API Endpoints (33 total)
+### REST API Endpoints (32 total)
 
 ```
 Auth:       POST /v1/auth/register, /v1/auth/login, /v1/auth/verify-email, /v1/auth/resend-verification, GET /v1/auth/me
 Agents:     POST /v1/agents, GET/DELETE /v1/agents/:id, POST /v1/agents/:id/rotate-secret
 Registry:   GET /v1/registry/agents, POST /v1/registry/discover
 Groups:     POST/GET /v1/groups, POST /v1/groups/:id/join, /v1/groups/:id/leave
-Messages:   GET /v1/messages, GET /v1/messages/poll, POST /v1/messages/:id/replay
+Messages:   GET /v1/messages/poll, POST /v1/messages/:id/replay
 Connections: POST /v1/connections/request, GET /v1/connections/inbox, POST /v1/connections/:id/accept, POST /v1/connections/:id/reject
 Blacklist:  POST /v1/blacklist, DELETE /v1/blacklist/:id
 Approvals:  GET /v1/approvals/pending, POST /v1/approvals/:id/decide
@@ -286,7 +286,7 @@ WebSocket:  GET /v1/ws/connect
 System:     GET /v1/health, /v1/metrics
 ```
 
-### Wire Envelope (8 fields)
+### Wire Envelope (7 fields)
 
 ```json
 {
@@ -296,8 +296,7 @@ System:     GET /v1/health, /v1/metrics
   "tag": "request.action",
   "payload": {},
   "metadata": {},
-  "timestamp": "RFC3339",
-  "trace_id": "uuid"
+  "timestamp": "RFC3339"
 }
 ```
 

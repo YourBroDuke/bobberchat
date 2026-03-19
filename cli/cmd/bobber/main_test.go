@@ -1517,13 +1517,9 @@ func TestSendCommand(t *testing.T) {
 		select {
 		case env := <-received:
 			id, _ := env["id"].(string)
-			trace, _ := env["trace_id"].(string)
 			ts, _ := env["timestamp"].(string)
 			if _, err := uuid.Parse(id); err != nil {
 				t.Fatalf("invalid id uuid: %q (%v)", id, err)
-			}
-			if _, err := uuid.Parse(trace); err != nil {
-				t.Fatalf("invalid trace_id uuid: %q (%v)", trace, err)
 			}
 			if _, err := time.Parse(time.RFC3339, ts); err != nil {
 				t.Fatalf("invalid timestamp: %q (%v)", ts, err)

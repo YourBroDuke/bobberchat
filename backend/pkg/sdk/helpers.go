@@ -12,8 +12,6 @@ func NewMessage(from, to, tag string, payload map[string]any) Message {
 		payload = map[string]any{}
 	}
 
-	traceID := uuid.NewString()
-
 	return Message{
 		ID:        uuid.NewString(),
 		From:      from,
@@ -22,7 +20,6 @@ func NewMessage(from, to, tag string, payload map[string]any) Message {
 		Payload:   payload,
 		Metadata:  map[string]any{"protocol_version": "1.0.0"},
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
-		TraceID:   traceID,
 	}
 }
 

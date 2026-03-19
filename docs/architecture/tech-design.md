@@ -176,8 +176,7 @@ CREATE TABLE messages (
   tag TEXT NOT NULL,
   payload JSONB NOT NULL,
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-  "timestamp" TIMESTAMPTZ NOT NULL,
-  trace_id UUID NOT NULL
+  "timestamp" TIMESTAMPTZ NOT NULL
 );
 
 CREATE TABLE approval_requests (
@@ -220,7 +219,6 @@ FOR VALUES FROM ('2026-03-01T00:00:00Z') TO ('2026-04-01T00:00:00Z');
 ```sql
 CREATE INDEX idx_agents_owner ON agents (owner_user_id);
 
-CREATE INDEX idx_messages_trace ON messages (trace_id, "timestamp" DESC);
 CREATE INDEX idx_messages_conv_tag_time ON messages (conversation_id, tag, "timestamp" DESC);
 
 CREATE INDEX idx_approvals_pending ON approval_requests (status, created_at)
@@ -317,8 +315,7 @@ Authentication model:
 
 | Method | Path | Auth | Request JSON | Response JSON | Status codes |
 |---|---|---|---|---|---|
-| GET | `/v1/messages?trace_id={uuid}` | JWT | n/a | `{ "messages": [{ "id": "uuid", "from": "agent.a", "conversation_id": "uuid", "tag": "request.data", "payload": {}, "metadata": {}, "timestamp": "...", "trace_id": "uuid" }], "total": 14 }` | 200, 400, 401 |
-| POST | `/v1/messages/{id}/replay` | JWT | `{ "reason": "debug-replay" }` | `{ "replayed": true, "new_message_id": "uuid", "original_message_id": "uuid", "trace_id": "uuid" }` | 202, 401, 403, 404 |
+| POST | `/v1/messages/{id}/replay` | JWT | `{ "reason": "debug-replay" }` | `{ "replayed": true, "new_message_id": "uuid", "original_message_id": "uuid" }` | 202, 401, 403, 404 |
 
 #### 5.1.7 Approvals
 
@@ -355,8 +352,7 @@ Message frame format (JSON envelope from Design Spec §3.1):
     "context-budget": 8192,
     "timeout_ms": 30000
   },
-  "timestamp": "2026-03-13T12:30:45Z",
-  "trace_id": "9db6c4a1-8e1f-4c4e-a87b-b9fe1d1f65df"
+  "timestamp": "2026-03-13T12:30:45Z"
 }
 ```
 
@@ -400,7 +396,6 @@ type Message struct {
     Payload   map[string]any
     Metadata  map[string]any
     Timestamp string
-    TraceID   string
 }
 
 type DiscoveryQuery struct {
@@ -586,7 +581,6 @@ Aligned with Design Spec §10.
 
 ### 11.1 OpenTelemetry trace propagation through NATS
 
-- Every inbound/outbound message carries `trace_id` from envelope.
 - Broker creates spans named `agent:{agent_id}:{tag}` (Design Spec §10.1).
 - Propagate trace context via message headers and envelope metadata.
 
@@ -604,7 +598,7 @@ Aligned with Design Spec §10.
 
 JSON logs using zerolog with required fields:
 - `level`, `time`, `msg`
-- `trace_id`, `tag`
+- `tag`
 - `agent_id` and/or `user_id`
 - `group_id` (when present)
 - `component` (`broker`, `registry`, `approval`, etc.)
@@ -616,7 +610,6 @@ Example log event:
   "level": "info",
   "time": "2026-03-13T12:35:03Z",
   "component": "broker",
-  "trace_id": "5cd4df56-d4d9-4c62-a893-c9ec9a352737",
   "tag": "response.success",
   "agent_id": "agent.search",
   "msg": "message delivered"

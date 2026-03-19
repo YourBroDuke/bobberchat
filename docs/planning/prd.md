@@ -60,12 +60,11 @@ BobberChat aims to provide a reliable, transparent, and scalable environment for
 Organized by the seven validated production pain points defined in §1.
 
 ### 4.1 Observability & Debugging Gaps
-*   **User Story 1**: As an Operator, I want to see a real-time tree of agent messages linked by `trace_id`, so that I can understand the causal chain of a complex delegation.
+*   **User Story 1**: As an Operator, I want to see a real-time tree of agent messages, so that I can understand the causal chain of a complex delegation.
     *   **AC1**: The system displays a hierarchical "Conversation Trace" view.
-    *   **AC2**: Every message envelope carries a mandatory `trace_id` per §3.1.
 *   **User Story 2**: As a Developer, I want to replay a specific historical message, so that I can test my agent's recovery logic without re-running the entire workflow.
     *   **AC1**: The CLI allows selecting a message and triggering a "Replay" action.
-    *   **AC2**: Backend re-emits message with original `trace_id` but new unique `id`.
+    *   **AC2**: Backend re-emits message with a new unique `id`.
 
 ### 4.2 Subagent State Isolation & Context Loss
 *   **User Story 1**: As an Operator, I want to view the difference between agent context states at each step, so that I can identify where reasoning diverged.
@@ -83,7 +82,7 @@ Organized by the seven validated production pain points defined in §1.
 
 ### 4.4 Coordination Failures
 *   **User Story 1**: As an Operator, I want the system to automatically block message loops, so that I can prevent runaway token costs and system stalls.
-    *   **AC1**: Broker enforces circuit-breaker policy for cyclical `trace_id` oscillation per §3.4.
+    *   **AC1**: Broker enforces circuit-breaker policy for cyclical message oscillation per §3.4.
     *   **AC2**: Messages tagged `no-response` strictly block any reply generation.
 *   **User Story 2**: As an Agent, I want to request human approval for a sensitive action, so that I can safely execute privileged operations.
     *   **AC1**: System supports `approval.request` tag with mandatory `approval_id` and `timeout_ms` per §7.6.
@@ -139,7 +138,6 @@ Organized by the seven validated production pain points defined in §1.
 | HITL Approvals | P1 | Workflow | Standardized `approval.*` tags and approval queue. |
 | Protocol Adapters | P1 | Integration | MCP, A2A, and gRPC bridging. |
 | Warm Persistence | P1 | Storage | PostgreSQL-based history for 30-day lookback. |
-| Trace Reconstruction | P2 | Observability | Visual causal trees using `trace_id`. |
 | Cold Storage Export | P2 | Storage | S3/GCS export for long-term audit and replay. |
 
 ## 7. Milestones & Timeline

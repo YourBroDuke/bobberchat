@@ -22,7 +22,6 @@ type Message struct {
 	Payload   map[string]any `json:"payload"`
 	Metadata  map[string]any `json:"metadata,omitempty"`
 	Timestamp string         `json:"timestamp"`
-	TraceID   string         `json:"trace_id"`
 }
 
 type DiscoveryQuery struct {

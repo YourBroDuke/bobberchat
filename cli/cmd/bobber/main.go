@@ -491,7 +491,6 @@ func sendCmd(cfg *cliConfig) *cobra.Command {
 				"payload":   map[string]any{"content": content},
 				"metadata":  map[string]any{},
 				"timestamp": time.Now().UTC().Format(time.RFC3339),
-				"trace_id":  uuidString(),
 			}
 			if err := conn.WriteJSON(env); err != nil {
 				return err

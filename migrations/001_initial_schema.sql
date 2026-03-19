@@ -80,7 +80,6 @@ CREATE TABLE IF NOT EXISTS messages (
   payload JSONB NOT NULL,
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   "timestamp" TIMESTAMPTZ NOT NULL,
-  trace_id UUID NOT NULL,
   topic_id UUID REFERENCES topics(id) ON DELETE SET NULL
 );
 
@@ -112,7 +111,6 @@ CREATE INDEX IF NOT EXISTS idx_agents_capabilities_gin ON agents USING GIN (capa
 CREATE INDEX IF NOT EXISTS idx_topics_group_status ON topics (group_id, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_topics_parent ON topics (parent_topic_id);
 
-CREATE INDEX IF NOT EXISTS idx_messages_trace ON messages (trace_id, "timestamp" DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_topic_time ON messages (topic_id, "timestamp" DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_to_tag_time ON messages (to_id, tag, "timestamp" DESC);
 

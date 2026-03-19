@@ -93,8 +93,6 @@ check "POST /v1/groups/{id}/leave" "200" "POST" "/v1/groups/$GROUP_ID/leave" "{}
 
 echo ""
 echo "▸ Messages"
-TRACE_ID=$(python3 -c "import uuid; print(uuid.uuid4())")
-check "GET /v1/messages?trace_id" "200" "GET" "/v1/messages?trace_id=$TRACE_ID" "" -H "Authorization: Bearer $TOKEN"
 
 echo ""
 echo "▸ Approvals"

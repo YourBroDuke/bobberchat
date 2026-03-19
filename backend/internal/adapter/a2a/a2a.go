@@ -97,7 +97,6 @@ func (a *A2AAdapter) Ingest(ctx context.Context, raw []byte, meta adapter.Transp
 		Payload:   map[string]any{},
 		Metadata:  map[string]any{},
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
-		TraceID:   uuid.NewString(),
 	}
 
 	switch msg.Method {

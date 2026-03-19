@@ -129,7 +129,6 @@ func (a *GRPCAdapter) Ingest(ctx context.Context, raw []byte, meta adapter.Trans
 		Payload:   map[string]any{},
 		Metadata:  map[string]any{},
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
-		TraceID:   uuid.NewString(),
 	}
 
 	msgType := strings.TrimSpace(msg.Type)

@@ -75,7 +75,6 @@ func makeEnvelope(from, to, tag string) *protocol.Envelope {
 		Payload:   map[string]any{"text": "hello"},
 		Metadata:  map[string]any{},
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
-		TraceID:   uuid.NewString(),
 	}
 }
 
@@ -174,7 +173,6 @@ func TestPublishAndAudit_AuditDetails(t *testing.T) {
 	a, _, fa := newTestApp(nil)
 
 	env := makeEnvelope("from-agent", "to-agent", "chat.message")
-	env.TraceID = "trace-123"
 
 	err := a.publishAndAudit(context.Background(), env)
 	if err != nil {
@@ -194,9 +192,6 @@ func TestPublishAndAudit_AuditDetails(t *testing.T) {
 	}
 	if entry.Details["tag"] != "chat.message" {
 		t.Fatalf("expected tag=chat.message, got %v", entry.Details["tag"])
-	}
-	if entry.Details["trace_id"] != "trace-123" {
-		t.Fatalf("expected trace_id=trace-123, got %v", entry.Details["trace_id"])
 	}
 }
 

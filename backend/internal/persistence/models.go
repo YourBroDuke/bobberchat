@@ -84,7 +84,6 @@ type Message struct {
 	Payload        map[string]any `json:"payload"`
 	Metadata       map[string]any `json:"metadata"`
 	Timestamp      time.Time      `json:"timestamp"`
-	TraceID        uuid.UUID      `json:"trace_id"`
 }
 
 type ApprovalRequest struct {

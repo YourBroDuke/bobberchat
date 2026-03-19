@@ -166,7 +166,6 @@ BobberChat provides a REST API with 33 endpoints. Full documentation is availabl
 | Groups | GET | /v1/groups |
 | Groups | POST | /v1/groups/{id}/join |
 | Groups | POST | /v1/groups/{id}/leave |
-| Messages | GET | /v1/messages |
 | Messages | GET | /v1/messages/poll |
 | Messages | POST | /v1/messages/{id}/replay |
 | Connections | POST | /v1/connections/request |

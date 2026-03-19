@@ -126,7 +126,6 @@ func (c *Client) Send(ctx context.Context, msg Message) error {
 		Payload:   msg.Payload,
 		Metadata:  msg.Metadata,
 		Timestamp: msg.Timestamp,
-		TraceID:   msg.TraceID,
 	}
 
 	if err := env.Validate(); err != nil {

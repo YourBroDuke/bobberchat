@@ -39,7 +39,6 @@ func (s *Service) SubmitRequest(ctx context.Context, req *persistence.ApprovalRe
 		Payload:   map[string]any{"approval_id": created.ApprovalID.String(), "action": created.Action, "justification": created.Justification},
 		Metadata:  map[string]any{"timeout_ms": created.TimeoutMS},
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
-		TraceID:   created.ApprovalID.String(),
 	}
 
 	if err := s.broker.PublishMessage(ctx, env); err != nil {
@@ -111,7 +110,6 @@ func (s *Service) Decide(ctx context.Context, approvalID string, decision persis
 		Payload:   map[string]any{"approval_id": approvalID, "decision": string(decision), "reason": reason},
 		Metadata:  map[string]any{},
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
-		TraceID:   approvalID,
 	}
 
 	return s.broker.PublishMessage(ctx, env)

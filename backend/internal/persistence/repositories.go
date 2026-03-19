@@ -61,7 +61,6 @@ type ChatGroupRepository interface {
 
 type MessageRepository interface {
 	Save(ctx context.Context, message Message) (*Message, error)
-	GetByTraceID(ctx context.Context, traceID uuid.UUID) ([]Message, error)
 	GetByID(ctx context.Context, messageID uuid.UUID) (*Message, error)
 	GetByConversation(ctx context.Context, conversationID uuid.UUID, limit int, sinceTS *time.Time, sinceID *uuid.UUID) ([]Message, error)
 }
@@ -684,10 +683,10 @@ func (r *pgMessageRepository) Save(ctx context.Context, message Message) (*Messa
 	defer tx.Rollback(ctx) //nolint:errcheck
 
 	row := tx.QueryRow(ctx, `
-		INSERT INTO messages (id, from_id, conversation_id, tag, payload, metadata, "timestamp", trace_id)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-		RETURNING id, from_id, conversation_id, tag, payload, metadata, "timestamp", trace_id
-	`, message.ID, message.FromID, message.ConversationID, message.Tag, payload, metadata, message.Timestamp, message.TraceID)
+		INSERT INTO messages (id, from_id, conversation_id, tag, payload, metadata, "timestamp")
+		VALUES ($1,$2,$3,$4,$5,$6,$7)
+		RETURNING id, from_id, conversation_id, tag, payload, metadata, "timestamp"
+	`, message.ID, message.FromID, message.ConversationID, message.Tag, payload, metadata, message.Timestamp)
 
 	out, err := scanMessage(row)
 	if err != nil {
@@ -710,35 +709,9 @@ func (r *pgMessageRepository) Save(ctx context.Context, message Message) (*Messa
 	return out, nil
 }
 
-func (r *pgMessageRepository) GetByTraceID(ctx context.Context, traceID uuid.UUID) ([]Message, error) {
-	rows, err := r.db.Pool().Query(ctx, `
-		SELECT id, from_id, conversation_id, tag, payload, metadata, "timestamp", trace_id
-		FROM messages
-		WHERE trace_id = $1
-		ORDER BY "timestamp" ASC
-	`, traceID)
-	if err != nil {
-		return nil, fmt.Errorf("get messages by trace id: %w", err)
-	}
-	defer rows.Close()
-
-	messages := make([]Message, 0)
-	for rows.Next() {
-		m, err := scanMessage(rows)
-		if err != nil {
-			return nil, err
-		}
-		messages = append(messages, *m)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate messages by trace id: %w", err)
-	}
-	return messages, nil
-}
-
 func (r *pgMessageRepository) GetByID(ctx context.Context, messageID uuid.UUID) (*Message, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, from_id, conversation_id, tag, payload, metadata, "timestamp", trace_id
+		SELECT id, from_id, conversation_id, tag, payload, metadata, "timestamp"
 		FROM messages
 		WHERE id = $1
 	`, messageID)
@@ -751,7 +724,7 @@ func (r *pgMessageRepository) GetByConversation(ctx context.Context, conversatio
 	}
 
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT id, from_id, conversation_id, tag, payload, metadata, "timestamp", trace_id
+		SELECT id, from_id, conversation_id, tag, payload, metadata, "timestamp"
 		FROM messages
 		WHERE conversation_id = $1
 			AND ($2::timestamptz IS NULL OR "timestamp" > $2)
@@ -1096,7 +1069,6 @@ func scanMessage(scanner rowScanner) (*Message, error) {
 		&payloadRaw,
 		&metadataRaw,
 		&out.Timestamp,
-		&out.TraceID,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

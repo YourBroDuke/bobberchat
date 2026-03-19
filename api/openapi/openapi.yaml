@@ -647,34 +647,6 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /v1/messages:
-    get:
-      tags:
-        - Messages
-      summary: Retrieve messages by trace ID
-      operationId: getMessagesByTrace
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: trace_id
-          in: query
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Messages retrieved
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  messages:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Message'
-
   /v1/messages/poll:
     get:
       tags:
@@ -948,9 +920,6 @@ paths:
                   original_message_id:
                     type: string
                     format: uuid
-                  trace_id:
-                    type: string
-                    format: uuid
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -1174,7 +1143,6 @@ components:
         - payload
         - metadata
         - timestamp
-        - trace_id
       properties:
         id:
           type: string
@@ -1194,9 +1162,6 @@ components:
         timestamp:
           type: string
           format: date-time
-        trace_id:
-          type: string
-          format: uuid
 
     ApprovalRequest:
       type: object
@@ -1303,7 +1268,6 @@ components:
         - payload
         - metadata
         - timestamp
-        - trace_id
       properties:
         id:
           type: string
@@ -1321,9 +1285,6 @@ components:
         timestamp:
           type: string
           format: date-time
-        trace_id:
-          type: string
-          format: uuid
 
   responses:
     BadRequest:

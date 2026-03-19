@@ -95,9 +95,6 @@ func (b *Broker) PublishMessage(ctx context.Context, env *protocol.Envelope) err
 
 	msg := &nats.Msg{Subject: subject, Data: data, Header: nats.Header{}}
 	msg.Header.Set("Nats-Msg-Id", env.ID)
-	if env.TraceID != "" {
-		msg.Header.Set("trace_id", env.TraceID)
-	}
 
 	start := time.Now()
 	_, err = b.js.PublishMsg(ctx, msg)

@@ -134,13 +134,7 @@ curl -s "$BASE_URL/v1/groups" \
 
 ## 10. Send a Message (via NATS)
 
-Messages are typically sent through NATS JetStream, but you can verify message retrieval:
-
-```bash
-# Query messages by trace ID (if you have one from WebSocket)
-curl -s "$BASE_URL/v1/messages?trace_id=<TRACE_ID>" \
-  -H "Authorization: Bearer $TOKEN" | jq .
-```
+Messages are typically sent through NATS JetStream.
 
 ## 11. Create an Approval Request
 

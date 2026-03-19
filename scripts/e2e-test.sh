@@ -210,10 +210,6 @@ LAST_BODY="$(<"$body_file")"
 rm -f "$body_file"
 assert_status "Adapter ingest empty body" 400 "$LAST_STATUS"
 
-print_step "24/29 Messages missing trace_id"
-request "GET" "/v1/messages" "" "$TOKEN"
-assert_status "Messages missing trace_id" 400 "$LAST_STATUS"
-
 print_step "25/29 Messages no auth"
 request "GET" "/v1/messages"
 assert_status "Messages no auth" 401 "$LAST_STATUS"

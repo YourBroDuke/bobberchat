@@ -278,7 +278,6 @@ func (a *app) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/groups/{id}/join", a.requireAuth(true, true, a.handleJoinGroup))
 	mux.HandleFunc("POST /v1/groups/{id}/leave", a.requireAuth(true, true, a.handleLeaveGroup))
 
-	mux.HandleFunc("GET /v1/messages", a.requireJWT(a.handleMessagesByTraceID))
 	mux.HandleFunc("GET /v1/messages/poll", a.requireJWT(a.handlePollMessages))
 	mux.HandleFunc("POST /v1/messages/{id}/replay", a.requireJWT(a.handleReplayMessage))
 
@@ -716,25 +715,6 @@ func (a *app) handleLeaveGroup(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"group_id": id, "left": true})
 }
 
-func (a *app) handleMessagesByTraceID(w http.ResponseWriter, r *http.Request) {
-	traceID := strings.TrimSpace(r.URL.Query().Get("trace_id"))
-	if traceID == "" {
-		writeError(w, http.StatusBadRequest, "trace_id is required")
-		return
-	}
-	tr, err := uuid.Parse(traceID)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid trace_id")
-		return
-	}
-	msgs, err := persistence.NewPostgresRepositories(a.db).Messages.GetByTraceID(r.Context(), tr)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"messages": msgs})
-}
-
 func (a *app) handlePollMessages(w http.ResponseWriter, r *http.Request) {
 	convRaw := strings.TrimSpace(r.URL.Query().Get("conversation_id"))
 	if convRaw == "" {
@@ -935,7 +915,7 @@ func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
 	var payloadRaw []byte
 	var metadataRaw []byte
 	err = a.db.Pool().QueryRow(r.Context(), `
-		SELECT id, from_id, conversation_id, tag, payload, metadata, "timestamp", trace_id
+		SELECT id, from_id, conversation_id, tag, payload, metadata, "timestamp"
 		FROM messages
 		WHERE id = $1
 	`, originalID).Scan(
@@ -946,7 +926,6 @@ func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
 		&payloadRaw,
 		&metadataRaw,
 		&original.Timestamp,
-		&original.TraceID,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -987,7 +966,6 @@ func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	newMessageID := uuid.NewString()
-	newTraceID := uuid.NewString()
 	env := &protocol.Envelope{
 		ID:        newMessageID,
 		From:      original.FromID.String(),
@@ -996,7 +974,6 @@ func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
 		Payload:   payload,
 		Metadata:  metadata,
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
-		TraceID:   newTraceID,
 	}
 
 	if err := a.publishAndAudit(r.Context(), env); err != nil {
@@ -1012,7 +989,6 @@ func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
 		"replayed":            true,
 		"new_message_id":      newMessageID,
 		"original_message_id": original.ID.String(),
-		"trace_id":            newTraceID,
 	})
 }
 
@@ -1102,7 +1078,6 @@ func (a *app) handleAdapterIngest(w http.ResponseWriter, r *http.Request) {
 		"adapter":    name,
 		"message_id": env.ID,
 		"tag":        env.Tag,
-		"trace_id":   env.TraceID,
 	})
 }
 
@@ -1192,9 +1167,6 @@ func (a *app) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			}
 			if env.ID == "" {
 				env.ID = uuid.NewString()
-			}
-			if env.TraceID == "" {
-				env.TraceID = uuid.NewString()
 			}
 			if env.Timestamp == "" {
 				env.Timestamp = time.Now().UTC().Format(time.RFC3339)
@@ -1304,7 +1276,6 @@ func (a *app) publishAndAudit(ctx context.Context, env *protocol.Envelope) error
 				"from":        env.From,
 				"to":          env.To,
 				"tag":         env.Tag,
-				"trace_id":    env.TraceID,
 				"receiver_id": toID.String(),
 			},
 		}

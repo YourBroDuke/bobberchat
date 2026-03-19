@@ -15,7 +15,6 @@ type Envelope struct {
 	Payload   map[string]any `json:"payload"`
 	Metadata  map[string]any `json:"metadata,omitempty"`
 	Timestamp string         `json:"timestamp"`
-	TraceID   string         `json:"trace_id"`
 }
 
 func (e *Envelope) Validate() error {
@@ -38,10 +37,6 @@ func (e *Envelope) Validate() error {
 	if strings.TrimSpace(e.Timestamp) == "" {
 		return errors.New("timestamp is required")
 	}
-	if strings.TrimSpace(e.TraceID) == "" {
-		return errors.New("trace_id is required")
-	}
-
 	if e.Payload == nil {
 		return errors.New("payload must not be nil")
 	}

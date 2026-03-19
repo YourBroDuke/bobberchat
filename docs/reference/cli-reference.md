@@ -514,8 +514,7 @@ bobber send <target_id> --tag <tag> --content <content>
       "content": "hello world"
     },
     "metadata": {},
-    "timestamp": "2026-03-17T12:00:00Z",
-    "trace_id": "a7b8c9d0-e1f2-3456-0123-456789abcdef"
+    "timestamp": "2026-03-17T12:00:00Z"
   }
 }
 ```
@@ -547,8 +546,7 @@ bobber poll <target_id> [--limit <n>] [--since_ts <ts>] [--since_id <id>]
       "tag": "request.action",
       "payload": { "content": "hello" },
       "metadata": {},
-      "timestamp": "2026-03-17T12:00:00Z",
-      "trace_id": "a7b8c9d0-e1f2-3456-0123-456789abcdef"
+      "timestamp": "2026-03-17T12:00:00Z"
     }
   ]
 }

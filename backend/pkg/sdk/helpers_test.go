@@ -36,7 +36,6 @@ func TestNewMessage(t *testing.T) {
 	}
 
 	assertValidUUID(t, msg.ID, "ID")
-	assertValidUUID(t, msg.TraceID, "TraceID")
 	assertRFC3339Timestamp(t, msg.Timestamp)
 }
 

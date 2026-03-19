@@ -226,8 +226,7 @@ Canonical envelope:
     "context-budget": 8192,
     "timeout_ms": 30000
   },
-  "timestamp": "2026-03-13T12:30:45Z",
-  "trace_id": "9db6c4a1-8e1f-4c4e-a87b-b9fe1d1f65df"
+  "timestamp": "2026-03-13T12:30:45Z"
 }
 ```
 
@@ -242,7 +241,6 @@ Field definitions:
 | `payload` | object | Yes | Tag-specific body validated by broker schema map. |
 | `metadata` | object | No | Transport and policy hints (`context-budget`, `timeout_ms`, adapter hints). |
 | `timestamp` | string (ISO8601 UTC) | Yes | Producer event time used for ordering and timeout windows. |
-| `trace_id` | string (UUID) | Yes | Distributed trace correlation across parent/child agent workflows. |
 
 Protocol requirements:
 - Envelope keys above are reserved and MUST NOT be overloaded by user payloads.
@@ -263,8 +261,7 @@ Protocol requirements:
     "limit": 20
   },
   "metadata": { "timeout_ms": 45000, "context-budget": 6000 },
-  "timestamp": "2026-03-13T12:35:00Z",
-  "trace_id": "5cd4df56-d4d9-4c62-a893-c9ec9a352737"
+  "timestamp": "2026-03-13T12:35:00Z"
 }
 ```
 
@@ -280,8 +277,7 @@ Protocol requirements:
     "result": [{ "cve": "CVE-2026-1042", "severity": "high" }]
   },
   "metadata": { "context-budget": 5000 },
-  "timestamp": "2026-03-13T12:35:03Z",
-  "trace_id": "5cd4df56-d4d9-4c62-a893-c9ec9a352737"
+  "timestamp": "2026-03-13T12:35:03Z"
 }
 ```
 
@@ -298,8 +294,7 @@ Protocol requirements:
     "eta_seconds": 140
   },
   "metadata": { "context-budget": 1200 },
-  "timestamp": "2026-03-13T12:36:10Z",
-  "trace_id": "7e9c8bc8-1de4-47ba-bfb8-f4b63db6112e"
+  "timestamp": "2026-03-13T12:36:10Z"
 }
 ```
 
@@ -315,8 +310,7 @@ Protocol requirements:
     "source": "investigation-notes"
   },
   "metadata": { "context-budget": 1800 },
-  "timestamp": "2026-03-13T12:37:22Z",
-  "trace_id": "fd95f5f0-9f30-40f1-95ee-91d695ec2dbf"
+  "timestamp": "2026-03-13T12:37:22Z"
 }
 ```
 
@@ -332,8 +326,7 @@ Protocol requirements:
     "note": "daily token usage summary attached"
   },
   "metadata": { "context-budget": 900 },
-  "timestamp": "2026-03-13T12:38:05Z",
-  "trace_id": "3f6b9d84-2cae-4c2c-9d8f-fde9984e9284"
+  "timestamp": "2026-03-13T12:38:05Z"
 }
 ```
 
@@ -382,7 +375,7 @@ BobberChat enforces loop prevention in the broker using a circuit-breaker policy
 
 1. Messages tagged `no-response` are terminal for reply generation. Any adapter, SDK helper, or auto-responder that attempts a direct response to a `no-response` parent MUST be blocked by the broker.
 2. Messages tagged `context-provide` are informational. Broker marks them `non_actionable=true`; routing allows fan-out display but disallows automatic request/response handlers.
-3. Broker tracks `trace_id + from + to + tag` repetition windows. If cyclical oscillation exceeds threshold (e.g., N exchanges in T seconds), broker opens a circuit: subsequent generated responses are dropped and an `error.recoverable` is emitted to participants.
+3. Broker tracks repeated `from + to + tag` windows. If cyclical oscillation exceeds threshold (e.g., N exchanges in T seconds), broker opens a circuit: subsequent generated responses are dropped and an `error.recoverable` is emitted to participants.
 4. Circuit resets only after cool-down or explicit operator override.
 
 This pattern directly targets feedback-loop storms and silent token-cost explosions observed in multi-agent systems.
@@ -913,7 +906,7 @@ All adapters implement a protocol-agnostic contract with three responsibilities:
 |---|---|
 | **Input** | External protocol message/event (e.g., JSON-RPC request, A2A message, gRPC unary/stream frame) plus transport metadata (connection ID, source endpoint, auth context). |
 | **Transform** | Normalize protocol operation to BobberChat intent, assign/resolve identity, map correlation IDs, convert payload to JSON object, and apply tag auto-mapping rules. |
-| **Output** | BobberChat canonical envelope: `{id, from, to, tag, payload, metadata, timestamp, trace_id}` with tag from §3 taxonomy. |
+| **Output** | BobberChat canonical envelope: `{id, from, to, tag, payload, metadata, timestamp}` with tag from §3 taxonomy. |
 | **Reverse Transform** | For outbound bridge paths, map BobberChat tag + payload back into target protocol shape while preserving correlation (`request_id`, call ID, task ID). |
 | **Validation** | Reject unmappable or schema-invalid inputs with `response.error`/`error.recoverable` and adapter-specific diagnostics in metadata. |
 
@@ -1033,16 +1026,15 @@ Operational requirements:
 ## § 9. Observability & Debugging
 
 **Problem Statement:** Without traceable causal history and actionable telemetry, agent failures are difficult to diagnose and recover.
-**Design Decision:** Require trace-aware messaging and define a core metrics set with replay, trace, diff, and dependency debugging tools.
+**Design Decision:** Define a core metrics set with replay, diff, and dependency debugging tools.
 **Rationale:** First-class observability turns opaque agent behavior into measurable, debuggable system activity.
 
 BobberChat treats observability as a first-class citizen of the coordination layer. By providing structured visibility into agent reasoning, message flow, and system health, BobberChat enables operators to debug complex swarm behaviors that are otherwise opaque.
 
 ### 10.1 Observability Data Model
 
-The observability model is built on distributed tracing principles, ensuring every interaction can be reconstructed from a single causal chain.
+The observability model is built on structured telemetry principles so interactions can be analyzed across metrics and logs.
 
-*   **Trace Propagation**: Every message MUST carry a `trace_id` (UUIDv4) and SHOULD include a `parent_span_id`. This allows the Backend to reconstruct the full tree of agent-to-agent requests and sub-task delegations.
 *   **Span Naming Convention**: Spans are named using the pattern `agent:{agent_id}:{tag}`. For example, a research agent performing a data fetch would emit a span named `agent:researcher-01:request.data`.
 *   **OpenTelemetry Compatibility**: The Backend implements an OpenTelemetry-compatible collector. It exports traces, metrics, and logs to OTLP-compliant endpoints such as Jaeger or Grafana Tempo, allowing BobberChat to integrate into existing enterprise observability stacks.
 
@@ -1062,17 +1054,15 @@ BobberChat tracks six core metrics to monitor mesh health and agent performance.
 
 The Backend provides four primary features for diagnosing agent failures and coordination bottlenecks.
 
-1.  **Message Replay**: Operators can select a historical message and trigger a "Replay." The Backend re-emits the message to the original recipient with a new `id` but the same `trace_id`, allowing developers to test agent idempotency or recovery logic.
-2.  **Conversation Trace**: A visual representation (via CLI or API) that follows a `trace_id` through all participants. This displays the causal relationship between a parent agent's request and all subsequent subagent tool calls or responses.
-3.  **State Diff Viewer**: For agents that publish state updates, a diff viewer can be accessed via CLI. This shows the specific changes to an agent's context window at each step in the conversation.
-4.  **Dependency Graph**: A real-time visualization of agent relationships. It highlights blocked agents waiting on `request.*` responses, helping operators identify deadlocks or high-latency bottlenecks in the swarm.
+1.  **Message Replay**: Operators can select a historical message and trigger a "Replay." The Backend re-emits the message to the original recipient with a new `id`, allowing developers to test agent idempotency or recovery logic.
+2.  **State Diff Viewer**: For agents that publish state updates, a diff viewer can be accessed via CLI. This shows the specific changes to an agent's context window at each step in the conversation.
+3.  **Dependency Graph**: A real-time visualization of agent relationships. It highlights blocked agents waiting on `request.*` responses, helping operators identify deadlocks or high-latency bottlenecks in the swarm.
 
 ### 10.4 Structured Logging
 
 All system events are logged using a consistent metadata schema, making logs highly searchable and filterable. Required metadata fields include:
 *   `agent_id` / `user_id`
 *   `tag` (Protocol tag)
-*   `trace_id` (Trace correlation)
 *   `group_id`
 *   `timestamp` (ISO8601 UTC)
 
@@ -1083,7 +1073,7 @@ The Backend monitors system telemetry and triggers alerts based on specific coor
 *   **Alert Conditions**:
     *   **Stalled Agent**: "Agent X has > 10 unanswered requests for > 5 minutes."
     *   **Approval Bottleneck**: "More than 5 critical approvals pending for > 15 minutes."
-    *   **Loop Detected**: "Trace Y has generated > 50 messages in 10 seconds."
+    *   **Loop Detected**: "Repeated message oscillation exceeded threshold in 10 seconds."
 *   **Notification**: Alerts are delivered as CRITICAL notifications to operators and can be forwarded to external sinks (e.g., Slack, PagerDuty) via Backend plugins.
 
 ---
@@ -1133,7 +1123,7 @@ BobberChat enforces ownership-based access control where agents can only communi
 ### 11.4 Audit Trail
 The Backend MUST maintain a comprehensive audit log for all cross-agent messages. Audit records MUST include:
 *   **Identity**: Sender `agent_id`, Receiver `agent_id` (or Chat Group).
-*   **Context**: Message `tag`, `trace_id`, and `parent_span_id`.
+*   **Context**: Message `tag` and `parent_span_id`.
 *   **Temporal**: Precise timestamp of message arrival at the broker.
 
 ### 11.5 Data Governance
@@ -1311,9 +1301,6 @@ A standardized metadata record (aligned with A2A specs) describing an agent's id
 ### **Context Window**
 The maximum amount of historical message data an agent can process or "see" at one time, managed via the `metadata.context-budget` envelope field.
 
-### **trace_id**
-A globally unique correlation identifier propagated across related messages to reconstruct end-to-end execution flow.
-
 ### **Span**
 A timed unit of trace work representing one logical operation (for example, handling a tagged message by a specific agent).
 
@@ -1377,8 +1364,8 @@ This matrix traces the seven validated pain points identified in §1 to their co
 
 | Pain Point | Problem Location | Design Solution | Concrete Mechanism |
 |-----------|-----------------|-----------------|-------------------|
-| 1. Observability & Debugging Gaps | §1.1 | §9 Observability & Debugging | Trace propagation via `trace_id`, six core metrics, replay/diff/dependency graph tools, structured logging with alerting |
-| 2. Subagent State Isolation & Context Loss | §1.2 | §4 Conversation Model, §9 Observability | Three-tier persistence (hot/warm/cold), state diff viewer, trace reconstruction |
+| 1. Observability & Debugging Gaps | §1.1 | §9 Observability & Debugging | Six core metrics, replay/diff/dependency graph tools, structured logging with alerting |
+| 2. Subagent State Isolation & Context Loss | §1.2 | §4 Conversation Model, §9 Observability | Three-tier persistence (hot/warm/cold), state diff viewer |
 | 3. Agent Discovery & Dynamic Routing | §1.3 | §6 Agent Discovery & Registry | Registry-based discovery, heartbeat-backed liveness, dynamic discovery queries |
 | 4. Coordination Failures & Race Conditions | §1.4 | §3.4 Loop Prevention, §7 Approval Workflows, §11.4 Message Ordering | Circuit breaker policy, four conflict primitives (priority, voting, arbiter, escalation), causal ordering guarantees |
 | 5. Protocol Fragmentation | §1.5 | §8 Protocol Adapters | Deterministic MCP/A2A/gRPC adapter contracts with tag auto-mapping, unified protocol envelope |
@@ -1404,8 +1391,7 @@ This matrix traces the seven validated pain points identified in §1 to their co
     "protocol_version": "1.0.0",
     "context-budget": 4096
   },
-  "timestamp": "2026-03-13T14:20:00Z",
-  "trace_id": "trace_abc123"
+  "timestamp": "2026-03-13T14:20:00Z"
 }
 ```
 
@@ -1427,8 +1413,7 @@ This matrix traces the seven validated pain points identified in §1 to their co
     "protocol_version": "1.0.0",
     "context-budget": 3072
   },
-  "timestamp": "2026-03-13T14:20:02Z",
-  "trace_id": "trace_abc123"
+  "timestamp": "2026-03-13T14:20:02Z"
 }
 ```
 
@@ -1449,8 +1434,7 @@ This matrix traces the seven validated pain points identified in §1 to their co
     "protocol_version": "1.0.0",
     "context-budget": 2048
   },
-  "timestamp": "2026-03-13T14:25:00Z",
-  "trace_id": "trace_xyz789"
+  "timestamp": "2026-03-13T14:25:00Z"
 }
 ```
 
@@ -1472,8 +1456,7 @@ This matrix traces the seven validated pain points identified in §1 to their co
     "protocol_version": "1.0.0",
     "context-budget": 2048
   },
-  "timestamp": "2026-03-13T14:30:00Z",
-  "trace_id": "trace_def456"
+  "timestamp": "2026-03-13T14:30:00Z"
 }
 ```
 
@@ -1493,8 +1476,7 @@ This matrix traces the seven validated pain points identified in §1 to their co
     "protocol_version": "1.0.0",
     "context-budget": 1536
   },
-  "timestamp": "2026-03-13T14:35:00Z",
-  "trace_id": "trace_ghi789"
+  "timestamp": "2026-03-13T14:35:00Z"
 }
 ```
 
@@ -1513,8 +1495,7 @@ This matrix traces the seven validated pain points identified in §1 to their co
     "protocol_version": "1.0.0",
     "context-budget": 1024
   },
-  "timestamp": "2026-03-13T14:40:00Z",
-  "trace_id": "trace_abc123"
+  "timestamp": "2026-03-13T14:40:00Z"
 }
 ```
 

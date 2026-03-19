@@ -122,9 +122,6 @@ func TestMCPAdapterIngestToolCall(t *testing.T) {
 	if _, err := uuid.Parse(env.ID); err != nil {
 		t.Fatalf("env.ID = %q is not valid UUID: %v", env.ID, err)
 	}
-	if _, err := uuid.Parse(env.TraceID); err != nil {
-		t.Fatalf("env.TraceID = %q is not valid UUID: %v", env.TraceID, err)
-	}
 
 	metaRaw, ok := env.Metadata[adapter.MetaKeyAdapter]
 	if !ok {
