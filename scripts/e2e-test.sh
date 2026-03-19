@@ -135,7 +135,7 @@ request "POST" "/v1/registry/discover" "{\"capability\":\"test\",\"status\":[\"R
 assert_step "Discover" 200 "$LAST_STATUS" '"agents"'
 
 print_step "8/27 Create group"
-request "POST" "/v1/groups" "{\"name\":\"test-group\",\"description\":\"e2e test\",\"visibility\":\"private\"}" "$TOKEN"
+request "POST" "/v1/groups" "{\"name\":\"test-group\"}" "$TOKEN"
 GROUP_ID="$(echo "$LAST_BODY" | grep -o '"id":"[^"]*"' | cut -d'"' -f4 || true)"
 if [ "$LAST_STATUS" -eq 201 ] && [ -n "$GROUP_ID" ] && [[ "$LAST_BODY" == *'"name":"test-group"'* ]]; then
   echo "  PASS: Create group (HTTP $LAST_STATUS)"
@@ -184,7 +184,7 @@ request "GET" "/v1/registry/agents"
 assert_status "List agents no auth" 401 "$LAST_STATUS"
 
 print_step "18/27 Create group no auth"
-request "POST" "/v1/groups" "{\"name\":\"test-group\",\"description\":\"e2e test\",\"visibility\":\"private\"}"
+request "POST" "/v1/groups" "{\"name\":\"test-group\"}"
 assert_status "Create group no auth" 401 "$LAST_STATUS"
 
 print_step "19/27 Adapter ingest unknown adapter"

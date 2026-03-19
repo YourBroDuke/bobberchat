@@ -572,13 +572,13 @@ func (r *pgChatGroupRepository) Create(ctx context.Context, group ChatGroup) (*C
 		group.CreatedAt = time.Now().UTC()
 	}
 	row := r.db.Pool().QueryRow(ctx, `
-		INSERT INTO chat_groups (id, name, description, owner_id, conversation_id, created_at)
-		VALUES ($1,$2,$3,$4,$5,$6)
-		RETURNING id, name, description, owner_id, conversation_id, created_at
-	`, group.ID, group.Name, group.Description, group.OwnerID, group.ConversationID, group.CreatedAt)
+		INSERT INTO chat_groups (id, name, owner_id, conversation_id, created_at)
+		VALUES ($1,$2,$3,$4,$5)
+		RETURNING id, name, owner_id, conversation_id, created_at
+	`, group.ID, group.Name, group.OwnerID, group.ConversationID, group.CreatedAt)
 
 	created := ChatGroup{}
-	err := row.Scan(&created.ID, &created.Name, &created.Description, &created.OwnerID, &created.ConversationID, &created.CreatedAt)
+	err := row.Scan(&created.ID, &created.Name, &created.OwnerID, &created.ConversationID, &created.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("create chat group: %w", err)
 	}
@@ -587,13 +587,13 @@ func (r *pgChatGroupRepository) Create(ctx context.Context, group ChatGroup) (*C
 
 func (r *pgChatGroupRepository) GetByID(ctx context.Context, groupID uuid.UUID) (*ChatGroup, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, name, description, owner_id, conversation_id, created_at
+		SELECT id, name, owner_id, conversation_id, created_at
 		FROM chat_groups
 		WHERE id = $1
 	`, groupID)
 
 	g := ChatGroup{}
-	err := row.Scan(&g.ID, &g.Name, &g.Description, &g.OwnerID, &g.ConversationID, &g.CreatedAt)
+	err := row.Scan(&g.ID, &g.Name, &g.OwnerID, &g.ConversationID, &g.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -605,7 +605,7 @@ func (r *pgChatGroupRepository) GetByID(ctx context.Context, groupID uuid.UUID) 
 
 func (r *pgChatGroupRepository) ListAll(ctx context.Context) ([]ChatGroup, error) {
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT id, name, description, owner_id, conversation_id, created_at
+		SELECT id, name, owner_id, conversation_id, created_at
 		FROM chat_groups
 		ORDER BY created_at DESC
 	`)
@@ -617,7 +617,7 @@ func (r *pgChatGroupRepository) ListAll(ctx context.Context) ([]ChatGroup, error
 	groups := make([]ChatGroup, 0)
 	for rows.Next() {
 		g := ChatGroup{}
-		if err := rows.Scan(&g.ID, &g.Name, &g.Description, &g.OwnerID, &g.ConversationID, &g.CreatedAt); err != nil {
+		if err := rows.Scan(&g.ID, &g.Name, &g.OwnerID, &g.ConversationID, &g.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan chat group: %w", err)
 		}
 		groups = append(groups, g)

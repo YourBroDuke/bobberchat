@@ -521,12 +521,11 @@ func (a *app) handleEntityInfo(w http.ResponseWriter, r *http.Request) {
 	group, err := repos.Groups.GetByID(r.Context(), uid)
 	if err == nil {
 		writeJSON(w, http.StatusOK, map[string]any{
-			"type":        "group",
-			"id":          group.ID,
-			"name":        group.Name,
-			"description": group.Description,
-			"owner_id":    group.OwnerID,
-			"created_at":  group.CreatedAt,
+			"type":       "group",
+			"id":         group.ID,
+			"name":       group.Name,
+			"owner_id":   group.OwnerID,
+			"created_at": group.CreatedAt,
 		})
 		return
 	}
@@ -621,8 +620,7 @@ func (a *app) handleListConversations(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) handleCreateGroup(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
+		Name string `json:"name"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -632,7 +630,6 @@ func (a *app) handleCreateGroup(w http.ResponseWriter, r *http.Request) {
 	group, err := a.convSvc.CreateGroup(
 		r.Context(),
 		req.Name,
-		req.Description,
 		contextString(r.Context(), ctxUserID),
 	)
 	if err != nil {

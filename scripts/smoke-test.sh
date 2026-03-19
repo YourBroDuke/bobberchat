@@ -82,7 +82,7 @@ check "POST /v1/registry/discover" "200" "POST" "/v1/registry/discover" "{\"capa
 
 echo ""
 echo "▸ Groups"
-check "POST /v1/groups" "201" "POST" "/v1/groups" "{\"name\":\"smoke-group-${TS}\",\"description\":\"test\",\"visibility\":\"public\"}" -H "Authorization: Bearer $TOKEN"
+check "POST /v1/groups" "201" "POST" "/v1/groups" "{\"name\":\"smoke-group-${TS}\"}" -H "Authorization: Bearer $TOKEN"
 GROUP_ID=$(jp "['id']")
 check "GET /v1/groups" "200" "GET" "/v1/groups" "" -H "Authorization: Bearer $TOKEN"
 

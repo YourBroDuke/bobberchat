@@ -16,18 +16,13 @@ func NewService(db *persistence.DB) *Service {
 	return &Service{db: db}
 }
 
-func (s *Service) CreateGroup(ctx context.Context, name, description, creatorID string) (*persistence.ChatGroup, error) {
+func (s *Service) CreateGroup(ctx context.Context, name, creatorID string) (*persistence.ChatGroup, error) {
 	if s == nil || s.db == nil || name == "" || creatorID == "" {
 		return nil, persistence.ErrInvalidInput
 	}
 	cid, err := uuid.Parse(creatorID)
 	if err != nil {
 		return nil, err
-	}
-
-	var desc *string
-	if description != "" {
-		desc = &description
 	}
 
 	repos := persistence.NewPostgresRepositories(s.db)
@@ -41,7 +36,6 @@ func (s *Service) CreateGroup(ctx context.Context, name, description, creatorID 
 
 	group, err := repos.Groups.Create(ctx, persistence.ChatGroup{
 		Name:           name,
-		Description:    desc,
 		OwnerID:        cid,
 		ConversationID: &conv.ID,
 	})

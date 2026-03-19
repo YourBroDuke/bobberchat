@@ -60,7 +60,6 @@ type ConversationParticipant struct {
 type ChatGroup struct {
 	ID             uuid.UUID  `json:"id"`
 	Name           string     `json:"name"`
-	Description    *string    `json:"description,omitempty"`
 	OwnerID        uuid.UUID  `json:"owner_id"`
 	ConversationID *uuid.UUID `json:"conversation_id,omitempty"`
 	CreatedAt      time.Time  `json:"created_at"`

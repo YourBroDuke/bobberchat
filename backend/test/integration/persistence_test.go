@@ -166,11 +166,9 @@ func TestChatGroupRepository_CreateAndMembers(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	description := "integration group"
 	group, err := repos.Groups.Create(ctx, persistence.ChatGroup{
-		Name:        "integration-group",
-		Description: &description,
-		OwnerID:     creator.ID,
+		Name:    "integration-group",
+		OwnerID: creator.ID,
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -362,9 +362,6 @@ paths:
                         format: uuid
                       name:
                         type: string
-                      description:
-                        type: string
-                        nullable: true
                       owner_id:
                         type: string
                         format: uuid
@@ -521,8 +518,6 @@ paths:
                 - name
               properties:
                 name:
-                  type: string
-                description:
                   type: string
       responses:
         '201':
@@ -1041,8 +1036,6 @@ components:
           type: string
           format: uuid
         name:
-          type: string
-        description:
           type: string
         owner_id:
           type: string
