@@ -1174,18 +1174,23 @@ components:
       description: Unified conversation list item for both DMs and groups
       required:
         - id
-        - conversation_id
+        - reference_id
+        - reference_type
         - type
         - name
       properties:
         id:
           type: string
           format: uuid
-          description: For DMs, the peer user/agent ID. For groups, the group ID.
-        conversation_id:
+          description: The conversation UUID, usable with the poll endpoint.
+        reference_id:
           type: string
           format: uuid
-          description: The conversation UUID, usable with the poll endpoint.
+          description: For DMs, the peer user/agent ID. For groups, the group ID.
+        reference_type:
+          type: string
+          enum: [user, agent, group]
+          description: The entity type of the reference_id.
         type:
           type: string
           enum: [direct, group]
