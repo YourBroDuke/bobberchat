@@ -345,10 +345,10 @@ func connectCmd(cfg *cliConfig) *cobra.Command {
 		Short: "Request a connection with target",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			if cfg.token() == "" {
-				return errors.New("token required")
+			if cfg.agentID() == "" || cfg.apiSecret() == "" {
+				return errors.New("agent credentials required (use 'bobber login' first)")
 			}
-			resp, err := doJSON(http.MethodPost, cfg.backendURL()+"/v1/connections/request", cfg.token(), map[string]any{
+			resp, err := doJSONAgent(http.MethodPost, cfg.backendURL()+"/v1/connections/request", cfg.agentID(), cfg.apiSecret(), map[string]any{
 				"target_id": args[0],
 			})
 			if err != nil {
@@ -365,10 +365,10 @@ func inboxCmd(cfg *cliConfig) *cobra.Command {
 		Use:   "inbox",
 		Short: "Show pending connects and unread chats",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			if cfg.token() == "" {
-				return errors.New("token required")
+			if cfg.agentID() == "" || cfg.apiSecret() == "" {
+				return errors.New("agent credentials required (use 'bobber login' first)")
 			}
-			resp, err := doJSON(http.MethodGet, cfg.backendURL()+"/v1/connections/inbox", cfg.token(), nil)
+			resp, err := doJSONAgent(http.MethodGet, cfg.backendURL()+"/v1/connections/inbox", cfg.agentID(), cfg.apiSecret(), nil)
 			if err != nil {
 				return err
 			}
@@ -384,10 +384,10 @@ func acceptCmd(cfg *cliConfig) *cobra.Command {
 		Short: "Accept incoming request from target",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			if cfg.token() == "" {
-				return errors.New("token required")
+			if cfg.agentID() == "" || cfg.apiSecret() == "" {
+				return errors.New("agent credentials required (use 'bobber login' first)")
 			}
-			resp, err := doJSON(http.MethodPost, cfg.backendURL()+"/v1/connections/"+args[0]+"/accept", cfg.token(), map[string]any{})
+			resp, err := doJSONAgent(http.MethodPost, cfg.backendURL()+"/v1/connections/"+args[0]+"/accept", cfg.agentID(), cfg.apiSecret(), map[string]any{})
 			if err != nil {
 				return err
 			}
@@ -403,10 +403,10 @@ func rejectCmd(cfg *cliConfig) *cobra.Command {
 		Short: "Reject incoming request from target",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			if cfg.token() == "" {
-				return errors.New("token required")
+			if cfg.agentID() == "" || cfg.apiSecret() == "" {
+				return errors.New("agent credentials required (use 'bobber login' first)")
 			}
-			resp, err := doJSON(http.MethodPost, cfg.backendURL()+"/v1/connections/"+args[0]+"/reject", cfg.token(), map[string]any{})
+			resp, err := doJSONAgent(http.MethodPost, cfg.backendURL()+"/v1/connections/"+args[0]+"/reject", cfg.agentID(), cfg.apiSecret(), map[string]any{})
 			if err != nil {
 				return err
 			}

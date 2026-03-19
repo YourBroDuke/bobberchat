@@ -699,7 +699,7 @@ paths:
       summary: Create a connection request
       operationId: createConnectionRequest
       security:
-        - BearerAuth: []
+        - AgentSecret: []
       requestBody:
         required: true
         content:
@@ -730,7 +730,7 @@ paths:
       summary: List pending incoming connection requests
       operationId: listConnectionInbox
       security:
-        - BearerAuth: []
+        - AgentSecret: []
       responses:
         '200':
           description: Pending connection requests
@@ -751,7 +751,7 @@ paths:
       summary: Accept a connection request
       operationId: acceptConnectionRequest
       security:
-        - BearerAuth: []
+        - AgentSecret: []
       parameters:
         - name: id
           in: path
@@ -787,7 +787,7 @@ paths:
       summary: Reject a connection request
       operationId: rejectConnectionRequest
       security:
-        - BearerAuth: []
+        - AgentSecret: []
       parameters:
         - name: id
           in: path
@@ -1110,8 +1110,8 @@ components:
       type: object
       required:
         - id
-        - from_user_id
-        - to_user_id
+        - from_agent_id
+        - to_agent_id
         - status
         - created_at
         - updated_at
@@ -1119,10 +1119,10 @@ components:
         id:
           type: string
           format: uuid
-        from_user_id:
+        from_agent_id:
           type: string
           format: uuid
-        to_user_id:
+        to_agent_id:
           type: string
           format: uuid
         status:

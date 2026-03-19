@@ -67,9 +67,9 @@ type MessageRepository interface {
 
 type ConnectionRequestRepository interface {
 	Create(ctx context.Context, req ConnectionRequest) (*ConnectionRequest, error)
-	GetPendingForUser(ctx context.Context, userID uuid.UUID) ([]ConnectionRequest, error)
+	GetPendingForAgent(ctx context.Context, agentID uuid.UUID) ([]ConnectionRequest, error)
 	UpdateStatus(ctx context.Context, requestID uuid.UUID, status ConnectionRequestStatus) error
-	GetByFromAndTo(ctx context.Context, fromUserID, toUserID uuid.UUID) (*ConnectionRequest, error)
+	GetByFromAndTo(ctx context.Context, fromAgentID, toAgentID uuid.UUID) (*ConnectionRequest, error)
 }
 
 type BlacklistRepository interface {
@@ -750,10 +750,10 @@ func (r *pgConnectionRequestRepository) Create(ctx context.Context, req Connecti
 	}
 
 	row := r.db.Pool().QueryRow(ctx, `
-		INSERT INTO connection_requests (id, from_user_id, to_user_id, status, created_at, updated_at)
+		INSERT INTO connection_requests (id, from_agent_id, to_agent_id, status, created_at, updated_at)
 		VALUES ($1,$2,$3,$4,$5,$6)
-		RETURNING id, from_user_id, to_user_id, status, created_at, updated_at
-	`, req.ID, req.FromUserID, req.ToUserID, string(req.Status), req.CreatedAt, req.UpdatedAt)
+		RETURNING id, from_agent_id, to_agent_id, status, created_at, updated_at
+	`, req.ID, req.FromAgentID, req.ToAgentID, string(req.Status), req.CreatedAt, req.UpdatedAt)
 
 	created, err := scanConnectionRequest(row)
 	if err != nil {
@@ -762,13 +762,13 @@ func (r *pgConnectionRequestRepository) Create(ctx context.Context, req Connecti
 	return created, nil
 }
 
-func (r *pgConnectionRequestRepository) GetPendingForUser(ctx context.Context, userID uuid.UUID) ([]ConnectionRequest, error) {
+func (r *pgConnectionRequestRepository) GetPendingForAgent(ctx context.Context, agentID uuid.UUID) ([]ConnectionRequest, error) {
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT id, from_user_id, to_user_id, status, created_at, updated_at
+		SELECT id, from_agent_id, to_agent_id, status, created_at, updated_at
 		FROM connection_requests
-		WHERE to_user_id = $1 AND status = 'PENDING'
+		WHERE to_agent_id = $1 AND status = 'PENDING'
 		ORDER BY created_at DESC
-	`, userID)
+	`, agentID)
 	if err != nil {
 		return nil, fmt.Errorf("get pending connection requests: %w", err)
 	}
@@ -803,12 +803,12 @@ func (r *pgConnectionRequestRepository) UpdateStatus(ctx context.Context, reques
 	return nil
 }
 
-func (r *pgConnectionRequestRepository) GetByFromAndTo(ctx context.Context, fromUserID, toUserID uuid.UUID) (*ConnectionRequest, error) {
+func (r *pgConnectionRequestRepository) GetByFromAndTo(ctx context.Context, fromAgentID, toAgentID uuid.UUID) (*ConnectionRequest, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, from_user_id, to_user_id, status, created_at, updated_at
+		SELECT id, from_agent_id, to_agent_id, status, created_at, updated_at
 		FROM connection_requests
-		WHERE from_user_id = $1 AND to_user_id = $2
-	`, fromUserID, toUserID)
+		WHERE from_agent_id = $1 AND to_agent_id = $2
+	`, fromAgentID, toAgentID)
 	return scanConnectionRequest(row)
 }
 
@@ -993,8 +993,8 @@ func scanConnectionRequest(scanner rowScanner) (*ConnectionRequest, error) {
 	var status string
 	err := scanner.Scan(
 		&out.ID,
-		&out.FromUserID,
-		&out.ToUserID,
+		&out.FromAgentID,
+		&out.ToAgentID,
 		&status,
 		&out.CreatedAt,
 		&out.UpdatedAt,

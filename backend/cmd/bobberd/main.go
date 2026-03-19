@@ -274,10 +274,10 @@ func (a *app) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/messages/poll", a.requireJWT(a.handlePollMessages))
 	mux.HandleFunc("POST /v1/messages/{id}/replay", a.requireJWT(a.handleReplayMessage))
 
-	mux.HandleFunc("POST /v1/connections/request", a.requireJWT(a.handleConnectionRequest))
-	mux.HandleFunc("GET /v1/connections/inbox", a.requireJWT(a.handleConnectionInbox))
-	mux.HandleFunc("POST /v1/connections/{id}/accept", a.requireJWT(a.handleConnectionAccept))
-	mux.HandleFunc("POST /v1/connections/{id}/reject", a.requireJWT(a.handleConnectionReject))
+	mux.HandleFunc("POST /v1/connections/request", a.requireAuth(false, true, a.handleConnectionRequest))
+	mux.HandleFunc("GET /v1/connections/inbox", a.requireAuth(false, true, a.handleConnectionInbox))
+	mux.HandleFunc("POST /v1/connections/{id}/accept", a.requireAuth(false, true, a.handleConnectionAccept))
+	mux.HandleFunc("POST /v1/connections/{id}/reject", a.requireAuth(false, true, a.handleConnectionReject))
 	mux.HandleFunc("POST /v1/blacklist", a.requireJWT(a.handleBlacklist))
 	mux.HandleFunc("DELETE /v1/blacklist/{id}", a.requireJWT(a.handleUnblacklist))
 
@@ -765,9 +765,9 @@ func (a *app) handleConnectionRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := uuid.Parse(contextString(r.Context(), ctxUserID))
+	agentID, err := uuid.Parse(contextString(r.Context(), ctxAgentID))
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid user context")
+		writeError(w, http.StatusBadRequest, "invalid agent context")
 		return
 	}
 	targetID, err := uuid.Parse(strings.TrimSpace(req.TargetID))
@@ -777,9 +777,9 @@ func (a *app) handleConnectionRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	created, err := persistence.NewPostgresRepositories(a.db).ConnectionRequests.Create(r.Context(), persistence.ConnectionRequest{
-		FromUserID: userID,
-		ToUserID:   targetID,
-		Status:     persistence.ConnectionRequestStatusPending,
+		FromAgentID: agentID,
+		ToAgentID:   targetID,
+		Status:      persistence.ConnectionRequestStatusPending,
 	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -790,13 +790,13 @@ func (a *app) handleConnectionRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleConnectionInbox(w http.ResponseWriter, r *http.Request) {
-	userID, err := uuid.Parse(contextString(r.Context(), ctxUserID))
+	agentID, err := uuid.Parse(contextString(r.Context(), ctxAgentID))
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid user context")
+		writeError(w, http.StatusBadRequest, "invalid agent context")
 		return
 	}
 
-	requests, err := persistence.NewPostgresRepositories(a.db).ConnectionRequests.GetPendingForUser(r.Context(), userID)
+	requests, err := persistence.NewPostgresRepositories(a.db).ConnectionRequests.GetPendingForAgent(r.Context(), agentID)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return

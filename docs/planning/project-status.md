@@ -172,6 +172,7 @@ Key implementation details:
 | `migrations/003_connections_blacklist.sql` | Adds `connection_requests` and `blacklist_entries` tables, enum, and indexes |
 | `migrations/004_remove_agent_status.sql` | Removes `agent_status` enum type, `status` column, and associated index from agents table |
 | `migrations/005_remove_agent_version_heartbeat.sql` | Removes `version`, `connected_at`, `last_heartbeat` columns from agents table |
+| `migrations/016_agent_connections.sql` | Renames `from_user_id`/`to_user_id` → `from_agent_id`/`to_agent_id` in `connection_requests`, re-points FKs to `agents(agent_id)` |
 | `configs/backend.yaml` | Default backend configuration |
 | `Makefile` | Build, test, lint, migrate, run targets |
 | `scripts/e2e-test.sh` | 27-test curl-based API e2e test script |
@@ -277,7 +278,7 @@ Backend config: `configs/backend.yaml`
 - `messages` table uses `conversation_id` FK (replaced `to_id`), time-based partitioning by `timestamp` (monthly ranges)
 - `conversations` table includes `last_message_id` (UUID FK → messages, ON DELETE SET NULL) and `last_message_at` (TIMESTAMPTZ) for efficient conversation ordering
 - `pgMessageRepository.Save` atomically inserts the message and updates `conversations.last_message_id/last_message_at` in a single transaction
-- Migration: `migrations/001_initial_schema.sql` through `migrations/013_conversation_last_message.sql`
+- Migration: `migrations/001_initial_schema.sql` through `migrations/016_agent_connections.sql`
 
 ### NATS JetStream Streams
 
@@ -460,6 +461,7 @@ bobberchat/
 ├── migrations/008_conversations.sql # Adds conversations, conversation_participants; migrates chat_group_members; messages.to_id→conversation_id
 ├── migrations/009_rename_dm_ids.sql # Renames agent_id_low/agent_id_high → id_low/id_high in conversations
 ├── migrations/013_conversation_last_message.sql # Adds last_message_id, last_message_at to conversations with backfill
+├── migrations/016_agent_connections.sql # Renames connection_requests FKs from user to agent
 ├── scripts/
 │   ├── e2e-test.sh                  # 27-test API e2e test
 │   └── smoke-test.sh                # Quick deployment smoke test
