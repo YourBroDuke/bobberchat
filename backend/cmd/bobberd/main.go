@@ -536,7 +536,7 @@ func (a *app) handleEntityInfo(w http.ResponseWriter, r *http.Request) {
 			"id":          group.ID,
 			"name":        group.Name,
 			"description": group.Description,
-			"creator_id":  group.CreatorID,
+			"owner_id":    group.OwnerID,
 			"created_at":  group.CreatedAt,
 		})
 		return

@@ -367,7 +367,7 @@ paths:
                       description:
                         type: string
                         nullable: true
-                      creator_id:
+                      owner_id:
                         type: string
                         format: uuid
                       created_at:
@@ -1122,7 +1122,7 @@ components:
       required:
         - id
         - name
-        - creator_id
+        - owner_id
         - created_at
       properties:
         id:
@@ -1132,7 +1132,7 @@ components:
           type: string
         description:
           type: string
-        creator_id:
+        owner_id:
           type: string
           format: uuid
         created_at:

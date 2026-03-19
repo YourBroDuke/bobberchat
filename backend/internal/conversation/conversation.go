@@ -42,7 +42,7 @@ func (s *Service) CreateGroup(ctx context.Context, name, description, creatorID 
 	group, err := repos.Groups.Create(ctx, persistence.ChatGroup{
 		Name:           name,
 		Description:    desc,
-		CreatorID:      cid,
+		OwnerID:        cid,
 		ConversationID: &conv.ID,
 	})
 	if err != nil {

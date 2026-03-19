@@ -71,7 +71,7 @@ type ChatGroup struct {
 	ID             uuid.UUID  `json:"id"`
 	Name           string     `json:"name"`
 	Description    *string    `json:"description,omitempty"`
-	CreatorID      uuid.UUID  `json:"creator_id"`
+	OwnerID        uuid.UUID  `json:"owner_id"`
 	ConversationID *uuid.UUID `json:"conversation_id,omitempty"`
 	CreatedAt      time.Time  `json:"created_at"`
 }

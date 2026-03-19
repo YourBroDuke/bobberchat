@@ -164,7 +164,7 @@ CREATE TABLE chat_groups (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL UNIQUE,
   description TEXT,
-  creator_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+  owner_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
   conversation_id UUID REFERENCES conversations(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -308,7 +308,7 @@ Authentication model:
 
 | Method | Path | Auth | Request JSON | Response JSON | Status codes |
 |---|---|---|---|---|---|
-| POST | `/v1/groups` | JWT | `{ "name": "research-swarm", "description": "Coordination room" }` | `{ "id": "uuid", "name": "research-swarm", "creator_id": "uuid", "created_at": "..." }` | 201, 400, 401, 409 |
+| POST | `/v1/groups` | JWT | `{ "name": "research-swarm", "description": "Coordination room" }` | `{ "id": "uuid", "name": "research-swarm", "owner_id": "uuid", "created_at": "..." }` | 201, 400, 401, 409 |
 | GET | `/v1/groups` | JWT | n/a | `{ "groups": [{ "id": "uuid", "name": "...", "member_count": 12 }], "total": 3 }` | 200, 401 |
 | POST | `/v1/groups/{id}/join` | JWT or Agent Secret | `{ "participant_id": "uuid", "participant_kind": "user|agent" }` | `{ "group_id": "uuid", "joined": true, "joined_at": "..." }` | 200, 400, 401, 403, 404 |
 | POST | `/v1/groups/{id}/leave` | JWT or Agent Secret | `{ "participant_id": "uuid", "participant_kind": "user|agent" }` | `{ "group_id": "uuid", "left": true }` | 200, 400, 401, 403, 404 |
