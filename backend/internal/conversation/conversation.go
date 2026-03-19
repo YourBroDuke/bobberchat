@@ -43,6 +43,10 @@ func (s *Service) CreateGroup(ctx context.Context, name, creatorID string) (*per
 		return nil, err
 	}
 
+	if err := repos.Conversations.UpdateGroupID(ctx, conv.ID, group.ID); err != nil {
+		return nil, err
+	}
+
 	if err := repos.ConversationParticipants.Add(ctx, persistence.ConversationParticipant{
 		ConversationID:  conv.ID,
 		ParticipantID:   cid,

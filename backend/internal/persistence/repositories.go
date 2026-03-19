@@ -39,7 +39,9 @@ type UserRepository interface {
 type ConversationRepository interface {
 	Create(ctx context.Context, conv Conversation) (*Conversation, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*Conversation, error)
+	GetByGroupID(ctx context.Context, groupID uuid.UUID) (*Conversation, error)
 	GetDirectByPair(ctx context.Context, idLow, idHigh uuid.UUID) (*Conversation, error)
+	UpdateGroupID(ctx context.Context, conversationID, groupID uuid.UUID) error
 	ListByParticipant(ctx context.Context, participantID uuid.UUID, kind ParticipantType) ([]Conversation, error)
 	ListByParticipantAndType(ctx context.Context, participantID uuid.UUID, kind ParticipantType, convType ConversationType) ([]Conversation, error)
 	ListItems(ctx context.Context, participantID uuid.UUID, kind ParticipantType, convType *ConversationType) ([]ConversationListItem, error)
@@ -390,17 +392,17 @@ func (r *pgConversationRepository) Create(ctx context.Context, conv Conversation
 	}
 
 	row := r.db.Pool().QueryRow(ctx, `
-		INSERT INTO conversations (id, type, id_low, id_high, created_at, last_message_at)
-		VALUES ($1,$2,$3,$4,$5,$5)
-		RETURNING id, type, id_low, id_high, created_at, last_message_id, last_message_at
-	`, conv.ID, string(conv.Type), conv.IDLow, conv.IDHigh, conv.CreatedAt)
+		INSERT INTO conversations (id, type, id_low, id_high, group_id, created_at, last_message_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$6)
+		RETURNING id, type, id_low, id_high, group_id, created_at, last_message_id, last_message_at
+	`, conv.ID, string(conv.Type), conv.IDLow, conv.IDHigh, conv.GroupID, conv.CreatedAt)
 
 	return scanConversation(row)
 }
 
 func (r *pgConversationRepository) GetByID(ctx context.Context, id uuid.UUID) (*Conversation, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, type, id_low, id_high, created_at, last_message_id, last_message_at
+		SELECT id, type, id_low, id_high, group_id, created_at, last_message_id, last_message_at
 		FROM conversations
 		WHERE id = $1
 	`, id)
@@ -409,16 +411,38 @@ func (r *pgConversationRepository) GetByID(ctx context.Context, id uuid.UUID) (*
 
 func (r *pgConversationRepository) GetDirectByPair(ctx context.Context, idLow, idHigh uuid.UUID) (*Conversation, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, type, id_low, id_high, created_at, last_message_id, last_message_at
+		SELECT id, type, id_low, id_high, group_id, created_at, last_message_id, last_message_at
 		FROM conversations
 		WHERE id_low = $1 AND id_high = $2
 	`, idLow, idHigh)
 	return scanConversation(row)
 }
 
+func (r *pgConversationRepository) GetByGroupID(ctx context.Context, groupID uuid.UUID) (*Conversation, error) {
+	row := r.db.Pool().QueryRow(ctx, `
+		SELECT id, type, id_low, id_high, group_id, created_at, last_message_id, last_message_at
+		FROM conversations
+		WHERE group_id = $1
+	`, groupID)
+	return scanConversation(row)
+}
+
+func (r *pgConversationRepository) UpdateGroupID(ctx context.Context, conversationID, groupID uuid.UUID) error {
+	res, err := r.db.Pool().Exec(ctx, `
+		UPDATE conversations SET group_id = $1 WHERE id = $2
+	`, groupID, conversationID)
+	if err != nil {
+		return fmt.Errorf("update conversation group_id: %w", err)
+	}
+	if res.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (r *pgConversationRepository) ListByParticipant(ctx context.Context, participantID uuid.UUID, kind ParticipantType) ([]Conversation, error) {
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT c.id, c.type, c.id_low, c.id_high, c.created_at, c.last_message_id, c.last_message_at
+		SELECT c.id, c.type, c.id_low, c.id_high, c.group_id, c.created_at, c.last_message_id, c.last_message_at
 		FROM conversations c
 		JOIN conversation_participants cp ON cp.conversation_id = c.id
 		WHERE cp.participant_id = $1 AND cp.participant_kind = $2
@@ -446,7 +470,7 @@ func (r *pgConversationRepository) ListByParticipant(ctx context.Context, partic
 
 func (r *pgConversationRepository) ListByParticipantAndType(ctx context.Context, participantID uuid.UUID, kind ParticipantType, convType ConversationType) ([]Conversation, error) {
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT c.id, c.type, c.id_low, c.id_high, c.created_at, c.last_message_id, c.last_message_at
+		SELECT c.id, c.type, c.id_low, c.id_high, c.group_id, c.created_at, c.last_message_id, c.last_message_at
 		FROM conversations c
 		JOIN conversation_participants cp ON cp.conversation_id = c.id
 		WHERE cp.participant_id = $1 AND cp.participant_kind = $2 AND c.type = $3
@@ -500,7 +524,7 @@ func (r *pgConversationRepository) ListItems(ctx context.Context, participantID 
 				c.last_message_at
 			FROM conversations c
 			JOIN conversation_participants cp ON cp.conversation_id = c.id
-			JOIN chat_groups g ON g.conversation_id = c.id
+			JOIN chat_groups g ON g.id = c.group_id
 			WHERE cp.participant_id = $1
 				AND cp.participant_kind = $2
 				AND c.type = 'group'
@@ -581,7 +605,7 @@ func (r *pgConversationRepository) ListUnreadByParticipant(ctx context.Context, 
 				) AS unread_count
 			FROM conversations c
 			JOIN conversation_participants cp ON cp.conversation_id = c.id
-			JOIN chat_groups g ON g.conversation_id = c.id
+			JOIN chat_groups g ON g.id = c.group_id
 			WHERE cp.participant_id = $1
 				AND cp.participant_kind = $2
 				AND c.type = 'group'
@@ -1096,6 +1120,7 @@ func scanConversation(scanner rowScanner) (*Conversation, error) {
 		&conversationType,
 		&out.IDLow,
 		&out.IDHigh,
+		&out.GroupID,
 		&out.CreatedAt,
 		&out.LastMessageID,
 		&out.LastMessageAt,

@@ -1165,6 +1165,10 @@ components:
           type: string
           format: uuid
           nullable: true
+        group_id:
+          type: string
+          format: uuid
+          nullable: true
         created_at:
           type: string
           format: date-time

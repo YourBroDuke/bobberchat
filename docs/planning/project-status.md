@@ -273,12 +273,12 @@ Backend config: `configs/backend.yaml`
 - PostgreSQL 15+
 - 6 tables: `users`, `agents`, `chat_groups`, `conversations`, `conversation_participants`, `messages`
 - 2 enum types: `participant_type`, `conversation_type`
-- `conversations` table unifies DMs and groups; DMs identified by canonical `(id_low, id_high)` pair (generic UUIDs, no FK constraint)
+- `conversations` table unifies DMs and groups; DMs identified by canonical `(id_low, id_high)` pair (generic UUIDs, no FK constraint); group conversations linked via `group_id` (UUID FK → chat_groups, ON DELETE SET NULL) for accelerated group lookups
 - `conversation_participants` replaces `chat_group_members` and handles both DM and group membership with `muted`, `last_read_message_id` fields
 - `messages` table uses `conversation_id` FK (replaced `to_id`), time-based partitioning by `timestamp` (monthly ranges), `participant_kind` column (reuses `participant_type` enum) to distinguish user vs agent messages
 - `conversations` table includes `last_message_id` (UUID FK → messages, ON DELETE SET NULL) and `last_message_at` (TIMESTAMPTZ) for efficient conversation ordering
 - `pgMessageRepository.Save` atomically inserts the message and updates `conversations.last_message_id/last_message_at` in a single transaction
-- Migration: `migrations/001_initial_schema.sql` through `migrations/017_add_message_participant_kind.sql`
+- Migration: `migrations/001_initial_schema.sql` through `migrations/022_conversation_group_id.sql`
 
 ### NATS JetStream Streams
 
@@ -465,6 +465,8 @@ bobberchat/
 ├── migrations/017_add_message_participant_kind.sql # Adds participant_kind column to messages table
 ├── migrations/018_connection_request_polymorphic.sql # Polymorphic connection_requests: sender_id, from/to kind (agent/group)
 ├── migrations/019_blacklist_polymorphic.sql # Polymorphic blacklist_entries: from/to id+kind (user/agent/group)
+├── migrations/021_conversation_last_message_at_default.sql # Defaults last_message_at to now(), backfills NULLs
+├── migrations/022_conversation_group_id.sql # Adds group_id FK to conversations for accelerated group lookups
 ├── scripts/
 │   ├── e2e-test.sh                  # 27-test API e2e test
 │   └── smoke-test.sh                # Quick deployment smoke test

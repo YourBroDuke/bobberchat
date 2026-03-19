@@ -43,6 +43,7 @@ type Conversation struct {
 	Type          ConversationType `json:"type"`
 	IDLow         *uuid.UUID       `json:"id_low,omitempty"`
 	IDHigh        *uuid.UUID       `json:"id_high,omitempty"`
+	GroupID       *uuid.UUID       `json:"group_id,omitempty"`
 	CreatedAt     time.Time        `json:"created_at"`
 	LastMessageID *uuid.UUID       `json:"last_message_id,omitempty"`
 	LastMessageAt *time.Time       `json:"last_message_at,omitempty"`

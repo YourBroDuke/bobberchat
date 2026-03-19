@@ -138,7 +138,10 @@ CREATE TABLE conversations (
   type conversation_type NOT NULL,
   id_low UUID,
   id_high UUID,
+  group_id UUID REFERENCES chat_groups(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
+  last_message_at TIMESTAMPTZ DEFAULT NOW(),
   CONSTRAINT chk_direct_ids CHECK (
     type != 'direct' OR (id_low IS NOT NULL AND id_high IS NOT NULL AND id_low < id_high)
   ),
