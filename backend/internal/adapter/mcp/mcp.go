@@ -116,29 +116,29 @@ func (a *MCPAdapter) Ingest(ctx context.Context, raw []byte, meta adapter.Transp
 		if msg.ID == nil {
 			return nil, errors.New("json-rpc error message missing id")
 		}
-		env.Tag = protocol.TagResponseError
-		env.Payload["code"] = strconv.Itoa(msg.Error.Code)
-		env.Payload["message"] = msg.Error.Message
+		adapter.SetSystemMeta(env, protocol.MetaSysTag, protocol.TagResponseError)
+		adapter.SetSystemMeta(env, protocol.MetaSysCode, strconv.Itoa(msg.Error.Code))
+		adapter.SetSystemMeta(env, protocol.MetaSysMessage, msg.Error.Message)
 		if sourceID != "" {
-			env.Payload["request_id"] = sourceID
+			adapter.SetSystemMeta(env, protocol.MetaSysRequestID, sourceID)
 		}
 
 	case msg.Result != nil:
 		if msg.ID == nil {
 			return nil, errors.New("json-rpc result message missing id")
 		}
-		env.Tag = protocol.TagResponseSuccess
+		adapter.SetSystemMeta(env, protocol.MetaSysTag, protocol.TagResponseSuccess)
 		if sourceID != "" {
-			env.Payload["request_id"] = sourceID
+			adapter.SetSystemMeta(env, protocol.MetaSysRequestID, sourceID)
 		}
-		env.Payload["result"] = msg.Result
+		adapter.SetSystemMeta(env, protocol.MetaSysResult, msg.Result)
 
 	case strings.TrimSpace(msg.Method) != "" && msg.ID == nil:
-		env.Tag = protocol.TagContextProvide
+		adapter.SetSystemMeta(env, protocol.MetaSysTag, protocol.TagContextProvide)
 		env.Payload["summary"] = buildNotificationSummary(msg.Method, msg.Params)
 
 	case msg.Method == "tools/call" && msg.ID != nil:
-		env.Tag = protocol.TagRequestAction
+		adapter.SetSystemMeta(env, protocol.MetaSysTag, protocol.TagRequestAction)
 		nameRaw, ok := msg.Params["name"]
 		if !ok {
 			return nil, errors.New("tools/call params.name is required")
@@ -147,11 +147,11 @@ func (a *MCPAdapter) Ingest(ctx context.Context, raw []byte, meta adapter.Transp
 		if !ok || strings.TrimSpace(action) == "" {
 			return nil, errors.New("tools/call params.name must be a non-empty string")
 		}
-		env.Payload["action"] = action
+		adapter.SetSystemMeta(env, protocol.MetaSysAction, action)
 		if args, ok := msg.Params["arguments"]; ok {
-			env.Payload["args"] = args
+			adapter.SetSystemMeta(env, protocol.MetaSysArgs, args)
 		} else {
-			env.Payload["args"] = map[string]any{}
+			adapter.SetSystemMeta(env, protocol.MetaSysArgs, map[string]any{})
 		}
 
 	default:
@@ -176,15 +176,12 @@ func (a *MCPAdapter) Emit(ctx context.Context, env *protocol.Envelope) ([]byte, 
 
 	msg := jsonRPCMessage{JSONRPC: "2.0"}
 
-	switch env.Tag {
+	tag := protocol.EffectiveTag(env)
+	switch tag {
 	case protocol.TagRequestAction:
-		actionRaw, ok := env.Payload["action"]
-		if !ok {
-			return nil, errors.New("request.action payload.action is required")
-		}
-		action, ok := actionRaw.(string)
-		if !ok || strings.TrimSpace(action) == "" {
-			return nil, errors.New("request.action payload.action must be a non-empty string")
+		action := adapter.SystemMetaString(env, protocol.MetaSysAction)
+		if strings.TrimSpace(action) == "" {
+			return nil, errors.New("request.action metadata.action is required")
 		}
 
 		msg.ID = requestIDForEmit(env)
@@ -192,7 +189,7 @@ func (a *MCPAdapter) Emit(ctx context.Context, env *protocol.Envelope) ([]byte, 
 		msg.Params = map[string]any{
 			"name": action,
 		}
-		if args, ok := env.Payload["args"]; ok {
+		if args, ok := adapter.SystemMeta(env, protocol.MetaSysArgs); ok {
 			msg.Params["arguments"] = args
 		} else {
 			msg.Params["arguments"] = map[string]any{}
@@ -200,36 +197,32 @@ func (a *MCPAdapter) Emit(ctx context.Context, env *protocol.Envelope) ([]byte, 
 
 	case protocol.TagResponseSuccess:
 		msg.ID = requestIDForEmit(env)
-		if result, ok := env.Payload["result"]; ok {
+		if result, ok := adapter.SystemMeta(env, protocol.MetaSysResult); ok {
 			msg.Result = result
 		} else {
-			return nil, errors.New("response.success payload.result is required")
+			return nil, errors.New("response.success metadata.result is required")
 		}
 
 	case protocol.TagResponseError:
-		codeRaw, ok := env.Payload["code"]
+		codeRaw, ok := adapter.SystemMeta(env, protocol.MetaSysCode)
 		if !ok {
-			return nil, errors.New("response.error payload.code is required")
-		}
-		messageRaw, ok := env.Payload["message"]
-		if !ok {
-			return nil, errors.New("response.error payload.message is required")
+			return nil, errors.New("response.error metadata.code is required")
 		}
 
 		code, err := parseErrorCode(codeRaw)
 		if err != nil {
 			return nil, err
 		}
-		message, ok := messageRaw.(string)
-		if !ok || strings.TrimSpace(message) == "" {
-			return nil, errors.New("response.error payload.message must be a non-empty string")
+		message := adapter.SystemMetaString(env, protocol.MetaSysMessage)
+		if strings.TrimSpace(message) == "" {
+			return nil, errors.New("response.error metadata.message must be a non-empty string")
 		}
 
 		msg.ID = requestIDForEmit(env)
 		msg.Error = &jsonRPCError{Code: code, Message: message}
 
 	default:
-		return nil, fmt.Errorf("unsupported envelope tag for mcp emit: %s", env.Tag)
+		return nil, fmt.Errorf("unsupported envelope tag for mcp emit: %s", tag)
 	}
 
 	out, err := json.Marshal(msg)
@@ -273,8 +266,10 @@ func buildNotificationSummary(method string, params map[string]any) string {
 }
 
 func requestIDForEmit(env *protocol.Envelope) any {
-	if requestID, ok := env.Payload["request_id"]; ok {
-		return requestID
+	if requestID, ok := adapter.SystemMeta(env, protocol.MetaSysRequestID); ok {
+		if requestID != nil {
+			return requestID
+		}
 	}
 	return env.ID
 }

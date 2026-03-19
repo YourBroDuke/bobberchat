@@ -81,6 +81,31 @@ type Adapter interface {
 }
 ```
 
+### System Metadata Refactor (Tags & Payload → Metadata)
+
+All system-injected data has been moved from `Tag` and `Payload` fields into `Metadata` under underscore-prefixed keys. This ensures `Tag` and `Payload` remain purely user-controlled input.
+
+**Changes across all adapters** (gRPC, MCP, A2A):
+- `Ingest()` now writes system data to `Metadata` (e.g. `_tag`, `_action`, `_args`) instead of `Tag`/`Payload`
+- `Emit()` now reads system data from `Metadata` instead of `Tag`/`Payload`
+- All adapter tests updated to assert `Metadata` keys
+
+**Envelope changes** (`internal/protocol/envelope.go`):
+- 18 `MetaSys*` constants for all system metadata keys
+- `EffectiveTag(env)` helper: prefers user-supplied `Tag`, falls back to `Metadata["_tag"]`
+- `Validate()` accepts empty `Tag` when `_tag` exists in Metadata
+- `Tag` field is now `json:"tag,omitempty"`
+
+**Adapter helpers** (`internal/adapter/adapter.go`):
+- `SetSystemMeta(env, key, value)` — write system metadata
+- `SystemMeta(env, key)` / `SystemMetaString(env, key)` — read system metadata
+
+**Broker & main server**: Use `protocol.EffectiveTag(env)` for routing, rate limiting, metrics, and audit.
+
+**Approval module**: System data (`_approval_id`, `_decision`, `_reason`, `_justification`) in Metadata; Payload is empty.
+
+**Replay handler**: Replay keys (`_replayed`, `_original_message_id`, `_replay_reason`, `_tag`) in Metadata.
+
 Server endpoints for adapters:
 - `POST /v1/adapter/{name}/ingest` — Auth-protected generic ingest endpoint
 - `GET /v1/adapter` — List registered adapters
@@ -123,7 +148,7 @@ Key implementation details:
 
 | Test File | Subtests | What's Tested |
 |-----------|----------|---------------|
-| `backend/internal/protocol/envelope_test.go` | 13 | Envelope marshaling, validation, ID generation |
+| `backend/internal/protocol/envelope_test.go` | 15 | Envelope marshaling, validation (incl. metadata-tag fallback), ID generation |
 | `backend/internal/protocol/tags_test.go` | 28 | Tag parsing, validation, family classification |
 | `backend/internal/protocol/version_test.go` | 21 | Version negotiation, compatibility checks |
 | `backend/internal/auth/auth_test.go` | 10 | Argon2id hash/verify, JWT sign/validate, bcrypt |
@@ -293,12 +318,14 @@ System:     GET /v1/health, /v1/metrics
   "id": "uuid",
   "from": "uuid",
   "to": "uuid",
-  "tag": "request.action",
+  "tag": "(optional) user-supplied tag",
   "payload": {},
-  "metadata": {},
+  "metadata": { "_tag": "request.action", "_action": "...", "...": "..." },
   "timestamp": "RFC3339"
 }
 ```
+
+**Field semantics**: `tag` and `payload` are purely user-controlled. All system-injected data (adapter-derived routing tags, action names, error codes, replay/approval keys) lives in `metadata` under underscore-prefixed keys (e.g. `_tag`, `_action`, `_result`). When `tag` is empty, `protocol.EffectiveTag()` falls back to `metadata._tag`.
 
 ### 8 Tag Families
 

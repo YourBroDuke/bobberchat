@@ -46,3 +46,27 @@ func SetAdapterMetadata(env *protocol.Envelope, adapterName, version, direction,
 		MetaKeySourceProtocol: sourceProtocol,
 	}
 }
+
+func SetSystemMeta(env *protocol.Envelope, key string, value any) {
+	if env.Metadata == nil {
+		env.Metadata = make(map[string]any)
+	}
+	env.Metadata[key] = value
+}
+
+func SystemMeta(env *protocol.Envelope, key string) (any, bool) {
+	if env == nil || env.Metadata == nil {
+		return nil, false
+	}
+	v, ok := env.Metadata[key]
+	return v, ok
+}
+
+func SystemMetaString(env *protocol.Envelope, key string) string {
+	v, ok := SystemMeta(env, key)
+	if !ok {
+		return ""
+	}
+	s, _ := v.(string)
+	return s
+}

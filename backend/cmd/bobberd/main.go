@@ -952,17 +952,20 @@ func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	payload := make(map[string]any, len(original.Payload)+3)
+	payload := make(map[string]any, len(original.Payload))
 	for k, v := range original.Payload {
 		payload[k] = v
 	}
-	payload["replayed"] = true
-	payload["original_message_id"] = original.ID.String()
-	payload["replay_reason"] = strings.TrimSpace(req.Reason)
 
-	metadata := make(map[string]any, len(original.Metadata))
+	metadata := make(map[string]any, len(original.Metadata)+4)
 	for k, v := range original.Metadata {
 		metadata[k] = v
+	}
+	metadata[protocol.MetaSysReplayed] = true
+	metadata[protocol.MetaSysOriginalMessageID] = original.ID.String()
+	metadata[protocol.MetaSysReplayReason] = strings.TrimSpace(req.Reason)
+	if original.Tag != "" {
+		metadata[protocol.MetaSysTag] = original.Tag
 	}
 
 	newMessageID := uuid.NewString()
@@ -970,7 +973,6 @@ func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
 		ID:        newMessageID,
 		From:      original.FromID.String(),
 		To:        original.ConversationID.String(),
-		Tag:       original.Tag,
 		Payload:   payload,
 		Metadata:  metadata,
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
@@ -1252,7 +1254,7 @@ func (a *app) publishAndAudit(ctx context.Context, env *protocol.Envelope) error
 			}
 		}
 
-		tagKey := ratelimit.TagKey(env.Tag)
+		tagKey := ratelimit.TagKey(protocol.EffectiveTag(env))
 		if !a.limiter.Allow(ratelimit.DimensionTag, tagKey) {
 			if a.metrics != nil {
 				a.metrics.RateLimited.WithLabelValues(ratelimit.DimensionTag, tagKey).Inc()
@@ -1275,7 +1277,7 @@ func (a *app) publishAndAudit(ctx context.Context, env *protocol.Envelope) error
 				"message_id":  env.ID,
 				"from":        env.From,
 				"to":          env.To,
-				"tag":         env.Tag,
+				"tag":         protocol.EffectiveTag(env),
 				"receiver_id": toID.String(),
 			},
 		}

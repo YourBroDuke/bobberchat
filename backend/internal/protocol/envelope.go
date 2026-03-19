@@ -7,14 +7,59 @@ import (
 	"time"
 )
 
+// System metadata key constants. All system-injected data lives under these
+// keys in Metadata so that Tag and Payload remain pure user input.
+const (
+	MetaSysTag               = "_tag"
+	MetaSysAction            = "_action"
+	MetaSysArgs              = "_args"
+	MetaSysResult            = "_result"
+	MetaSysRequestID         = "_request_id"
+	MetaSysCode              = "_code"
+	MetaSysMessage           = "_message"
+	MetaSysStreamID          = "_stream_id"
+	MetaSysUpdate            = "_update"
+	MetaSysPercentage        = "_percentage"
+	MetaSysReplayed          = "_replayed"
+	MetaSysOriginalMessageID = "_original_message_id"
+	MetaSysReplayReason      = "_replay_reason"
+	MetaSysApprovalID        = "_approval_id"
+	MetaSysDecision          = "_decision"
+	MetaSysReason            = "_reason"
+	MetaSysJustification     = "_justification"
+	MetaSysTaskID            = "_task_id"
+	MetaSysStatus            = "_status"
+)
+
 type Envelope struct {
 	ID        string         `json:"id"`
 	From      string         `json:"from"`
 	To        string         `json:"to"`
-	Tag       string         `json:"tag"`
+	Tag       string         `json:"tag,omitempty"`
 	Payload   map[string]any `json:"payload"`
 	Metadata  map[string]any `json:"metadata,omitempty"`
 	Timestamp string         `json:"timestamp"`
+}
+
+// EffectiveTag returns the tag for routing and protocol logic. It prefers the
+// user-supplied Tag field; when Tag is empty it falls back to the system tag
+// stored in Metadata["_tag"].
+func EffectiveTag(env *Envelope) string {
+	if env == nil {
+		return ""
+	}
+	if t := strings.TrimSpace(env.Tag); t != "" {
+		return t
+	}
+	if env.Metadata == nil {
+		return ""
+	}
+	if raw, ok := env.Metadata[MetaSysTag]; ok {
+		if s, ok := raw.(string); ok {
+			return strings.TrimSpace(s)
+		}
+	}
+	return ""
 }
 
 func (e *Envelope) Validate() error {
@@ -31,9 +76,6 @@ func (e *Envelope) Validate() error {
 	if strings.TrimSpace(e.To) == "" {
 		return errors.New("to is required")
 	}
-	if strings.TrimSpace(e.Tag) == "" {
-		return errors.New("tag is required")
-	}
 	if strings.TrimSpace(e.Timestamp) == "" {
 		return errors.New("timestamp is required")
 	}
@@ -41,8 +83,13 @@ func (e *Envelope) Validate() error {
 		return errors.New("payload must not be nil")
 	}
 
-	if !IsValidTag(e.Tag) {
-		return fmt.Errorf("invalid tag: %s", e.Tag)
+	tag := EffectiveTag(e)
+	if tag == "" {
+		return errors.New("tag is required (set Tag field or Metadata[\"_tag\"])")
+	}
+
+	if !IsValidTag(tag) {
+		return fmt.Errorf("invalid tag: %s", tag)
 	}
 
 	if _, err := time.Parse(time.RFC3339, e.Timestamp); err != nil {

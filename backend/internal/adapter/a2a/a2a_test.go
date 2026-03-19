@@ -100,8 +100,11 @@ func TestA2AAdapterIngestMessageSendAction(t *testing.T) {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
 
-	if env.Tag != protocol.TagRequestAction {
-		t.Fatalf("env.Tag = %q, want %q", env.Tag, protocol.TagRequestAction)
+	if env.Tag != "" {
+		t.Fatalf("env.Tag = %q, want empty", env.Tag)
+	}
+	if got := adapter.SystemMetaString(env, protocol.MetaSysTag); got != protocol.TagRequestAction {
+		t.Fatalf("system meta tag = %q, want %q", got, protocol.TagRequestAction)
 	}
 	if env.From != "a2a:conn-1" {
 		t.Fatalf("env.From = %q, want %q", env.From, "a2a:conn-1")
@@ -161,8 +164,11 @@ func TestA2AAdapterIngestMessageSendDataIntent(t *testing.T) {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
 
-	if env.Tag != protocol.TagRequestData {
-		t.Fatalf("env.Tag = %q, want %q", env.Tag, protocol.TagRequestData)
+	if env.Tag != "" {
+		t.Fatalf("env.Tag = %q, want empty", env.Tag)
+	}
+	if got := adapter.SystemMetaString(env, protocol.MetaSysTag); got != protocol.TagRequestData {
+		t.Fatalf("system meta tag = %q, want %q", got, protocol.TagRequestData)
 	}
 }
 
@@ -175,8 +181,11 @@ func TestA2AAdapterIngestMessageSendApprovalIntent(t *testing.T) {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
 
-	if env.Tag != protocol.TagRequestApproval {
-		t.Fatalf("env.Tag = %q, want %q", env.Tag, protocol.TagRequestApproval)
+	if env.Tag != "" {
+		t.Fatalf("env.Tag = %q, want empty", env.Tag)
+	}
+	if got := adapter.SystemMetaString(env, protocol.MetaSysTag); got != protocol.TagRequestApproval {
+		t.Fatalf("system meta tag = %q, want %q", got, protocol.TagRequestApproval)
 	}
 }
 
@@ -189,8 +198,11 @@ func TestA2AAdapterIngestAgentCard(t *testing.T) {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
 
-	if env.Tag != protocol.TagContextProvide {
-		t.Fatalf("env.Tag = %q, want %q", env.Tag, protocol.TagContextProvide)
+	if env.Tag != "" {
+		t.Fatalf("env.Tag = %q, want empty", env.Tag)
+	}
+	if got := adapter.SystemMetaString(env, protocol.MetaSysTag); got != protocol.TagContextProvide {
+		t.Fatalf("system meta tag = %q, want %q", got, protocol.TagContextProvide)
 	}
 	if got := env.Payload["name"]; got != "alpha-agent" {
 		t.Fatalf("env.Payload[name] = %v, want %q", got, "alpha-agent")
@@ -223,20 +235,26 @@ func TestA2AAdapterIngestTaskCreate(t *testing.T) {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
 
-	if env.Tag != protocol.TagRequestAction {
-		t.Fatalf("env.Tag = %q, want %q", env.Tag, protocol.TagRequestAction)
+	if env.Tag != "" {
+		t.Fatalf("env.Tag = %q, want empty", env.Tag)
 	}
-	if got := env.Payload["action"]; got != "task.create" {
-		t.Fatalf("env.Payload[action] = %v, want %q", got, "task.create")
+	if got := adapter.SystemMetaString(env, protocol.MetaSysTag); got != protocol.TagRequestAction {
+		t.Fatalf("system meta tag = %q, want %q", got, protocol.TagRequestAction)
 	}
-	if got := env.Payload["task_id"]; got != "task-100" {
-		t.Fatalf("env.Payload[task_id] = %v, want %q", got, "task-100")
+	if got := adapter.SystemMetaString(env, protocol.MetaSysAction); got != "task.create" {
+		t.Fatalf("system meta action = %q, want %q", got, "task.create")
 	}
-	if got := env.Payload["status"]; got != "created" {
-		t.Fatalf("env.Payload[status] = %v, want %q", got, "created")
+	if got := adapter.SystemMetaString(env, protocol.MetaSysTaskID); got != "task-100" {
+		t.Fatalf("system meta task_id = %q, want %q", got, "task-100")
 	}
-	if _, ok := env.Payload["result"]; !ok {
-		t.Fatalf("env.Payload[result] missing")
+	if got := adapter.SystemMetaString(env, protocol.MetaSysStatus); got != "created" {
+		t.Fatalf("system meta status = %q, want %q", got, "created")
+	}
+	if _, ok := adapter.SystemMeta(env, protocol.MetaSysResult); !ok {
+		t.Fatalf("system meta result missing")
+	}
+	if len(env.Payload) != 0 {
+		t.Fatalf("env.Payload = %v, want empty", env.Payload)
 	}
 }
 
@@ -249,14 +267,23 @@ func TestA2AAdapterIngestTaskUpdateCompleted(t *testing.T) {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
 
-	if env.Tag != protocol.TagResponseSuccess {
-		t.Fatalf("env.Tag = %q, want %q", env.Tag, protocol.TagResponseSuccess)
+	if env.Tag != "" {
+		t.Fatalf("env.Tag = %q, want empty", env.Tag)
 	}
-	if got := env.Payload["task_id"]; got != "task-200" {
-		t.Fatalf("env.Payload[task_id] = %v, want %q", got, "task-200")
+	if got := adapter.SystemMetaString(env, protocol.MetaSysTag); got != protocol.TagResponseSuccess {
+		t.Fatalf("system meta tag = %q, want %q", got, protocol.TagResponseSuccess)
 	}
-	if got := env.Payload["status"]; got != "completed" {
-		t.Fatalf("env.Payload[status] = %v, want %q", got, "completed")
+	if got := adapter.SystemMetaString(env, protocol.MetaSysTaskID); got != "task-200" {
+		t.Fatalf("system meta task_id = %q, want %q", got, "task-200")
+	}
+	if got := adapter.SystemMetaString(env, protocol.MetaSysStatus); got != "completed" {
+		t.Fatalf("system meta status = %q, want %q", got, "completed")
+	}
+	if _, ok := adapter.SystemMeta(env, protocol.MetaSysResult); !ok {
+		t.Fatalf("system meta result missing")
+	}
+	if len(env.Payload) != 0 {
+		t.Fatalf("env.Payload = %v, want empty", env.Payload)
 	}
 }
 
@@ -269,17 +296,23 @@ func TestA2AAdapterIngestTaskUpdateFailed(t *testing.T) {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
 
-	if env.Tag != protocol.TagResponseError {
-		t.Fatalf("env.Tag = %q, want %q", env.Tag, protocol.TagResponseError)
+	if env.Tag != "" {
+		t.Fatalf("env.Tag = %q, want empty", env.Tag)
 	}
-	if got := env.Payload["task_id"]; got != "task-201" {
-		t.Fatalf("env.Payload[task_id] = %v, want %q", got, "task-201")
+	if got := adapter.SystemMetaString(env, protocol.MetaSysTag); got != protocol.TagResponseError {
+		t.Fatalf("system meta tag = %q, want %q", got, protocol.TagResponseError)
 	}
-	if got := env.Payload["code"]; got != "E42" {
-		t.Fatalf("env.Payload[code] = %v, want %q", got, "E42")
+	if got := adapter.SystemMetaString(env, protocol.MetaSysTaskID); got != "task-201" {
+		t.Fatalf("system meta task_id = %q, want %q", got, "task-201")
 	}
-	if got := env.Payload["message"]; got != "boom" {
-		t.Fatalf("env.Payload[message] = %v, want %q", got, "boom")
+	if got := adapter.SystemMetaString(env, protocol.MetaSysCode); got != "E42" {
+		t.Fatalf("system meta code = %q, want %q", got, "E42")
+	}
+	if got := adapter.SystemMetaString(env, protocol.MetaSysMessage); got != "boom" {
+		t.Fatalf("system meta message = %q, want %q", got, "boom")
+	}
+	if len(env.Payload) != 0 {
+		t.Fatalf("env.Payload = %v, want empty", env.Payload)
 	}
 }
 
@@ -292,11 +325,23 @@ func TestA2AAdapterIngestTaskUpdateInProgress(t *testing.T) {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
 
-	if env.Tag != protocol.TagProgressUpdate {
-		t.Fatalf("env.Tag = %q, want %q", env.Tag, protocol.TagProgressUpdate)
+	if env.Tag != "" {
+		t.Fatalf("env.Tag = %q, want empty", env.Tag)
 	}
-	if got := env.Payload["task_id"]; got != "task-202" {
-		t.Fatalf("env.Payload[task_id] = %v, want %q", got, "task-202")
+	if got := adapter.SystemMetaString(env, protocol.MetaSysTag); got != protocol.TagProgressUpdate {
+		t.Fatalf("system meta tag = %q, want %q", got, protocol.TagProgressUpdate)
+	}
+	if got := adapter.SystemMetaString(env, protocol.MetaSysTaskID); got != "task-202" {
+		t.Fatalf("system meta task_id = %q, want %q", got, "task-202")
+	}
+	if got := adapter.SystemMetaString(env, protocol.MetaSysStatus); got != "in_progress" {
+		t.Fatalf("system meta status = %q, want %q", got, "in_progress")
+	}
+	if _, ok := adapter.SystemMeta(env, protocol.MetaSysResult); !ok {
+		t.Fatalf("system meta result missing")
+	}
+	if len(env.Payload) != 0 {
+		t.Fatalf("env.Payload = %v, want empty", env.Payload)
 	}
 }
 
@@ -362,9 +407,9 @@ func TestA2AAdapterIngestFallbackBroadcast(t *testing.T) {
 func TestA2AAdapterEmitRequestTag(t *testing.T) {
 	a := NewA2AAdapter()
 	env := &protocol.Envelope{
-		ID:      "env-1",
-		Tag:     protocol.TagRequestAction,
-		Payload: map[string]any{"request_id": "req-1", "message": "execute workflow", "task_id": "task-1", "context_id": "ctx-1"},
+		ID:       "env-1",
+		Payload:  map[string]any{"message": "execute workflow", "context_id": "ctx-1"},
+		Metadata: map[string]any{protocol.MetaSysTag: protocol.TagRequestAction, protocol.MetaSysRequestID: "req-1", protocol.MetaSysTaskID: "task-1"},
 	}
 
 	out, err := a.Emit(context.Background(), env)
@@ -402,13 +447,9 @@ func TestA2AAdapterEmitRequestTag(t *testing.T) {
 func TestA2AAdapterEmitResponseSuccess(t *testing.T) {
 	a := NewA2AAdapter()
 	env := &protocol.Envelope{
-		ID:  "env-2",
-		Tag: protocol.TagResponseSuccess,
-		Payload: map[string]any{
-			"request_id": "req-22",
-			"task_id":    "task-22",
-			"result":     map[string]any{"output": "ok"},
-		},
+		ID:       "env-2",
+		Payload:  map[string]any{},
+		Metadata: map[string]any{protocol.MetaSysTag: protocol.TagResponseSuccess, protocol.MetaSysRequestID: "req-22", protocol.MetaSysTaskID: "task-22", protocol.MetaSysResult: map[string]any{"output": "ok"}},
 	}
 
 	out, err := a.Emit(context.Background(), env)
@@ -441,14 +482,9 @@ func TestA2AAdapterEmitResponseSuccess(t *testing.T) {
 func TestA2AAdapterEmitResponseError(t *testing.T) {
 	a := NewA2AAdapter()
 	env := &protocol.Envelope{
-		ID:  "env-3",
-		Tag: protocol.TagResponseError,
-		Payload: map[string]any{
-			"request_id": "req-33",
-			"task_id":    "task-33",
-			"code":       "E500",
-			"message":    "failure",
-		},
+		ID:       "env-3",
+		Payload:  map[string]any{},
+		Metadata: map[string]any{protocol.MetaSysTag: protocol.TagResponseError, protocol.MetaSysRequestID: "req-33", protocol.MetaSysTaskID: "task-33", protocol.MetaSysCode: "E500", protocol.MetaSysMessage: "failure"},
 	}
 
 	out, err := a.Emit(context.Background(), env)
@@ -485,13 +521,11 @@ func TestA2AAdapterEmitResponseError(t *testing.T) {
 func TestA2AAdapterEmitProgressTag(t *testing.T) {
 	a := NewA2AAdapter()
 	env := &protocol.Envelope{
-		ID:  "env-4",
-		Tag: protocol.TagProgressUpdate,
+		ID: "env-4",
 		Payload: map[string]any{
-			"request_id": "req-44",
-			"task_id":    "task-44",
-			"progress":   map[string]any{"percent": 75},
+			"progress": map[string]any{"percent": 75},
 		},
+		Metadata: map[string]any{protocol.MetaSysTag: protocol.TagProgressUpdate, protocol.MetaSysRequestID: "req-44", protocol.MetaSysTaskID: "task-44"},
 	}
 
 	out, err := a.Emit(context.Background(), env)

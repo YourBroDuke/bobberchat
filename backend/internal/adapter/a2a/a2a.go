@@ -105,11 +105,11 @@ func (a *A2AAdapter) Ingest(ctx context.Context, raw []byte, meta adapter.Transp
 		if err != nil {
 			return nil, err
 		}
-		env.Tag = tag
+		adapter.SetSystemMeta(env, protocol.MetaSysTag, tag)
 		env.Payload = payload
 
 	case "agent/card":
-		env.Tag = protocol.TagContextProvide
+		adapter.SetSystemMeta(env, protocol.MetaSysTag, protocol.TagContextProvide)
 		payload, err := ingestAgentCard(msg.Params)
 		if err != nil {
 			return nil, err
@@ -117,10 +117,26 @@ func (a *A2AAdapter) Ingest(ctx context.Context, raw []byte, meta adapter.Transp
 		env.Payload = payload
 
 	case "task/create":
-		env.Tag = protocol.TagRequestAction
+		adapter.SetSystemMeta(env, protocol.MetaSysTag, protocol.TagRequestAction)
 		payload, err := ingestTaskCreate(msg.Params)
 		if err != nil {
 			return nil, err
+		}
+		if action, ok := payload["action"]; ok {
+			adapter.SetSystemMeta(env, protocol.MetaSysAction, action)
+			delete(payload, "action")
+		}
+		if taskID, ok := payload["task_id"]; ok {
+			adapter.SetSystemMeta(env, protocol.MetaSysTaskID, taskID)
+			delete(payload, "task_id")
+		}
+		if status, ok := payload["status"]; ok {
+			adapter.SetSystemMeta(env, protocol.MetaSysStatus, status)
+			delete(payload, "status")
+		}
+		if result, ok := payload["result"]; ok {
+			adapter.SetSystemMeta(env, protocol.MetaSysResult, result)
+			delete(payload, "result")
 		}
 		env.Payload = payload
 
@@ -129,7 +145,27 @@ func (a *A2AAdapter) Ingest(ctx context.Context, raw []byte, meta adapter.Transp
 		if err != nil {
 			return nil, err
 		}
-		env.Tag = tag
+		adapter.SetSystemMeta(env, protocol.MetaSysTag, tag)
+		if taskID, ok := payload["task_id"]; ok {
+			adapter.SetSystemMeta(env, protocol.MetaSysTaskID, taskID)
+			delete(payload, "task_id")
+		}
+		if status, ok := payload["status"]; ok {
+			adapter.SetSystemMeta(env, protocol.MetaSysStatus, status)
+			delete(payload, "status")
+		}
+		if result, ok := payload["result"]; ok {
+			adapter.SetSystemMeta(env, protocol.MetaSysResult, result)
+			delete(payload, "result")
+		}
+		if message, ok := payload["message"]; ok {
+			adapter.SetSystemMeta(env, protocol.MetaSysMessage, message)
+			delete(payload, "message")
+		}
+		if code, ok := payload["code"]; ok {
+			adapter.SetSystemMeta(env, protocol.MetaSysCode, code)
+			delete(payload, "code")
+		}
 		env.Payload = payload
 
 	default:
@@ -153,28 +189,29 @@ func (a *A2AAdapter) Emit(ctx context.Context, env *protocol.Envelope) ([]byte, 
 	}
 
 	msg := a2aMessage{}
+	tag := protocol.EffectiveTag(env)
 
 	switch {
-	case strings.HasPrefix(env.Tag, protocol.TagRequest+"."):
+	case strings.HasPrefix(tag, protocol.TagRequest+"."):
 		msg.Method = "message/send"
 		msg.ID = requestIDForEmit(env)
 		msg.Params = map[string]any{
 			"message": buildOutboundMessagePayload(env),
 		}
 
-	case env.Tag == protocol.TagResponseSuccess:
+	case tag == protocol.TagResponseSuccess:
 		msg.Method = "task/update"
 		msg.ID = requestIDForEmit(env)
 		params := map[string]any{
 			"taskId": taskIDForEmit(env),
 			"status": "completed",
 		}
-		if result, ok := env.Payload["result"]; ok {
+		if result, ok := adapter.SystemMeta(env, protocol.MetaSysResult); ok {
 			params["result"] = result
 		}
 		msg.Params = params
 
-	case env.Tag == protocol.TagResponseError:
+	case tag == protocol.TagResponseError:
 		msg.Method = "task/update"
 		msg.ID = requestIDForEmit(env)
 		params := map[string]any{
@@ -182,10 +219,10 @@ func (a *A2AAdapter) Emit(ctx context.Context, env *protocol.Envelope) ([]byte, 
 			"status": "failed",
 		}
 		result := map[string]any{}
-		if code, ok := env.Payload["code"]; ok {
+		if code, ok := adapter.SystemMeta(env, protocol.MetaSysCode); ok {
 			result["code"] = code
 		}
-		if message, ok := env.Payload["message"]; ok {
+		if message := adapter.SystemMetaString(env, protocol.MetaSysMessage); message != "" {
 			result["message"] = message
 		}
 		if len(result) > 0 {
@@ -193,25 +230,27 @@ func (a *A2AAdapter) Emit(ctx context.Context, env *protocol.Envelope) ([]byte, 
 		}
 		msg.Params = params
 
-	case strings.HasPrefix(env.Tag, protocol.TagProgress+"."):
+	case strings.HasPrefix(tag, protocol.TagProgress+"."):
 		msg.Method = "task/update"
 		msg.ID = requestIDForEmit(env)
 		params := map[string]any{
 			"taskId": taskIDForEmit(env),
 			"status": "in_progress",
 		}
-		if progress, ok := env.Payload["progress"]; ok {
+		if result, ok := adapter.SystemMeta(env, protocol.MetaSysResult); ok {
+			params["result"] = result
+		} else if progress, ok := env.Payload["progress"]; ok {
 			params["result"] = progress
 		} else if len(env.Payload) > 0 {
 			params["result"] = env.Payload
 		}
 		msg.Params = params
 
-	case env.Tag == protocol.TagContextProvide:
+	case tag == protocol.TagContextProvide:
 		return nil, errors.New("unsupported envelope tag for a2a emit: context-provide")
 
 	default:
-		return nil, fmt.Errorf("unsupported envelope tag for a2a emit: %s", env.Tag)
+		return nil, fmt.Errorf("unsupported envelope tag for a2a emit: %s", tag)
 	}
 
 	out, err := json.Marshal(msg)
@@ -414,21 +453,18 @@ func sourceIDFromA2AID(id any) string {
 }
 
 func requestIDForEmit(env *protocol.Envelope) any {
-	if requestID, ok := env.Payload["request_id"]; ok {
+	if requestID, ok := adapter.SystemMeta(env, protocol.MetaSysRequestID); ok && requestID != nil {
 		return requestID
 	}
 	return env.ID
 }
 
 func taskIDForEmit(env *protocol.Envelope) string {
-	if taskID := strings.TrimSpace(asString(env.Payload["task_id"])); taskID != "" {
+	if taskID := strings.TrimSpace(adapter.SystemMetaString(env, protocol.MetaSysTaskID)); taskID != "" {
 		return taskID
 	}
-	if requestID := strings.TrimSpace(asString(env.Payload["request_id"])); requestID != "" {
+	if requestID := strings.TrimSpace(adapter.SystemMetaString(env, protocol.MetaSysRequestID)); requestID != "" {
 		return requestID
-	}
-	if strings.TrimSpace(env.ID) == "" {
-		return uuid.NewString()
 	}
 	return env.ID
 }
@@ -439,7 +475,7 @@ func buildOutboundMessagePayload(env *protocol.Envelope) map[string]any {
 		"parts":     []any{map[string]any{"type": "text", "text": outboundMessageText(env)}},
 		"messageId": env.ID,
 	}
-	if taskID := strings.TrimSpace(asString(env.Payload["task_id"])); taskID != "" {
+	if taskID := strings.TrimSpace(adapter.SystemMetaString(env, protocol.MetaSysTaskID)); taskID != "" {
 		message["taskId"] = taskID
 	}
 	if contextID := strings.TrimSpace(asString(env.Payload["context_id"])); contextID != "" {
@@ -449,15 +485,18 @@ func buildOutboundMessagePayload(env *protocol.Envelope) map[string]any {
 }
 
 func outboundMessageText(env *protocol.Envelope) string {
+	if text := strings.TrimSpace(adapter.SystemMetaString(env, protocol.MetaSysMessage)); text != "" {
+		return text
+	}
 	if text := strings.TrimSpace(asString(env.Payload["message"])); text != "" {
 		return text
 	}
-	if action := strings.TrimSpace(asString(env.Payload["action"])); action != "" {
+	if action := strings.TrimSpace(adapter.SystemMetaString(env, protocol.MetaSysAction)); action != "" {
 		return action
 	}
 	b, err := json.Marshal(env.Payload)
 	if err != nil {
-		return env.Tag
+		return protocol.EffectiveTag(env)
 	}
 	return string(b)
 }

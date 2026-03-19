@@ -136,48 +136,49 @@ func (a *GRPCAdapter) Ingest(ctx context.Context, raw []byte, meta adapter.Trans
 
 	switch {
 	case msgType == "unary" && strings.TrimSpace(msg.Service) != "" && strings.TrimSpace(msg.Method) != "" && status == "":
-		env.Tag = protocol.TagRequestAction
-		env.Payload["action"] = strings.TrimSpace(msg.Service) + "/" + strings.TrimSpace(msg.Method)
+		adapter.SetSystemMeta(env, protocol.MetaSysTag, protocol.TagRequestAction)
+		adapter.SetSystemMeta(env, protocol.MetaSysAction, strings.TrimSpace(msg.Service)+"/"+strings.TrimSpace(msg.Method))
 		if msg.Body != nil {
-			env.Payload["args"] = msg.Body
+			adapter.SetSystemMeta(env, protocol.MetaSysArgs, msg.Body)
 		} else {
-			env.Payload["args"] = map[string]any{}
+			adapter.SetSystemMeta(env, protocol.MetaSysArgs, map[string]any{})
 		}
 
 	case msgType == "unary" && status == "OK":
-		env.Tag = protocol.TagResponseSuccess
-		env.Payload["result"] = map[string]any{}
+		adapter.SetSystemMeta(env, protocol.MetaSysTag, protocol.TagResponseSuccess)
 		if msg.Body != nil {
-			env.Payload["result"] = msg.Body
+			adapter.SetSystemMeta(env, protocol.MetaSysResult, msg.Body)
+		} else {
+			adapter.SetSystemMeta(env, protocol.MetaSysResult, map[string]any{})
 		}
 		if sourceID != "" {
-			env.Payload["request_id"] = sourceID
+			adapter.SetSystemMeta(env, protocol.MetaSysRequestID, sourceID)
 		}
 
 	case msgType == "unary" && status == "ERROR":
-		env.Tag = protocol.TagResponseError
-		env.Payload["code"] = strconv.Itoa(msg.Code)
-		env.Payload["message"] = msg.Message
+		adapter.SetSystemMeta(env, protocol.MetaSysTag, protocol.TagResponseError)
+		adapter.SetSystemMeta(env, protocol.MetaSysCode, msg.Code)
+		adapter.SetSystemMeta(env, protocol.MetaSysMessage, msg.Message)
 		if sourceID != "" {
-			env.Payload["request_id"] = sourceID
+			adapter.SetSystemMeta(env, protocol.MetaSysRequestID, sourceID)
 		}
 
 	case msgType == "stream":
-		env.Tag = protocol.TagProgressUpdate
+		adapter.SetSystemMeta(env, protocol.MetaSysTag, protocol.TagProgressUpdate)
 		if msg.Body != nil {
-			env.Payload["update"] = msg.Body
+			adapter.SetSystemMeta(env, protocol.MetaSysUpdate, msg.Body)
 			if progressRaw, ok := msg.Body["progress"]; ok {
 				if percentage, ok := numericAsFloat64(progressRaw); ok {
-					env.Payload["percentage"] = percentage
+					adapter.SetSystemMeta(env, protocol.MetaSysPercentage, percentage)
 				}
 			}
 		} else {
-			env.Payload["update"] = map[string]any{}
+			adapter.SetSystemMeta(env, protocol.MetaSysUpdate, map[string]any{})
 		}
 		if sourceID != "" {
-			env.Payload["request_id"] = sourceID
+			adapter.SetSystemMeta(env, protocol.MetaSysRequestID, sourceID)
 		}
-		env.Payload["stream_id"] = msg.StreamID
+		adapter.SetSystemMeta(env, protocol.MetaSysStreamID, msg.StreamID)
 
 	default:
 		return nil, errors.New("unsupported grpc message shape")
@@ -200,16 +201,13 @@ func (a *GRPCAdapter) Emit(ctx context.Context, env *protocol.Envelope) ([]byte,
 	}
 
 	msg := grpcMessage{}
+	tag := protocol.EffectiveTag(env)
 
 	switch {
-	case env.Tag == protocol.TagRequestAction:
-		actionRaw, ok := env.Payload["action"]
-		if !ok {
-			return nil, errors.New("request.action payload.action is required")
-		}
-		action, ok := actionRaw.(string)
-		if !ok || strings.TrimSpace(action) == "" {
-			return nil, errors.New("request.action payload.action must be a non-empty string")
+	case tag == protocol.TagRequestAction:
+		action := adapter.SystemMetaString(env, protocol.MetaSysAction)
+		if strings.TrimSpace(action) == "" {
+			return nil, errors.New("request.action metadata.action is required")
 		}
 
 		service, method, found := strings.Cut(strings.TrimSpace(action), "/")
@@ -222,7 +220,7 @@ func (a *GRPCAdapter) Emit(ctx context.Context, env *protocol.Envelope) ([]byte,
 		msg.Method = strings.TrimSpace(method)
 		msg.RequestID = requestIDForEmit(env)
 
-		if args, ok := env.Payload["args"]; ok {
+		if args, ok := adapter.SystemMeta(env, protocol.MetaSysArgs); ok {
 			body, err := normalizeBody(args, "request.action payload.args")
 			if err != nil {
 				return nil, err
@@ -232,10 +230,10 @@ func (a *GRPCAdapter) Emit(ctx context.Context, env *protocol.Envelope) ([]byte,
 			msg.Body = map[string]any{}
 		}
 
-	case env.Tag == protocol.TagResponseSuccess:
-		resultRaw, ok := env.Payload["result"]
+	case tag == protocol.TagResponseSuccess:
+		resultRaw, ok := adapter.SystemMeta(env, protocol.MetaSysResult)
 		if !ok {
-			return nil, errors.New("response.success payload.result is required")
+			return nil, errors.New("response.success metadata.result is required")
 		}
 
 		body, err := normalizeBody(resultRaw, "response.success payload.result")
@@ -248,19 +246,14 @@ func (a *GRPCAdapter) Emit(ctx context.Context, env *protocol.Envelope) ([]byte,
 		msg.Status = "OK"
 		msg.Body = body
 
-	case env.Tag == protocol.TagResponseError:
-		codeRaw, ok := env.Payload["code"]
+	case tag == protocol.TagResponseError:
+		codeRaw, ok := adapter.SystemMeta(env, protocol.MetaSysCode)
 		if !ok {
-			return nil, errors.New("response.error payload.code is required")
+			return nil, errors.New("response.error metadata.code is required")
 		}
-		messageRaw, ok := env.Payload["message"]
-		if !ok {
-			return nil, errors.New("response.error payload.message is required")
-		}
-
-		message, ok := messageRaw.(string)
-		if !ok || strings.TrimSpace(message) == "" {
-			return nil, errors.New("response.error payload.message must be a non-empty string")
+		message := adapter.SystemMetaString(env, protocol.MetaSysMessage)
+		if strings.TrimSpace(message) == "" {
+			return nil, errors.New("response.error metadata.message must be a non-empty string")
 		}
 
 		code, err := parseErrorCode(codeRaw)
@@ -274,12 +267,12 @@ func (a *GRPCAdapter) Emit(ctx context.Context, env *protocol.Envelope) ([]byte,
 		msg.Code = code
 		msg.Message = message
 
-	case protocol.ParseTagFamily(env.Tag) == protocol.TagProgress:
+	case protocol.ParseTagFamily(tag) == protocol.TagProgress:
 		msg.Type = "stream"
 		msg.RequestID = requestIDForEmit(env)
 		msg.StreamID = streamIDForEmit(env)
 
-		if updateRaw, ok := env.Payload["update"]; ok {
+		if updateRaw, ok := adapter.SystemMeta(env, protocol.MetaSysUpdate); ok {
 			body, err := normalizeBody(updateRaw, "progress payload.update")
 			if err != nil {
 				return nil, err
@@ -288,9 +281,6 @@ func (a *GRPCAdapter) Emit(ctx context.Context, env *protocol.Envelope) ([]byte,
 		} else {
 			msg.Body = map[string]any{}
 			for k, v := range env.Payload {
-				if k == "request_id" || k == "stream_id" {
-					continue
-				}
 				msg.Body[k] = v
 			}
 		}
@@ -300,7 +290,7 @@ func (a *GRPCAdapter) Emit(ctx context.Context, env *protocol.Envelope) ([]byte,
 		}
 
 		if _, exists := msg.Body["progress"]; !exists {
-			if pctRaw, ok := env.Payload["percentage"]; ok {
+			if pctRaw, ok := adapter.SystemMeta(env, protocol.MetaSysPercentage); ok {
 				if pct, ok := numericAsFloat64(pctRaw); ok {
 					msg.Body["progress"] = pct
 				}
@@ -308,7 +298,7 @@ func (a *GRPCAdapter) Emit(ctx context.Context, env *protocol.Envelope) ([]byte,
 		}
 
 	default:
-		return nil, fmt.Errorf("unsupported envelope tag for grpc emit: %s", env.Tag)
+		return nil, fmt.Errorf("unsupported envelope tag for grpc emit: %s", tag)
 	}
 
 	out, err := json.Marshal(msg)
@@ -320,18 +310,17 @@ func (a *GRPCAdapter) Emit(ctx context.Context, env *protocol.Envelope) ([]byte,
 }
 
 func requestIDForEmit(env *protocol.Envelope) string {
-	if requestID, ok := env.Payload["request_id"]; ok {
-		return fmt.Sprint(requestID)
+	requestID := adapter.SystemMetaString(env, protocol.MetaSysRequestID)
+	if strings.TrimSpace(requestID) != "" {
+		return requestID
 	}
 	return env.ID
 }
 
 func streamIDForEmit(env *protocol.Envelope) string {
-	if streamID, ok := env.Payload["stream_id"]; ok {
-		streamIDText := strings.TrimSpace(fmt.Sprint(streamID))
-		if streamIDText != "" {
-			return streamIDText
-		}
+	streamID := adapter.SystemMetaString(env, protocol.MetaSysStreamID)
+	if strings.TrimSpace(streamID) != "" {
+		return streamID
 	}
 	return env.ID
 }

@@ -98,8 +98,11 @@ func TestMCPAdapterIngestToolCall(t *testing.T) {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
 
-	if env.Tag != protocol.TagRequestAction {
-		t.Fatalf("env.Tag = %q, want %q", env.Tag, protocol.TagRequestAction)
+	if env.Tag != "" {
+		t.Fatalf("env.Tag = %q, want empty string", env.Tag)
+	}
+	if got := env.Metadata[protocol.MetaSysTag]; got != protocol.TagRequestAction {
+		t.Fatalf("env.Metadata[%q] = %v, want %q", protocol.MetaSysTag, got, protocol.TagRequestAction)
 	}
 	if env.From != "mcp:conn-1" {
 		t.Fatalf("env.From = %q, want %q", env.From, "mcp:conn-1")
@@ -107,16 +110,19 @@ func TestMCPAdapterIngestToolCall(t *testing.T) {
 	if env.To != "broadcast" {
 		t.Fatalf("env.To = %q, want %q", env.To, "broadcast")
 	}
-	if got := env.Payload["action"]; got != "search" {
-		t.Fatalf("env.Payload[action] = %v, want %q", got, "search")
+	if len(env.Payload) != 0 {
+		t.Fatalf("env.Payload = %v, want empty map", env.Payload)
+	}
+	if got := env.Metadata[protocol.MetaSysAction]; got != "search" {
+		t.Fatalf("env.Metadata[%q] = %v, want %q", protocol.MetaSysAction, got, "search")
 	}
 
-	args, ok := env.Payload["args"].(map[string]any)
+	args, ok := env.Metadata[protocol.MetaSysArgs].(map[string]any)
 	if !ok {
-		t.Fatalf("env.Payload[args] type = %T, want map[string]any", env.Payload["args"])
+		t.Fatalf("env.Metadata[%q] type = %T, want map[string]any", protocol.MetaSysArgs, env.Metadata[protocol.MetaSysArgs])
 	}
 	if got := args["query"]; got != "test" {
-		t.Fatalf("env.Payload[args][query] = %v, want %q", got, "test")
+		t.Fatalf("env.Metadata[%q][query] = %v, want %q", protocol.MetaSysArgs, got, "test")
 	}
 
 	if _, err := uuid.Parse(env.ID); err != nil {
@@ -158,14 +164,20 @@ func TestMCPAdapterIngestResult(t *testing.T) {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
 
-	if env.Tag != protocol.TagResponseSuccess {
-		t.Fatalf("env.Tag = %q, want %q", env.Tag, protocol.TagResponseSuccess)
+	if env.Tag != "" {
+		t.Fatalf("env.Tag = %q, want empty string", env.Tag)
 	}
-	if got := env.Payload["request_id"]; got != "1" {
-		t.Fatalf("env.Payload[request_id] = %v, want %q", got, "1")
+	if got := env.Metadata[protocol.MetaSysTag]; got != protocol.TagResponseSuccess {
+		t.Fatalf("env.Metadata[%q] = %v, want %q", protocol.MetaSysTag, got, protocol.TagResponseSuccess)
 	}
-	if _, ok := env.Payload["result"]; !ok {
-		t.Fatalf("env.Payload[result] missing")
+	if len(env.Payload) != 0 {
+		t.Fatalf("env.Payload = %v, want empty map", env.Payload)
+	}
+	if got := env.Metadata[protocol.MetaSysRequestID]; got != "1" {
+		t.Fatalf("env.Metadata[%q] = %v, want %q", protocol.MetaSysRequestID, got, "1")
+	}
+	if _, ok := env.Metadata[protocol.MetaSysResult]; !ok {
+		t.Fatalf("env.Metadata[%q] missing", protocol.MetaSysResult)
 	}
 }
 
@@ -178,14 +190,23 @@ func TestMCPAdapterIngestErrorResult(t *testing.T) {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
 
-	if env.Tag != protocol.TagResponseError {
-		t.Fatalf("env.Tag = %q, want %q", env.Tag, protocol.TagResponseError)
+	if env.Tag != "" {
+		t.Fatalf("env.Tag = %q, want empty string", env.Tag)
 	}
-	if got := env.Payload["code"]; got != "-32600" {
-		t.Fatalf("env.Payload[code] = %v, want %q", got, "-32600")
+	if got := env.Metadata[protocol.MetaSysTag]; got != protocol.TagResponseError {
+		t.Fatalf("env.Metadata[%q] = %v, want %q", protocol.MetaSysTag, got, protocol.TagResponseError)
 	}
-	if got := env.Payload["message"]; got != "Invalid Request" {
-		t.Fatalf("env.Payload[message] = %v, want %q", got, "Invalid Request")
+	if len(env.Payload) != 0 {
+		t.Fatalf("env.Payload = %v, want empty map", env.Payload)
+	}
+	if got := env.Metadata[protocol.MetaSysCode]; got != "-32600" {
+		t.Fatalf("env.Metadata[%q] = %v, want %q", protocol.MetaSysCode, got, "-32600")
+	}
+	if got := env.Metadata[protocol.MetaSysMessage]; got != "Invalid Request" {
+		t.Fatalf("env.Metadata[%q] = %v, want %q", protocol.MetaSysMessage, got, "Invalid Request")
+	}
+	if got := env.Metadata[protocol.MetaSysRequestID]; got != "1" {
+		t.Fatalf("env.Metadata[%q] = %v, want %q", protocol.MetaSysRequestID, got, "1")
 	}
 }
 
@@ -198,8 +219,11 @@ func TestMCPAdapterIngestNotification(t *testing.T) {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
 
-	if env.Tag != protocol.TagContextProvide {
-		t.Fatalf("env.Tag = %q, want %q", env.Tag, protocol.TagContextProvide)
+	if env.Tag != "" {
+		t.Fatalf("env.Tag = %q, want empty string", env.Tag)
+	}
+	if got := env.Metadata[protocol.MetaSysTag]; got != protocol.TagContextProvide {
+		t.Fatalf("env.Metadata[%q] = %v, want %q", protocol.MetaSysTag, got, protocol.TagContextProvide)
 	}
 	summary, ok := env.Payload["summary"].(string)
 	if !ok {
@@ -249,9 +273,14 @@ func TestMCPAdapterIngestUsesTargetAgentHeader(t *testing.T) {
 func TestMCPAdapterEmitRequestAction(t *testing.T) {
 	a := NewMCPAdapter()
 	env := &protocol.Envelope{
-		ID:      "env-1",
-		Tag:     protocol.TagRequestAction,
-		Payload: map[string]any{"action": "search", "args": map[string]any{"query": "test"}},
+		ID:  "env-1",
+		Tag: "",
+		Metadata: map[string]any{
+			protocol.MetaSysTag:    protocol.TagRequestAction,
+			protocol.MetaSysAction: "search",
+			protocol.MetaSysArgs:   map[string]any{"query": "test"},
+		},
+		Payload: map[string]any{},
 	}
 
 	out, err := a.Emit(context.Background(), env)
@@ -279,13 +308,15 @@ func TestMCPAdapterEmitResponseSuccess(t *testing.T) {
 	a := NewMCPAdapter()
 	env := &protocol.Envelope{
 		ID:  "env-2",
-		Tag: protocol.TagResponseSuccess,
-		Payload: map[string]any{
-			"request_id": "req-22",
-			"result": map[string]any{
+		Tag: "",
+		Metadata: map[string]any{
+			protocol.MetaSysTag:       protocol.TagResponseSuccess,
+			protocol.MetaSysRequestID: "req-22",
+			protocol.MetaSysResult: map[string]any{
 				"content": []any{map[string]any{"type": "text", "text": "ok"}},
 			},
 		},
+		Payload: map[string]any{},
 	}
 
 	out, err := a.Emit(context.Background(), env)
@@ -310,12 +341,14 @@ func TestMCPAdapterEmitResponseError(t *testing.T) {
 	a := NewMCPAdapter()
 	env := &protocol.Envelope{
 		ID:  "env-3",
-		Tag: protocol.TagResponseError,
-		Payload: map[string]any{
-			"request_id": "req-33",
-			"code":       "-32600",
-			"message":    "Invalid Request",
+		Tag: "",
+		Metadata: map[string]any{
+			protocol.MetaSysTag:       protocol.TagResponseError,
+			protocol.MetaSysRequestID: "req-33",
+			protocol.MetaSysCode:      "-32600",
+			protocol.MetaSysMessage:   "Invalid Request",
 		},
+		Payload: map[string]any{},
 	}
 
 	out, err := a.Emit(context.Background(), env)
@@ -344,7 +377,13 @@ func TestMCPAdapterEmitResponseError(t *testing.T) {
 
 func TestMCPAdapterEmitUnsupportedTag(t *testing.T) {
 	a := NewMCPAdapter()
-	env := &protocol.Envelope{Tag: protocol.TagProgressUpdate, Payload: map[string]any{}}
+	env := &protocol.Envelope{
+		Tag: "",
+		Metadata: map[string]any{
+			protocol.MetaSysTag: protocol.TagProgressUpdate,
+		},
+		Payload: map[string]any{},
+	}
 
 	_, err := a.Emit(context.Background(), env)
 	if err == nil {

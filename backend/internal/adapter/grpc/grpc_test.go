@@ -127,8 +127,11 @@ func TestGRPCAdapterIngestUnaryRequest(t *testing.T) {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
 
-	if env.Tag != protocol.TagRequestAction {
-		t.Fatalf("env.Tag = %q, want %q", env.Tag, protocol.TagRequestAction)
+	if env.Tag != "" {
+		t.Fatalf("env.Tag = %q, want empty string", env.Tag)
+	}
+	if got := env.Metadata[protocol.MetaSysTag]; got != protocol.TagRequestAction {
+		t.Fatalf("env.Metadata[_tag] = %v, want %q", got, protocol.TagRequestAction)
 	}
 	if env.From != "grpc:conn-1" {
 		t.Fatalf("env.From = %q, want %q", env.From, "grpc:conn-1")
@@ -136,16 +139,20 @@ func TestGRPCAdapterIngestUnaryRequest(t *testing.T) {
 	if env.To != "broadcast" {
 		t.Fatalf("env.To = %q, want %q", env.To, "broadcast")
 	}
-	if got := env.Payload["action"]; got != "agent.AgentService/Execute" {
-		t.Fatalf("env.Payload[action] = %v, want %q", got, "agent.AgentService/Execute")
+	if got := env.Metadata[protocol.MetaSysAction]; got != "agent.AgentService/Execute" {
+		t.Fatalf("env.Metadata[_action] = %v, want %q", got, "agent.AgentService/Execute")
 	}
 
-	args, ok := env.Payload["args"].(map[string]any)
+	args, ok := env.Metadata[protocol.MetaSysArgs].(map[string]any)
 	if !ok {
-		t.Fatalf("env.Payload[args] type = %T, want map[string]any", env.Payload["args"])
+		t.Fatalf("env.Metadata[_args] type = %T, want map[string]any", env.Metadata[protocol.MetaSysArgs])
 	}
 	if got := args["action"]; got != "compile" {
-		t.Fatalf("env.Payload[args][action] = %v, want %q", got, "compile")
+		t.Fatalf("env.Metadata[_args][action] = %v, want %q", got, "compile")
+	}
+
+	if env.Payload == nil || len(env.Payload) != 0 {
+		t.Fatalf("env.Payload = %#v, want empty map", env.Payload)
 	}
 
 	if _, err := uuid.Parse(env.ID); err != nil {
@@ -193,8 +200,11 @@ func TestGRPCAdapterIngestUnarySuccess(t *testing.T) {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
 
-	if env.Tag != protocol.TagResponseSuccess {
-		t.Fatalf("env.Tag = %q, want %q", env.Tag, protocol.TagResponseSuccess)
+	if env.Tag != "" {
+		t.Fatalf("env.Tag = %q, want empty string", env.Tag)
+	}
+	if got := env.Metadata[protocol.MetaSysTag]; got != protocol.TagResponseSuccess {
+		t.Fatalf("env.Metadata[_tag] = %v, want %q", got, protocol.TagResponseSuccess)
 	}
 	if env.From != "agent-123" {
 		t.Fatalf("env.From = %q, want %q", env.From, "agent-123")
@@ -202,16 +212,20 @@ func TestGRPCAdapterIngestUnarySuccess(t *testing.T) {
 	if env.To != "agent-target" {
 		t.Fatalf("env.To = %q, want %q", env.To, "agent-target")
 	}
-	if got := env.Payload["request_id"]; got != "rpc-777" {
-		t.Fatalf("env.Payload[request_id] = %v, want %q", got, "rpc-777")
+	if got := env.Metadata[protocol.MetaSysRequestID]; got != "rpc-777" {
+		t.Fatalf("env.Metadata[_request_id] = %v, want %q", got, "rpc-777")
 	}
 
-	result, ok := env.Payload["result"].(map[string]any)
+	result, ok := env.Metadata[protocol.MetaSysResult].(map[string]any)
 	if !ok {
-		t.Fatalf("env.Payload[result] type = %T, want map[string]any", env.Payload["result"])
+		t.Fatalf("env.Metadata[_result] type = %T, want map[string]any", env.Metadata[protocol.MetaSysResult])
 	}
 	if got := result["output"]; got != "compiled successfully" {
-		t.Fatalf("env.Payload[result][output] = %v, want %q", got, "compiled successfully")
+		t.Fatalf("env.Metadata[_result][output] = %v, want %q", got, "compiled successfully")
+	}
+
+	if env.Payload == nil || len(env.Payload) != 0 {
+		t.Fatalf("env.Payload = %#v, want empty map", env.Payload)
 	}
 }
 
@@ -224,20 +238,27 @@ func TestGRPCAdapterIngestUnaryError(t *testing.T) {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
 
-	if env.Tag != protocol.TagResponseError {
-		t.Fatalf("env.Tag = %q, want %q", env.Tag, protocol.TagResponseError)
+	if env.Tag != "" {
+		t.Fatalf("env.Tag = %q, want empty string", env.Tag)
+	}
+	if got := env.Metadata[protocol.MetaSysTag]; got != protocol.TagResponseError {
+		t.Fatalf("env.Metadata[_tag] = %v, want %q", got, protocol.TagResponseError)
 	}
 	if env.To != "broadcast" {
 		t.Fatalf("env.To = %q, want %q", env.To, "broadcast")
 	}
-	if got := env.Payload["code"]; got != "3" {
-		t.Fatalf("env.Payload[code] = %v, want %q", got, "3")
+	if got := env.Metadata[protocol.MetaSysCode]; got != 3 {
+		t.Fatalf("env.Metadata[_code] = %v, want %d", got, 3)
 	}
-	if got := env.Payload["message"]; got != "Invalid argument: missing target" {
-		t.Fatalf("env.Payload[message] = %v, want %q", got, "Invalid argument: missing target")
+	if got := env.Metadata[protocol.MetaSysMessage]; got != "Invalid argument: missing target" {
+		t.Fatalf("env.Metadata[_message] = %v, want %q", got, "Invalid argument: missing target")
 	}
-	if got := env.Payload["request_id"]; got != "rpc-888" {
-		t.Fatalf("env.Payload[request_id] = %v, want %q", got, "rpc-888")
+	if got := env.Metadata[protocol.MetaSysRequestID]; got != "rpc-888" {
+		t.Fatalf("env.Metadata[_request_id] = %v, want %q", got, "rpc-888")
+	}
+
+	if env.Payload == nil || len(env.Payload) != 0 {
+		t.Fatalf("env.Payload = %#v, want empty map", env.Payload)
 	}
 }
 
@@ -250,30 +271,37 @@ func TestGRPCAdapterIngestStreamProgress(t *testing.T) {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
 
-	if env.Tag != protocol.TagProgressUpdate {
-		t.Fatalf("env.Tag = %q, want %q", env.Tag, protocol.TagProgressUpdate)
+	if env.Tag != "" {
+		t.Fatalf("env.Tag = %q, want empty string", env.Tag)
 	}
-	if got := env.Payload["request_id"]; got != "rpc-456" {
-		t.Fatalf("env.Payload[request_id] = %v, want %q", got, "rpc-456")
+	if got := env.Metadata[protocol.MetaSysTag]; got != protocol.TagProgressUpdate {
+		t.Fatalf("env.Metadata[_tag] = %v, want %q", got, protocol.TagProgressUpdate)
 	}
-	if got := env.Payload["stream_id"]; got != "stream-1" {
-		t.Fatalf("env.Payload[stream_id] = %v, want %q", got, "stream-1")
+	if got := env.Metadata[protocol.MetaSysRequestID]; got != "rpc-456" {
+		t.Fatalf("env.Metadata[_request_id] = %v, want %q", got, "rpc-456")
+	}
+	if got := env.Metadata[protocol.MetaSysStreamID]; got != "stream-1" {
+		t.Fatalf("env.Metadata[_stream_id] = %v, want %q", got, "stream-1")
 	}
 
-	update, ok := env.Payload["update"].(map[string]any)
+	update, ok := env.Metadata[protocol.MetaSysUpdate].(map[string]any)
 	if !ok {
-		t.Fatalf("env.Payload[update] type = %T, want map[string]any", env.Payload["update"])
+		t.Fatalf("env.Metadata[_update] type = %T, want map[string]any", env.Metadata[protocol.MetaSysUpdate])
 	}
 	if got := update["stage"]; got != "compiling" {
-		t.Fatalf("env.Payload[update][stage] = %v, want %q", got, "compiling")
+		t.Fatalf("env.Metadata[_update][stage] = %v, want %q", got, "compiling")
 	}
 
-	pct, ok := env.Payload["percentage"].(float64)
+	pct, ok := env.Metadata[protocol.MetaSysPercentage].(float64)
 	if !ok {
-		t.Fatalf("env.Payload[percentage] type = %T, want float64", env.Payload["percentage"])
+		t.Fatalf("env.Metadata[_percentage] type = %T, want float64", env.Metadata[protocol.MetaSysPercentage])
 	}
 	if pct != 42 {
-		t.Fatalf("env.Payload[percentage] = %v, want %v", pct, 42)
+		t.Fatalf("env.Metadata[_percentage] = %v, want %v", pct, 42)
+	}
+
+	if env.Payload == nil || len(env.Payload) != 0 {
+		t.Fatalf("env.Payload = %#v, want empty map", env.Payload)
 	}
 }
 
@@ -286,8 +314,11 @@ func TestGRPCAdapterIngestStreamNonNumericProgress(t *testing.T) {
 		t.Fatalf("Ingest() error = %v, want nil", err)
 	}
 
-	if _, ok := env.Payload["percentage"]; ok {
-		t.Fatalf("env.Payload[percentage] present, want absent")
+	if _, ok := env.Metadata[protocol.MetaSysPercentage]; ok {
+		t.Fatalf("env.Metadata[_percentage] present, want absent")
+	}
+	if env.Payload == nil || len(env.Payload) != 0 {
+		t.Fatalf("env.Payload = %#v, want empty map", env.Payload)
 	}
 }
 
@@ -295,11 +326,12 @@ func TestGRPCAdapterEmitRequestAction(t *testing.T) {
 	a := NewGRPCAdapter()
 	env := &protocol.Envelope{
 		ID:  "env-1",
-		Tag: protocol.TagRequestAction,
-		Payload: map[string]any{
-			"request_id": "rpc-req-1",
-			"action":     "agent.AgentService/Execute",
-			"args":       map[string]any{"action": "compile", "args": map[string]any{"target": "main.go"}},
+		Tag: "",
+		Metadata: map[string]any{
+			protocol.MetaSysTag:       protocol.TagRequestAction,
+			protocol.MetaSysRequestID: "rpc-req-1",
+			protocol.MetaSysAction:    "agent.AgentService/Execute",
+			protocol.MetaSysArgs:      map[string]any{"action": "compile", "args": map[string]any{"target": "main.go"}},
 		},
 	}
 
@@ -334,10 +366,11 @@ func TestGRPCAdapterEmitResponseSuccess(t *testing.T) {
 	a := NewGRPCAdapter()
 	env := &protocol.Envelope{
 		ID:  "env-2",
-		Tag: protocol.TagResponseSuccess,
-		Payload: map[string]any{
-			"request_id": "rpc-ok-2",
-			"result": map[string]any{
+		Tag: "",
+		Metadata: map[string]any{
+			protocol.MetaSysTag:       protocol.TagResponseSuccess,
+			protocol.MetaSysRequestID: "rpc-ok-2",
+			protocol.MetaSysResult: map[string]any{
 				"output": "compiled successfully",
 			},
 		},
@@ -371,11 +404,12 @@ func TestGRPCAdapterEmitResponseError(t *testing.T) {
 	a := NewGRPCAdapter()
 	env := &protocol.Envelope{
 		ID:  "env-3",
-		Tag: protocol.TagResponseError,
-		Payload: map[string]any{
-			"request_id": "rpc-err-3",
-			"code":       "7",
-			"message":    "permission denied",
+		Tag: "",
+		Metadata: map[string]any{
+			protocol.MetaSysTag:       protocol.TagResponseError,
+			protocol.MetaSysRequestID: "rpc-err-3",
+			protocol.MetaSysCode:      "7",
+			protocol.MetaSysMessage:   "permission denied",
 		},
 	}
 
@@ -410,11 +444,12 @@ func TestGRPCAdapterEmitProgressUpdate(t *testing.T) {
 	a := NewGRPCAdapter()
 	env := &protocol.Envelope{
 		ID:  "env-4",
-		Tag: protocol.TagProgressUpdate,
-		Payload: map[string]any{
-			"request_id": "rpc-prog-4",
-			"stream_id":  "stream-4",
-			"update": map[string]any{
+		Tag: "",
+		Metadata: map[string]any{
+			protocol.MetaSysTag:       protocol.TagProgressUpdate,
+			protocol.MetaSysRequestID: "rpc-prog-4",
+			protocol.MetaSysStreamID:  "stream-4",
+			protocol.MetaSysUpdate: map[string]any{
 				"progress": 42,
 				"stage":    "compiling",
 			},
@@ -449,12 +484,12 @@ func TestGRPCAdapterEmitProgressFamilyFromGenericPayload(t *testing.T) {
 	a := NewGRPCAdapter()
 	env := &protocol.Envelope{
 		ID:  "env-5",
-		Tag: protocol.TagProgressStage,
-		Payload: map[string]any{
-			"request_id": "rpc-stage-5",
-			"stage":      "compiling",
-			"message":    "processing",
-			"percentage": 73,
+		Tag: "",
+		Metadata: map[string]any{
+			protocol.MetaSysTag:        protocol.TagProgressStage,
+			protocol.MetaSysRequestID:  "rpc-stage-5",
+			protocol.MetaSysUpdate:     map[string]any{"stage": "compiling", "message": "processing"},
+			protocol.MetaSysPercentage: 73,
 		},
 	}
 
@@ -503,57 +538,57 @@ func TestGRPCAdapterEmitErrors(t *testing.T) {
 		},
 		{
 			name:    "unsupported tag",
-			env:     &protocol.Envelope{Tag: protocol.TagContextProvide, Payload: map[string]any{}},
+			env:     &protocol.Envelope{Tag: "", Payload: map[string]any{}, Metadata: map[string]any{protocol.MetaSysTag: protocol.TagContextProvide}},
 			wantErr: "unsupported envelope tag",
 		},
 		{
 			name:    "request action missing action",
-			env:     &protocol.Envelope{ID: "env-e1", Tag: protocol.TagRequestAction, Payload: map[string]any{}},
-			wantErr: "payload.action is required",
+			env:     &protocol.Envelope{ID: "env-e1", Tag: "", Payload: map[string]any{}, Metadata: map[string]any{protocol.MetaSysTag: protocol.TagRequestAction}},
+			wantErr: "metadata.action is required",
 		},
 		{
 			name:    "request action invalid action format",
-			env:     &protocol.Envelope{ID: "env-e2", Tag: protocol.TagRequestAction, Payload: map[string]any{"action": "Execute"}},
+			env:     &protocol.Envelope{ID: "env-e2", Tag: "", Payload: map[string]any{}, Metadata: map[string]any{protocol.MetaSysTag: protocol.TagRequestAction, protocol.MetaSysAction: "Execute"}},
 			wantErr: "service/method format",
 		},
 		{
 			name:    "request action args not object",
-			env:     &protocol.Envelope{ID: "env-e3", Tag: protocol.TagRequestAction, Payload: map[string]any{"action": "svc/method", "args": "bad"}},
-			wantErr: "payload.args must be an object",
+			env:     &protocol.Envelope{ID: "env-e3", Tag: "", Payload: map[string]any{}, Metadata: map[string]any{protocol.MetaSysTag: protocol.TagRequestAction, protocol.MetaSysAction: "svc/method", protocol.MetaSysArgs: "bad"}},
+			wantErr: "request.action payload.args must be an object",
 		},
 		{
 			name:    "response success missing result",
-			env:     &protocol.Envelope{ID: "env-e4", Tag: protocol.TagResponseSuccess, Payload: map[string]any{}},
-			wantErr: "payload.result is required",
+			env:     &protocol.Envelope{ID: "env-e4", Tag: "", Payload: map[string]any{}, Metadata: map[string]any{protocol.MetaSysTag: protocol.TagResponseSuccess}},
+			wantErr: "metadata.result is required",
 		},
 		{
 			name:    "response success result not object",
-			env:     &protocol.Envelope{ID: "env-e5", Tag: protocol.TagResponseSuccess, Payload: map[string]any{"result": "ok"}},
-			wantErr: "payload.result must be an object",
+			env:     &protocol.Envelope{ID: "env-e5", Tag: "", Payload: map[string]any{}, Metadata: map[string]any{protocol.MetaSysTag: protocol.TagResponseSuccess, protocol.MetaSysResult: "ok"}},
+			wantErr: "response.success payload.result must be an object",
 		},
 		{
 			name:    "response error missing code",
-			env:     &protocol.Envelope{ID: "env-e6", Tag: protocol.TagResponseError, Payload: map[string]any{"message": "bad"}},
-			wantErr: "payload.code is required",
+			env:     &protocol.Envelope{ID: "env-e6", Tag: "", Payload: map[string]any{}, Metadata: map[string]any{protocol.MetaSysTag: protocol.TagResponseError, protocol.MetaSysMessage: "bad"}},
+			wantErr: "metadata.code is required",
 		},
 		{
 			name:    "response error non numeric code",
-			env:     &protocol.Envelope{ID: "env-e7", Tag: protocol.TagResponseError, Payload: map[string]any{"code": "abc", "message": "bad"}},
+			env:     &protocol.Envelope{ID: "env-e7", Tag: "", Payload: map[string]any{}, Metadata: map[string]any{protocol.MetaSysTag: protocol.TagResponseError, protocol.MetaSysCode: "abc", protocol.MetaSysMessage: "bad"}},
 			wantErr: "payload.code must be numeric",
 		},
 		{
 			name:    "response error missing message",
-			env:     &protocol.Envelope{ID: "env-e8", Tag: protocol.TagResponseError, Payload: map[string]any{"code": "3"}},
-			wantErr: "payload.message is required",
+			env:     &protocol.Envelope{ID: "env-e8", Tag: "", Payload: map[string]any{}, Metadata: map[string]any{protocol.MetaSysTag: protocol.TagResponseError, protocol.MetaSysCode: "3"}},
+			wantErr: "metadata.message must be a non-empty string",
 		},
 		{
 			name:    "response error blank message",
-			env:     &protocol.Envelope{ID: "env-e9", Tag: protocol.TagResponseError, Payload: map[string]any{"code": "3", "message": ""}},
-			wantErr: "payload.message must be a non-empty string",
+			env:     &protocol.Envelope{ID: "env-e9", Tag: "", Payload: map[string]any{}, Metadata: map[string]any{protocol.MetaSysTag: protocol.TagResponseError, protocol.MetaSysCode: "3", protocol.MetaSysMessage: ""}},
+			wantErr: "metadata.message must be a non-empty string",
 		},
 		{
 			name:    "progress update not object",
-			env:     &protocol.Envelope{ID: "env-e10", Tag: protocol.TagProgressUpdate, Payload: map[string]any{"update": "bad"}},
+			env:     &protocol.Envelope{ID: "env-e10", Tag: "", Payload: map[string]any{}, Metadata: map[string]any{protocol.MetaSysTag: protocol.TagProgressUpdate, protocol.MetaSysUpdate: "bad"}},
 			wantErr: "progress payload.update must be an object",
 		},
 	}

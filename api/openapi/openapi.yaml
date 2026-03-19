@@ -1135,11 +1135,15 @@ components:
 
     Message:
       type: object
+      description: >
+        Persisted message record. The `tag` field is optional — when empty,
+        the effective tag is stored in `metadata._tag`. Payload contains only
+        user-supplied data; system-injected keys live in metadata under
+        underscore-prefixed keys.
       required:
         - id
         - from_id
         - conversation_id
-        - tag
         - payload
         - metadata
         - timestamp
@@ -1155,10 +1159,17 @@ components:
           format: uuid
         tag:
           type: string
+          description: >
+            Optional user-supplied tag. May be empty for adapter-ingested
+            messages where the system tag is in `metadata._tag`.
         payload:
           type: object
+          description: User-controlled payload data.
         metadata:
           type: object
+          description: >
+            Metadata including system-injected keys (prefixed with `_`).
+            See Envelope schema for full system key reference.
         timestamp:
           type: string
           format: date-time
@@ -1260,11 +1271,16 @@ components:
 
     Envelope:
       type: object
+      description: >
+        Wire envelope for all BobberChat messages. Tags and Payload are purely
+        user-controlled fields. All system-injected information (adapter-derived
+        routing tags, action names, error codes, replay/approval data, etc.)
+        lives in Metadata under underscore-prefixed keys (e.g. `_tag`, `_action`).
+        When `tag` is omitted, the system uses `metadata._tag` for routing.
       required:
         - id
         - from
         - to
-        - tag
         - payload
         - metadata
         - timestamp
@@ -1278,10 +1294,78 @@ components:
           type: string
         tag:
           type: string
+          description: >
+            Optional user-supplied message tag. When present, takes precedence
+            over `metadata._tag` for routing. When absent, the system falls back
+            to `metadata._tag` set by protocol adapters.
         payload:
           type: object
+          description: >
+            User-controlled payload. Contains application-specific data only;
+            no system-injected keys.
         metadata:
           type: object
+          description: >
+            Metadata map. User-defined keys are allowed alongside system keys.
+            System-injected keys are prefixed with underscore (`_`).
+          properties:
+            _tag:
+              type: string
+              description: System-derived routing tag set by protocol adapters (e.g. `request.action`, `response.success`).
+            _action:
+              type: string
+              description: Action name extracted from adapter protocol (e.g. MCP tool name, gRPC method).
+            _args:
+              description: Action arguments from the adapter protocol.
+            _result:
+              description: Response result data from the adapter protocol.
+            _request_id:
+              type: string
+              description: Request correlation ID for matching responses to requests.
+            _code:
+              type: string
+              description: Error or status code from adapter protocol.
+            _message:
+              type: string
+              description: Error or status message from adapter protocol.
+            _stream_id:
+              type: string
+              description: Stream correlation ID for gRPC streaming frames.
+            _update:
+              description: Progress update body for streaming responses.
+            _percentage:
+              type: number
+              description: Progress percentage (0-100) for streaming responses.
+            _replayed:
+              type: boolean
+              description: Flag indicating this message is a replay of an earlier message.
+            _original_message_id:
+              type: string
+              format: uuid
+              description: ID of the original message when this is a replay.
+            _replay_reason:
+              type: string
+              description: Reason the message was replayed.
+            _approval_id:
+              type: string
+              format: uuid
+              description: Approval request ID for approval workflow messages.
+            _decision:
+              type: string
+              description: Approval decision (`granted` or `denied`).
+            _reason:
+              type: string
+              description: Reason for the approval decision.
+            _justification:
+              type: string
+              description: Justification provided with an approval request.
+            _task_id:
+              type: string
+              description: A2A task ID for task lifecycle tracking.
+            _status:
+              type: string
+              description: A2A task status.
+          additionalProperties: true
         timestamp:
           type: string
           format: date-time

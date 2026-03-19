@@ -32,12 +32,17 @@ func (s *Service) SubmitRequest(ctx context.Context, req *persistence.ApprovalRe
 	}
 
 	env := &protocol.Envelope{
-		ID:        created.ApprovalID.String(),
-		From:      created.AgentID.String(),
-		To:        "approval_queue",
-		Tag:       protocol.TagApprovalRequest,
-		Payload:   map[string]any{"approval_id": created.ApprovalID.String(), "action": created.Action, "justification": created.Justification},
-		Metadata:  map[string]any{"timeout_ms": created.TimeoutMS},
+		ID:      created.ApprovalID.String(),
+		From:    created.AgentID.String(),
+		To:      "approval_queue",
+		Payload: map[string]any{},
+		Metadata: map[string]any{
+			protocol.MetaSysTag:           protocol.TagApprovalRequest,
+			protocol.MetaSysApprovalID:    created.ApprovalID.String(),
+			protocol.MetaSysAction:        created.Action,
+			protocol.MetaSysJustification: created.Justification,
+			"timeout_ms":                  created.TimeoutMS,
+		},
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	}
 
@@ -103,12 +108,16 @@ func (s *Service) Decide(ctx context.Context, approvalID string, decision persis
 		tag = protocol.TagApprovalGranted
 	}
 	env := &protocol.Envelope{
-		ID:        uuid.NewString(),
-		From:      approverID,
-		To:        agentID.String(),
-		Tag:       tag,
-		Payload:   map[string]any{"approval_id": approvalID, "decision": string(decision), "reason": reason},
-		Metadata:  map[string]any{},
+		ID:      uuid.NewString(),
+		From:    approverID,
+		To:      agentID.String(),
+		Payload: map[string]any{},
+		Metadata: map[string]any{
+			protocol.MetaSysTag:        tag,
+			protocol.MetaSysApprovalID: approvalID,
+			protocol.MetaSysDecision:   string(decision),
+			protocol.MetaSysReason:     reason,
+		},
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	}
 

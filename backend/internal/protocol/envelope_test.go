@@ -133,6 +133,29 @@ func TestEnvelopeValidate(t *testing.T) {
 			env:  validEnvelope,
 		},
 		{
+			name: "valid with empty tag and _tag in metadata",
+			env: &Envelope{
+				ID:        "msg-123",
+				From:      "client",
+				To:        "server",
+				Payload:   map[string]any{},
+				Metadata:  map[string]any{MetaSysTag: TagRequestAction},
+				Timestamp: "2026-03-14T10:20:30Z",
+			},
+		},
+		{
+			name: "invalid _tag in metadata",
+			env: &Envelope{
+				ID:        "msg-123",
+				From:      "client",
+				To:        "server",
+				Payload:   map[string]any{},
+				Metadata:  map[string]any{MetaSysTag: "Request.Data"},
+				Timestamp: "2026-03-14T10:20:30Z",
+			},
+			wantErr: "invalid tag: Request.Data",
+		},
+		{
 			name: "valid custom reverse dns tag",
 			env: &Envelope{
 				ID:        "msg-123",

@@ -356,6 +356,43 @@ Message frame format (JSON envelope from Design Spec §3.1):
 }
 ```
 
+#### 5.2.1 Envelope Field Semantics: User vs System Data
+
+**Tag** and **Payload** are purely user-controlled fields. Protocol adapters and system code MUST NOT write to them. All system-injected information lives in **Metadata** under underscore-prefixed keys.
+
+- `tag` is optional (`json:"tag,omitempty"`). When a user provides a tag, it takes precedence for routing. When empty, the system uses `metadata._tag` (set by adapters) via `protocol.EffectiveTag()`.
+- `payload` contains only application data chosen by the user or SDK caller.
+- `metadata` holds both user-defined keys (no prefix) and system keys (underscore prefix).
+
+System metadata keys (`_`-prefixed, set by adapters and system code):
+
+| Key | Type | Set By | Description |
+|-----|------|--------|-------------|
+| `_tag` | string | Adapters | System-derived routing tag (e.g. `request.action`, `response.success`) |
+| `_action` | string | Adapters | Action name (MCP tool name, gRPC method, A2A intent) |
+| `_args` | any | Adapters | Action arguments |
+| `_result` | any | Adapters | Response result data |
+| `_request_id` | string | Adapters | Request correlation ID |
+| `_code` | string | Adapters | Error/status code |
+| `_message` | string | Adapters | Error/status message |
+| `_stream_id` | string | gRPC adapter | Stream correlation ID |
+| `_update` | any | gRPC adapter | Progress update body |
+| `_percentage` | number | gRPC adapter | Progress percentage (0-100) |
+| `_replayed` | bool | Replay handler | Replay flag |
+| `_original_message_id` | string | Replay handler | Original message ID |
+| `_replay_reason` | string | Replay handler | Replay reason |
+| `_approval_id` | string | Approval module | Approval request ID |
+| `_decision` | string | Approval module | Approval decision |
+| `_reason` | string | Approval module | Decision reason |
+| `_justification` | string | Approval module | Request justification |
+| `_task_id` | string | A2A adapter | A2A task ID |
+| `_status` | string | A2A adapter | A2A task status |
+
+Helper functions in `internal/adapter/adapter.go`:
+- `SetSystemMeta(env, key, value)` — write a system metadata key
+- `SystemMeta(env, key)` — read a system metadata value (returns `any, bool`)
+- `SystemMetaString(env, key)` — read as string (returns empty string if missing)
+
 Heartbeat protocol:
 - Server emits `system.heartbeat` every 30s.
 - Client must respond with pong-equivalent heartbeat acknowledgement within 10s.

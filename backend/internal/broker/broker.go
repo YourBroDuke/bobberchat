@@ -106,7 +106,7 @@ func (b *Broker) PublishMessage(ctx context.Context, env *protocol.Envelope) err
 	}
 
 	if b.metrics != nil {
-		b.metrics.MessagesSent.WithLabelValues(env.To, env.Tag).Inc()
+		b.metrics.MessagesSent.WithLabelValues(env.To, protocol.EffectiveTag(env)).Inc()
 		b.metrics.MessagesLatency.WithLabelValues(env.To).Observe(float64(time.Since(start).Milliseconds()))
 	}
 
@@ -198,13 +198,14 @@ func (b *Broker) Close() {
 }
 
 func subjectForEnvelope(env *protocol.Envelope) (string, error) {
-	family := protocol.ParseTagFamily(env.Tag)
+	tag := protocol.EffectiveTag(env)
+	family := protocol.ParseTagFamily(tag)
 	switch family {
 	case protocol.TagSystem:
-		suffix := strings.TrimPrefix(env.Tag, protocol.TagSystem+".")
+		suffix := strings.TrimPrefix(tag, protocol.TagSystem+".")
 		return fmt.Sprintf("bobberchat.system.%s", suffix), nil
 	case protocol.TagApproval:
-		suffix := strings.TrimPrefix(env.Tag, protocol.TagApproval+".")
+		suffix := strings.TrimPrefix(tag, protocol.TagApproval+".")
 		return fmt.Sprintf("bobberchat.approval.%s", suffix), nil
 	default:
 		if strings.HasPrefix(env.To, "group:") {
