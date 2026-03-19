@@ -168,6 +168,7 @@ CREATE TABLE messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   from_id UUID NOT NULL,
   conversation_id UUID NOT NULL REFERENCES conversations(id),
+  participant_kind participant_type NOT NULL DEFAULT 'user',
   tag TEXT NOT NULL,
   content TEXT NOT NULL DEFAULT '',
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -379,13 +380,14 @@ type Config struct {
 }
 
 type Message struct {
-    ID        string
-    From      string
-    To        string
-    Tag       string
-    Content   string
-    Metadata  map[string]any
-    Timestamp string
+    ID              string
+    From            string
+    To              string
+    ParticipantKind string
+    Tag             string
+    Content         string
+    Metadata        map[string]any
+    Timestamp       string
 }
 
 type DiscoveryQuery struct {

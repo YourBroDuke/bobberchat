@@ -903,14 +903,16 @@ func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
 
 	var original persistence.Message
 	var metadataRaw []byte
+	var participantKind string
 	err = a.db.Pool().QueryRow(r.Context(), `
-		SELECT id, from_id, conversation_id, tag, content, metadata, "timestamp"
+		SELECT id, from_id, conversation_id, participant_kind, tag, content, metadata, "timestamp"
 		FROM messages
 		WHERE id = $1
 	`, originalID).Scan(
 		&original.ID,
 		&original.FromID,
 		&original.ConversationID,
+		&participantKind,
 		&original.Tag,
 		&original.Content,
 		&metadataRaw,
@@ -924,6 +926,8 @@ func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to load message")
 		return
 	}
+
+	original.ParticipantKind = persistence.ParticipantType(participantKind)
 
 	original.Metadata = map[string]any{}
 	if len(metadataRaw) > 0 {

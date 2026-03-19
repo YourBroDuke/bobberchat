@@ -67,13 +67,14 @@ type ChatGroup struct {
 }
 
 type Message struct {
-	ID             uuid.UUID      `json:"id"`
-	FromID         uuid.UUID      `json:"from_id"`
-	ConversationID uuid.UUID      `json:"conversation_id"`
-	Tag            string         `json:"tag"`
-	Content        string         `json:"content"`
-	Metadata       map[string]any `json:"metadata"`
-	Timestamp      time.Time      `json:"timestamp"`
+	ID              uuid.UUID       `json:"id"`
+	FromID          uuid.UUID       `json:"from_id"`
+	ConversationID  uuid.UUID       `json:"conversation_id"`
+	ParticipantKind ParticipantType `json:"participant_kind"`
+	Tag             string          `json:"tag"`
+	Content         string          `json:"content"`
+	Metadata        map[string]any  `json:"metadata"`
+	Timestamp       time.Time       `json:"timestamp"`
 }
 
 type ConnectionRequestStatus string

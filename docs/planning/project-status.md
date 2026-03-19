@@ -275,10 +275,10 @@ Backend config: `configs/backend.yaml`
 - 2 enum types: `participant_type`, `conversation_type`
 - `conversations` table unifies DMs and groups; DMs identified by canonical `(id_low, id_high)` pair (generic UUIDs, no FK constraint)
 - `conversation_participants` replaces `chat_group_members` and handles both DM and group membership with `muted`, `last_read_message_id` fields
-- `messages` table uses `conversation_id` FK (replaced `to_id`), time-based partitioning by `timestamp` (monthly ranges)
+- `messages` table uses `conversation_id` FK (replaced `to_id`), time-based partitioning by `timestamp` (monthly ranges), `participant_kind` column (reuses `participant_type` enum) to distinguish user vs agent messages
 - `conversations` table includes `last_message_id` (UUID FK → messages, ON DELETE SET NULL) and `last_message_at` (TIMESTAMPTZ) for efficient conversation ordering
 - `pgMessageRepository.Save` atomically inserts the message and updates `conversations.last_message_id/last_message_at` in a single transaction
-- Migration: `migrations/001_initial_schema.sql` through `migrations/016_agent_connections.sql`
+- Migration: `migrations/001_initial_schema.sql` through `migrations/017_add_message_participant_kind.sql`
 
 ### NATS JetStream Streams
 
@@ -462,6 +462,7 @@ bobberchat/
 ├── migrations/009_rename_dm_ids.sql # Renames agent_id_low/agent_id_high → id_low/id_high in conversations
 ├── migrations/013_conversation_last_message.sql # Adds last_message_id, last_message_at to conversations with backfill
 ├── migrations/016_agent_connections.sql # Renames connection_requests FKs from user to agent
+├── migrations/017_add_message_participant_kind.sql # Adds participant_kind column to messages table
 ├── scripts/
 │   ├── e2e-test.sh                  # 27-test API e2e test
 │   └── smoke-test.sh                # Quick deployment smoke test

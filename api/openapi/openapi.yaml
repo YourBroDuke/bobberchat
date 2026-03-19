@@ -1089,6 +1089,9 @@ components:
         conversation_id:
           type: string
           format: uuid
+        participant_kind:
+          type: string
+          enum: [user, agent]
         tag:
           type: string
           description: >

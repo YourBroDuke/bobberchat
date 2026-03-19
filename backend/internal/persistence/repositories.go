@@ -664,10 +664,10 @@ func (r *pgMessageRepository) Save(ctx context.Context, message Message) (*Messa
 	defer tx.Rollback(ctx) //nolint:errcheck
 
 	row := tx.QueryRow(ctx, `
-		INSERT INTO messages (id, from_id, conversation_id, tag, content, metadata, "timestamp")
-		VALUES ($1,$2,$3,$4,$5,$6,$7)
-		RETURNING id, from_id, conversation_id, tag, content, metadata, "timestamp"
-	`, message.ID, message.FromID, message.ConversationID, message.Tag, message.Content, metadata, message.Timestamp)
+		INSERT INTO messages (id, from_id, conversation_id, participant_kind, tag, content, metadata, "timestamp")
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+		RETURNING id, from_id, conversation_id, participant_kind, tag, content, metadata, "timestamp"
+	`, message.ID, message.FromID, message.ConversationID, string(message.ParticipantKind), message.Tag, message.Content, metadata, message.Timestamp)
 
 	out, err := scanMessage(row)
 	if err != nil {
@@ -692,7 +692,7 @@ func (r *pgMessageRepository) Save(ctx context.Context, message Message) (*Messa
 
 func (r *pgMessageRepository) GetByID(ctx context.Context, messageID uuid.UUID) (*Message, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, from_id, conversation_id, tag, content, metadata, "timestamp"
+		SELECT id, from_id, conversation_id, participant_kind, tag, content, metadata, "timestamp"
 		FROM messages
 		WHERE id = $1
 	`, messageID)
@@ -705,7 +705,7 @@ func (r *pgMessageRepository) GetByConversation(ctx context.Context, conversatio
 	}
 
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT id, from_id, conversation_id, tag, content, metadata, "timestamp"
+		SELECT id, from_id, conversation_id, participant_kind, tag, content, metadata, "timestamp"
 		FROM messages
 		WHERE conversation_id = $1
 			AND ($2::timestamptz IS NULL OR "timestamp" > $2)
@@ -914,11 +914,13 @@ func scanAgent(scanner rowScanner) (*Agent, error) {
 func scanMessage(scanner rowScanner) (*Message, error) {
 	out := Message{}
 	var metadataRaw []byte
+	var participantKind string
 
 	err := scanner.Scan(
 		&out.ID,
 		&out.FromID,
 		&out.ConversationID,
+		&participantKind,
 		&out.Tag,
 		&out.Content,
 		&metadataRaw,
@@ -931,6 +933,7 @@ func scanMessage(scanner rowScanner) (*Message, error) {
 		return nil, fmt.Errorf("scan message: %w", err)
 	}
 
+	out.ParticipantKind = ParticipantType(participantKind)
 	out.Metadata = map[string]any{}
 	if len(metadataRaw) > 0 {
 		if err := json.Unmarshal(metadataRaw, &out.Metadata); err != nil {
