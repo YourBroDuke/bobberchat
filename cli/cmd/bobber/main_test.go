@@ -858,9 +858,25 @@ func TestAgentSubcommands(t *testing.T) {
 		}
 	})
 
-	t.Run("agent use: saves agent_id", func(t *testing.T) {
+	t.Run("agent use: fetches info, rotates secret, saves agent_id and api_secret", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/a1":
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"id": "a1", "display_name": "test-agent",
+				})
+			case r.Method == http.MethodPost && r.URL.Path == "/v1/agents/a1/rotate-secret":
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"api_secret": "new-secret-123",
+				})
+			default:
+				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+			}
+		}))
+		defer srv.Close()
+
 		tmp := t.TempDir()
-		cfg := testConfig("http://localhost:8080", "tok")
+		cfg := testConfig(srv.URL, "tok")
 		cfg.v.SetConfigFile(filepath.Join(tmp, "config.yaml"))
 
 		cmd := agentCmd(cfg)
@@ -872,6 +888,99 @@ func TestAgentSubcommands(t *testing.T) {
 		}
 		if got := cfg.agentID(); got != "a1" {
 			t.Fatalf("expected saved agent_id, got %q", got)
+		}
+		if got := cfg.apiSecret(); got != "new-secret-123" {
+			t.Fatalf("expected saved api_secret, got %q", got)
+		}
+	})
+
+	t.Run("agent use: no token", func(t *testing.T) {
+		cmd := agentCmd(testConfig("http://localhost:8080", ""))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"use", "a1"})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "token required") {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	})
+
+	t.Run("agent use: agent not found", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": "agent not found"})
+		}))
+		defer srv.Close()
+
+		cmd := agentCmd(testConfig(srv.URL, "tok"))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"use", "nonexistent"})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "agent not found") {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	})
+
+	t.Run("agent use: rotate-secret fails", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case r.Method == http.MethodGet && r.URL.Path == "/v1/agents/a1":
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"id": "a1", "display_name": "test-agent",
+				})
+			case r.Method == http.MethodPost && r.URL.Path == "/v1/agents/a1/rotate-secret":
+				w.WriteHeader(http.StatusForbidden)
+				_ = json.NewEncoder(w).Encode(map[string]any{"error": "not owner"})
+			default:
+				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+			}
+		}))
+		defer srv.Close()
+
+		cmd := agentCmd(testConfig(srv.URL, "tok"))
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"use", "a1"})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "not owner") {
+			t.Fatalf("unexpected err: %v", err)
+		}
+	})
+
+	t.Run("agent use: output includes display_name", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case r.Method == http.MethodGet:
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"id": "a1", "display_name": "my-agent",
+				})
+			case r.Method == http.MethodPost:
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"api_secret": "s3cret",
+				})
+			}
+		}))
+		defer srv.Close()
+
+		tmp := t.TempDir()
+		cfg := testConfig(srv.URL, "tok")
+		cfg.v.SetConfigFile(filepath.Join(tmp, "config.yaml"))
+
+		cmd := agentUseCmd(cfg)
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.SetArgs([]string{"a1"})
+		out := captureStdout(t, func() {
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("execute failed: %v", err)
+			}
+		})
+		if !strings.Contains(out, `"display_name": "my-agent"`) {
+			t.Fatalf("expected display_name in output, got: %q", out)
+		}
+		if !strings.Contains(out, `"active": true`) {
+			t.Fatalf("expected active in output, got: %q", out)
 		}
 	})
 }

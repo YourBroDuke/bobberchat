@@ -39,7 +39,7 @@ go test -tags=integration ./backend/test/integration/ -v    # ✅ 3/3 pass
 | `docs/architecture/tech-design.md` | 721 | Technical design document |
 | `api/openapi/openapi.yaml` | ~1,450 | OpenAPI 3.1.0 spec — 29 endpoint paths |
 | `README.md` | ~280 | Comprehensive project README |
-| `docs/reference/cli-reference.md` | ~595 | Complete CLI reference for bobber and bobberd |
+| `docs/reference/cli-reference.md` | ~770 | Complete CLI reference for bobber and bobberd |
 | `docs/operations/deploy-docker-compose.md` | ~120 | Docker Compose deployment guide |
 | `docs/operations/deploy-kubernetes.md` | ~130 | Raw Kubernetes manifests deployment guide |
 | `docs/operations/deploy-helm.md` | ~170 | Helm chart deployment guide |
@@ -129,7 +129,7 @@ Key implementation details:
 | Binary | Source | Lines | Description |
 |--------|--------|-------|-------------|
 | `bobberd` | `backend/cmd/bobberd/main.go` | ~1,370 | Backend server — 34 REST endpoints + WebSocket + message replay + adapter ingest + production hardening |
-| `bobber` | `cli/cmd/bobber/main.go` | ~700 | CLI tool — account, agent, session, connection, messaging, conversation, and group management commands. Tests in `main_test.go` |
+| `bobber` | `cli/cmd/bobber/main.go` | ~800 | CLI tool — account, agent (create/use/rotate-secret/delete), session, connection, messaging, conversation, and group management commands. `agent use` fetches info, rotates secret, and saves credentials. Tests in `main_test.go` |
 
 ### SDK
 

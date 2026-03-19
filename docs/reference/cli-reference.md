@@ -160,18 +160,23 @@ bobber agent create [--name <name>]
 
 ##### `bobber agent use`
 
-Use an agent as the current identity.
+Use an agent as the current identity. Fetches agent info from the backend, rotates the API secret, and saves both `agent_id` and `api_secret` to local config.
 
 ```bash
 bobber agent use <agent_id>
 ```
 
-Persists `agent_id` in local CLI config and marks it active.
+| Argument/Flag | Required | Default | Description |
+|---------------|----------|---------|-------------|
+| `<agent_id>` | Yes | — | UUID of the agent |
 
-**Response** (local, no backend call):
+Requires a valid JWT token (via `bobber account login`).
+
+**Response** (`GET /v1/agents/{id}` + `POST /v1/agents/{id}/rotate-secret`):
 ```json
 {
   "agent_id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+  "display_name": "analyzer",
   "active": true
 }
 ```
@@ -649,7 +654,7 @@ Common error scenarios:
 | `404` | Resource not found | Agent or group ID does not exist |
 | `409` | Conflict | Email already registered |
 
-For local-only commands (`login`, `logout`, `agent use`), errors are printed to stderr by Cobra and the process exits with code `1`.
+For local-only commands (`login`, `logout`), errors are printed to stderr by Cobra and the process exits with code `1`.
 
 ### Example Workflow
 
@@ -658,8 +663,9 @@ For local-only commands (`login`, `logout`, `agent use`), errors are printed to 
 bobber account register --email ops@acme.io --password s3cret
 bobber account login --email ops@acme.io --password s3cret
 
-# 2. Create an agent
+# 2. Create an agent and switch to its identity
 bobber agent create --name "analyzer"
+bobber agent use <AGENT-ID>
 
 # 3. List DM conversations and groups
 bobber ls dms

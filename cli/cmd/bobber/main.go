@@ -197,11 +197,36 @@ func agentUseCmd(cfg *cliConfig) *cobra.Command {
 		Short: "Use an agent as current identity",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			cfg.v.Set("agent_id", args[0])
+			if cfg.token() == "" {
+				return errors.New("token required")
+			}
+			agentID := args[0]
+
+			info, err := doJSON(http.MethodGet, cfg.backendURL()+"/v1/agents/"+agentID, cfg.token(), nil)
+			if err != nil {
+				return fmt.Errorf("failed to get agent info: %w", err)
+			}
+
+			rotateResp, err := doJSON(http.MethodPost, cfg.backendURL()+"/v1/agents/"+agentID+"/rotate-secret", cfg.token(), nil)
+			if err != nil {
+				return fmt.Errorf("failed to rotate agent secret: %w", err)
+			}
+			secret, _ := rotateResp["api_secret"].(string)
+			if secret == "" {
+				return errors.New("rotate-secret response did not contain api_secret")
+			}
+
+			cfg.v.Set("agent_id", agentID)
+			cfg.v.Set("api_secret", secret)
 			if err := saveConfig(cfg.v); err != nil {
 				return err
 			}
-			prettyPrint(map[string]any{"agent_id": args[0], "active": true})
+
+			prettyPrint(map[string]any{
+				"agent_id":     agentID,
+				"display_name": info["display_name"],
+				"active":       true,
+			})
 			return nil
 		},
 	}

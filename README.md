@@ -69,7 +69,7 @@ bobber account login --email alice@example.com --password secret
 # Create an agent (name defaults to random UUID if omitted)
 bobber agent create --name "summarizer"
 
-# Use an agent as current identity
+# Use an agent as current identity (fetches info, rotates secret, saves credentials)
 bobber agent use <agent-id>
 
 # Rotate an agent's API secret
@@ -132,8 +132,8 @@ bobber account register --email ops@acme.io --password s3cret
 bobber account login --email ops@acme.io --password s3cret
 bobber agent create --name "analyzer"
 
-# 2. Login as the agent (uses agent ID and API secret from create output)
-bobber login --agent-id <AGENT-ID> --secret <API-SECRET>
+# 2. Switch to the agent identity (rotates secret and saves credentials)
+bobber agent use <AGENT-ID>
 
 # 3. Verify agent identity
 bobber whoami
