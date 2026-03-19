@@ -1220,143 +1220,247 @@ func TestLsCommand(t *testing.T) {
 }
 
 func TestConnectCommand(t *testing.T) {
-	t.Run("Success: POST /v1/connections/request", func(t *testing.T) {
+	t.Run("Success: POST /v1/connections/request with agent auth", func(t *testing.T) {
 		var got map[string]any
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodPost || r.URL.Path != "/v1/connections/request" {
 				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 			}
+			if gotAgent := r.Header.Get("X-Agent-ID"); gotAgent != "agent-1" {
+				t.Fatalf("X-Agent-ID mismatch: %q", gotAgent)
+			}
+			if gotSecret := r.Header.Get("X-API-Secret"); gotSecret != "s3cret" {
+				t.Fatalf("X-API-Secret mismatch: %q", gotSecret)
+			}
 			b, _ := io.ReadAll(r.Body)
 			got = mustJSONMap(t, string(b))
-			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"request": map[string]any{
+					"id":         "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+					"sender_id":  "agent-1",
+					"from_id":    "agent-1",
+					"from_kind":  "agent",
+					"to_id":      "target-1",
+					"to_kind":    "agent",
+					"status":     "PENDING",
+					"created_at": "2026-03-19T00:00:00Z",
+					"updated_at": "2026-03-19T00:00:00Z",
+				},
+			})
 		}))
 		defer srv.Close()
 
-		cmd := connectCmd(testConfig(srv.URL, "tok"))
+		cmd := connectCmd(testAgentConfig(srv.URL, "agent-1", "s3cret"))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"user-id"})
-		if err := cmd.Execute(); err != nil {
-			t.Fatalf("execute failed: %v", err)
+		cmd.SetArgs([]string{"target-1"})
+		out := captureStdout(t, func() {
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("execute failed: %v", err)
+			}
+		})
+
+		if got["target_id"] != "target-1" {
+			t.Fatalf("unexpected payload: %v", got)
 		}
 
-		if got["target_id"] != "user-id" {
-			t.Fatalf("unexpected payload: %v", got)
+		parsed := mustJSONMap(t, out)
+		req, ok := parsed["request"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected 'request' key in response, got: %v", parsed)
+		}
+		for _, field := range []string{"id", "sender_id", "from_id", "from_kind", "to_id", "to_kind", "status", "created_at", "updated_at"} {
+			if _, exists := req[field]; !exists {
+				t.Fatalf("missing field %q in response: %v", field, req)
+			}
+		}
+		if req["status"] != "PENDING" {
+			t.Fatalf("expected status=PENDING, got %v", req["status"])
+		}
+		if req["from_kind"] != "agent" {
+			t.Fatalf("expected from_kind=agent, got %v", req["from_kind"])
 		}
 	})
 
-	t.Run("No token", func(t *testing.T) {
+	t.Run("No agent credentials", func(t *testing.T) {
 		cmd := connectCmd(testConfig("http://localhost:8080", ""))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
 		cmd.SetArgs([]string{"user-id"})
 		err := cmd.Execute()
-		if err == nil || !strings.Contains(err.Error(), "token required") {
+		if err == nil || !strings.Contains(err.Error(), "agent credentials required") {
 			t.Fatalf("unexpected err: %v", err)
 		}
 	})
 }
 
 func TestInboxCommand(t *testing.T) {
-	t.Run("Success: GET /v1/connections/inbox", func(t *testing.T) {
+	t.Run("Success: GET /v1/connections/inbox with agent auth", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodGet || r.URL.Path != "/v1/connections/inbox" {
 				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"items": []any{}})
+			if gotAgent := r.Header.Get("X-Agent-ID"); gotAgent != "agent-1" {
+				t.Fatalf("X-Agent-ID mismatch: %q", gotAgent)
+			}
+			if gotSecret := r.Header.Get("X-API-Secret"); gotSecret != "s3cret" {
+				t.Fatalf("X-API-Secret mismatch: %q", gotSecret)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"requests": []any{
+					map[string]any{
+						"id":         "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+						"sender_id":  "other-agent",
+						"from_id":    "other-agent",
+						"from_kind":  "agent",
+						"to_id":      "agent-1",
+						"to_kind":    "agent",
+						"status":     "PENDING",
+						"created_at": "2026-03-19T00:00:00Z",
+						"updated_at": "2026-03-19T00:00:00Z",
+					},
+				},
+			})
 		}))
 		defer srv.Close()
 
-		cmd := inboxCmd(testConfig(srv.URL, "tok"))
+		cmd := inboxCmd(testAgentConfig(srv.URL, "agent-1", "s3cret"))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		if err := cmd.Execute(); err != nil {
-			t.Fatalf("execute failed: %v", err)
+		out := captureStdout(t, func() {
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("execute failed: %v", err)
+			}
+		})
+
+		parsed := mustJSONMap(t, out)
+		reqs, ok := parsed["requests"].([]any)
+		if !ok || len(reqs) != 1 {
+			t.Fatalf("expected 'requests' array with 1 item, got: %v", parsed)
+		}
+		req, ok := reqs[0].(map[string]any)
+		if !ok {
+			t.Fatalf("expected request object, got: %v", reqs[0])
+		}
+		for _, field := range []string{"id", "sender_id", "from_id", "from_kind", "to_id", "to_kind", "status", "created_at", "updated_at"} {
+			if _, exists := req[field]; !exists {
+				t.Fatalf("missing field %q in response: %v", field, req)
+			}
+		}
+		if req["status"] != "PENDING" {
+			t.Fatalf("expected status=PENDING, got %v", req["status"])
 		}
 	})
 
-	t.Run("No token", func(t *testing.T) {
+	t.Run("No agent credentials", func(t *testing.T) {
 		cmd := inboxCmd(testConfig("http://localhost:8080", ""))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
 		err := cmd.Execute()
-		if err == nil || !strings.Contains(err.Error(), "token required") {
+		if err == nil || !strings.Contains(err.Error(), "agent credentials required") {
 			t.Fatalf("unexpected err: %v", err)
 		}
 	})
 }
 
 func TestAcceptCommand(t *testing.T) {
-	t.Run("Success: POST /v1/connections/{id}/accept", func(t *testing.T) {
-		var got map[string]any
+	t.Run("Success: POST /v1/connections/{id}/accept with agent auth", func(t *testing.T) {
+		reqID := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost || r.URL.Path != "/v1/connections/user-id/accept" {
+			if r.Method != http.MethodPost || r.URL.Path != "/v1/connections/"+reqID+"/accept" {
 				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 			}
-			b, _ := io.ReadAll(r.Body)
-			got = mustJSONMap(t, string(b))
-			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+			if gotAgent := r.Header.Get("X-Agent-ID"); gotAgent != "agent-1" {
+				t.Fatalf("X-Agent-ID mismatch: %q", gotAgent)
+			}
+			if gotSecret := r.Header.Get("X-API-Secret"); gotSecret != "s3cret" {
+				t.Fatalf("X-API-Secret mismatch: %q", gotSecret)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"request_id": reqID,
+				"status":     "ACCEPTED",
+			})
 		}))
 		defer srv.Close()
 
-		cmd := acceptCmd(testConfig(srv.URL, "tok"))
+		cmd := acceptCmd(testAgentConfig(srv.URL, "agent-1", "s3cret"))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"user-id"})
-		if err := cmd.Execute(); err != nil {
-			t.Fatalf("execute failed: %v", err)
-		}
+		cmd.SetArgs([]string{reqID})
+		out := captureStdout(t, func() {
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("execute failed: %v", err)
+			}
+		})
 
-		if len(got) != 0 {
-			t.Fatalf("unexpected payload: %v", got)
+		parsed := mustJSONMap(t, out)
+		if parsed["request_id"] != reqID {
+			t.Fatalf("expected request_id=%s, got %v", reqID, parsed["request_id"])
+		}
+		if parsed["status"] != "ACCEPTED" {
+			t.Fatalf("expected status=ACCEPTED, got %v", parsed["status"])
 		}
 	})
 
-	t.Run("No token", func(t *testing.T) {
+	t.Run("No agent credentials", func(t *testing.T) {
 		cmd := acceptCmd(testConfig("http://localhost:8080", ""))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"user-id"})
+		cmd.SetArgs([]string{"some-id"})
 		err := cmd.Execute()
-		if err == nil || !strings.Contains(err.Error(), "token required") {
+		if err == nil || !strings.Contains(err.Error(), "agent credentials required") {
 			t.Fatalf("unexpected err: %v", err)
 		}
 	})
 }
 
 func TestRejectCommand(t *testing.T) {
-	t.Run("Success: POST /v1/connections/{id}/reject", func(t *testing.T) {
-		var got map[string]any
+	t.Run("Success: POST /v1/connections/{id}/reject with agent auth", func(t *testing.T) {
+		reqID := "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost || r.URL.Path != "/v1/connections/user-id/reject" {
+			if r.Method != http.MethodPost || r.URL.Path != "/v1/connections/"+reqID+"/reject" {
 				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 			}
-			b, _ := io.ReadAll(r.Body)
-			got = mustJSONMap(t, string(b))
-			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+			if gotAgent := r.Header.Get("X-Agent-ID"); gotAgent != "agent-1" {
+				t.Fatalf("X-Agent-ID mismatch: %q", gotAgent)
+			}
+			if gotSecret := r.Header.Get("X-API-Secret"); gotSecret != "s3cret" {
+				t.Fatalf("X-API-Secret mismatch: %q", gotSecret)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"request_id": reqID,
+				"status":     "REJECTED",
+			})
 		}))
 		defer srv.Close()
 
-		cmd := rejectCmd(testConfig(srv.URL, "tok"))
+		cmd := rejectCmd(testAgentConfig(srv.URL, "agent-1", "s3cret"))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"user-id"})
-		if err := cmd.Execute(); err != nil {
-			t.Fatalf("execute failed: %v", err)
-		}
+		cmd.SetArgs([]string{reqID})
+		out := captureStdout(t, func() {
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("execute failed: %v", err)
+			}
+		})
 
-		if len(got) != 0 {
-			t.Fatalf("unexpected payload: %v", got)
+		parsed := mustJSONMap(t, out)
+		if parsed["request_id"] != reqID {
+			t.Fatalf("expected request_id=%s, got %v", reqID, parsed["request_id"])
+		}
+		if parsed["status"] != "REJECTED" {
+			t.Fatalf("expected status=REJECTED, got %v", parsed["status"])
 		}
 	})
 
-	t.Run("No token", func(t *testing.T) {
+	t.Run("No agent credentials", func(t *testing.T) {
 		cmd := rejectCmd(testConfig("http://localhost:8080", ""))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"user-id"})
+		cmd.SetArgs([]string{"some-id"})
 		err := cmd.Execute()
-		if err == nil || !strings.Contains(err.Error(), "token required") {
+		if err == nil || !strings.Contains(err.Error(), "agent credentials required") {
 			t.Fatalf("unexpected err: %v", err)
 		}
 	})
@@ -1435,38 +1539,79 @@ func TestPollCommand(t *testing.T) {
 }
 
 func TestGroupInviteCommand(t *testing.T) {
-	t.Run("Success: POST /v1/groups/{id}/join", func(t *testing.T) {
+	t.Run("Success: POST /v1/connections/request with from_kind=group", func(t *testing.T) {
 		var got map[string]any
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodPost || r.URL.Path != "/v1/groups/group-id/join" {
+			if r.Method != http.MethodPost || r.URL.Path != "/v1/connections/request" {
 				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+			}
+			if gotAgent := r.Header.Get("X-Agent-ID"); gotAgent != "agent-1" {
+				t.Fatalf("X-Agent-ID mismatch: %q", gotAgent)
+			}
+			if gotSecret := r.Header.Get("X-API-Secret"); gotSecret != "s3cret" {
+				t.Fatalf("X-API-Secret mismatch: %q", gotSecret)
 			}
 			b, _ := io.ReadAll(r.Body)
 			got = mustJSONMap(t, string(b))
-			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"request": map[string]any{
+					"id":         "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+					"sender_id":  "agent-1",
+					"from_id":    "group-id",
+					"from_kind":  "group",
+					"to_id":      "target-agent",
+					"to_kind":    "agent",
+					"status":     "PENDING",
+					"created_at": "2026-03-19T00:00:00Z",
+					"updated_at": "2026-03-19T00:00:00Z",
+				},
+			})
 		}))
 		defer srv.Close()
 
-		cmd := groupCmd(testConfig(srv.URL, "tok"))
+		cmd := groupCmd(testAgentConfig(srv.URL, "agent-1", "s3cret"))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"invite", "group-id", "user-id"})
-		if err := cmd.Execute(); err != nil {
-			t.Fatalf("execute failed: %v", err)
+		cmd.SetArgs([]string{"invite", "group-id", "target-agent"})
+		out := captureStdout(t, func() {
+			if err := cmd.Execute(); err != nil {
+				t.Fatalf("execute failed: %v", err)
+			}
+		})
+
+		if got["target_id"] != "target-agent" {
+			t.Fatalf("expected target_id=target-agent, got %v", got["target_id"])
+		}
+		if got["from_id"] != "group-id" {
+			t.Fatalf("expected from_id=group-id, got %v", got["from_id"])
+		}
+		if got["from_kind"] != "group" {
+			t.Fatalf("expected from_kind=group, got %v", got["from_kind"])
 		}
 
-		if got["participant_id"] != "user-id" || got["participant_kind"] != "user" {
-			t.Fatalf("unexpected payload: %v", got)
+		parsed := mustJSONMap(t, out)
+		req, ok := parsed["request"].(map[string]any)
+		if !ok {
+			t.Fatalf("expected 'request' key in response, got: %v", parsed)
+		}
+		for _, field := range []string{"id", "sender_id", "from_id", "from_kind", "to_id", "to_kind", "status", "created_at", "updated_at"} {
+			if _, exists := req[field]; !exists {
+				t.Fatalf("missing field %q in response: %v", field, req)
+			}
+		}
+		if req["from_kind"] != "group" {
+			t.Fatalf("expected from_kind=group, got %v", req["from_kind"])
 		}
 	})
 
-	t.Run("No token", func(t *testing.T) {
+	t.Run("No agent credentials", func(t *testing.T) {
 		cmd := groupCmd(testConfig("http://localhost:8080", ""))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
 		cmd.SetArgs([]string{"invite", "group-id", "user-id"})
 		err := cmd.Execute()
-		if err == nil || !strings.Contains(err.Error(), "token required") {
+		if err == nil || !strings.Contains(err.Error(), "agent credentials required") {
 			t.Fatalf("unexpected err: %v", err)
 		}
 	})
