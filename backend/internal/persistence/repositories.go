@@ -538,7 +538,7 @@ func (r *pgConversationRepository) ListItems(ctx context.Context, participantID 
 
 func (r *pgConversationRepository) ListUnreadByParticipant(ctx context.Context, participantID uuid.UUID, kind ParticipantType) ([]ConversationListItem, error) {
 	query := `
-		SELECT item_id, conv_type, item_name, last_message_at, unread_count FROM (
+		SELECT item_id, conv_type, item_name, last_message_at FROM (
 			SELECT
 				CASE WHEN c.id_low = $1 THEN c.id_high ELSE c.id_low END AS item_id,
 				c.type AS conv_type,
@@ -596,7 +596,7 @@ func (r *pgConversationRepository) ListUnreadByParticipant(ctx context.Context, 
 	for rows.Next() {
 		var item ConversationListItem
 		var ct string
-		if err := rows.Scan(&item.ID, &ct, &item.Name, &item.LastMessageAt, &item.UnreadCount); err != nil {
+		if err := rows.Scan(&item.ID, &ct, &item.Name, &item.LastMessageAt); err != nil {
 			return nil, fmt.Errorf("scan unread conversation item: %w", err)
 		}
 		item.Type = ConversationType(ct)

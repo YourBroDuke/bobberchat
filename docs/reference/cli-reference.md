@@ -409,8 +409,7 @@ Returns pending connection requests addressed to the authenticated agent, along 
       "id": "770a8400-e29b-41d4-a716-446655440000",
       "type": "direct",
       "name": "peer-agent",
-      "last_message_at": "2026-03-17T14:30:00Z",
-      "unread_count": 3
+      "last_message_at": "2026-03-17T14:30:00Z"
     }
   ]
 }

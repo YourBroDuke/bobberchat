@@ -1327,7 +1327,6 @@ func TestInboxCommand(t *testing.T) {
 						"type":            "direct",
 						"name":            "peer-agent",
 						"last_message_at": "2026-03-19T01:00:00Z",
-						"unread_count":    3,
 					},
 				},
 			})
@@ -1369,7 +1368,7 @@ func TestInboxCommand(t *testing.T) {
 		if !ok {
 			t.Fatalf("expected unread object, got: %v", unreads[0])
 		}
-		for _, field := range []string{"id", "type", "name", "last_message_at", "unread_count"} {
+		for _, field := range []string{"id", "type", "name", "last_message_at"} {
 			if _, exists := unread[field]; !exists {
 				t.Fatalf("missing field %q in unreads response: %v", field, unread)
 			}

@@ -112,7 +112,6 @@ type ConversationListItem struct {
 	Type          ConversationType `json:"type"`
 	Name          string           `json:"name"`
 	LastMessageAt *time.Time       `json:"last_message_at,omitempty"`
-	UnreadCount   int              `json:"unread_count"`
 }
 
 type BlacklistEntry struct {
