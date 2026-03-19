@@ -81,7 +81,7 @@ type Message struct {
 	FromID         uuid.UUID      `json:"from_id"`
 	ConversationID uuid.UUID      `json:"conversation_id"`
 	Tag            string         `json:"tag"`
-	Payload        map[string]any `json:"payload"`
+	Content        string         `json:"content"`
 	Metadata       map[string]any `json:"metadata"`
 	Timestamp      time.Time      `json:"timestamp"`
 }

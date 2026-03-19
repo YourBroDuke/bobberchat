@@ -72,7 +72,7 @@ func makeEnvelope(from, to, tag string) *protocol.Envelope {
 		From:      from,
 		To:        to,
 		Tag:       tag,
-		Payload:   map[string]any{"text": "hello"},
+		Content:   `{"text":"hello"}`,
 		Metadata:  map[string]any{},
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	}

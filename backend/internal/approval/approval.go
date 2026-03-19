@@ -35,7 +35,7 @@ func (s *Service) SubmitRequest(ctx context.Context, req *persistence.ApprovalRe
 		ID:      created.ApprovalID.String(),
 		From:    created.AgentID.String(),
 		To:      "approval_queue",
-		Payload: map[string]any{},
+		Content: "",
 		Metadata: map[string]any{
 			protocol.MetaSysTag:           protocol.TagApprovalRequest,
 			protocol.MetaSysApprovalID:    created.ApprovalID.String(),
@@ -111,7 +111,7 @@ func (s *Service) Decide(ctx context.Context, approvalID string, decision persis
 		ID:      uuid.NewString(),
 		From:    approverID,
 		To:      agentID.String(),
-		Payload: map[string]any{},
+		Content: "",
 		Metadata: map[string]any{
 			protocol.MetaSysTag:        tag,
 			protocol.MetaSysApprovalID: approvalID,

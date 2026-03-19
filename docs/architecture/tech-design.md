@@ -96,7 +96,7 @@ bobberchat/
 | `backend/internal/broker` | Owns JetStream stream/consumer setup, subject routing, dedupe handling, and delivery policy enforcement by tag family (Design Spec §3.5). |
 | `backend/internal/registry` | Manages agent registration, heartbeat liveness, and discovery query execution (Design Spec §6). |
 | `backend/internal/auth` | Handles human auth (JWT) and machine auth (API secret verification, rotation, revocation) (Design Spec §5, §11). |
-| `backend/internal/protocol` | Defines canonical envelope structs, tag taxonomy constants, payload validators, and protocol version negotiation logic (Design Spec §3.6). |
+| `backend/internal/protocol` | Defines canonical envelope structs, tag taxonomy constants, content validators, and protocol version negotiation logic (Design Spec §3.6). |
 | `backend/internal/conversation` | Implements conversations (DM & group), conversation participants, membership policies, and message ordering context (Design Spec §4). |
 | `backend/internal/approval` | Implements `approval.request/granted/denied` state machine, timeout policy (`auto-deny`, `auto-approve`, `escalate`), and idempotency gates (Design Spec §7). |
 | `backend/internal/persistence` | PostgreSQL repositories, message archival orchestration (hot/warm/cold boundaries), and migration integration (Design Spec §4.4). |
@@ -174,7 +174,7 @@ CREATE TABLE messages (
   from_id UUID NOT NULL,
   conversation_id UUID NOT NULL REFERENCES conversations(id),
   tag TEXT NOT NULL,
-  payload JSONB NOT NULL,
+  content TEXT NOT NULL DEFAULT '',
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   "timestamp" TIMESTAMPTZ NOT NULL
 );
@@ -346,7 +346,7 @@ Message frame format (JSON envelope from Design Spec §3.1):
   "from": "agent.planner",
   "to": "agent.researcher",
   "tag": "request.data",
-  "payload": { "query": "latest incident report" },
+  "content": "latest incident report",
   "metadata": {
     "protocol_version": "1.0.0",
     "context-budget": 8192,
@@ -358,10 +358,10 @@ Message frame format (JSON envelope from Design Spec §3.1):
 
 #### 5.2.1 Envelope Field Semantics: User vs System Data
 
-**Tag** and **Payload** are purely user-controlled fields. Protocol adapters and system code MUST NOT write to them. All system-injected information lives in **Metadata** under underscore-prefixed keys.
+**Tag** and **Content** are purely user-controlled fields. Protocol adapters and system code MUST NOT write to them. All system-injected information lives in **Metadata** under underscore-prefixed keys.
 
 - `tag` is optional (`json:"tag,omitempty"`). When a user provides a tag, it takes precedence for routing. When empty, the system uses `metadata._tag` (set by adapters) via `protocol.EffectiveTag()`.
-- `payload` contains only application data chosen by the user or SDK caller.
+- `content` is a plain string containing application data chosen by the user or SDK caller.
 - `metadata` holds both user-defined keys (no prefix) and system keys (underscore prefix).
 
 System metadata keys (`_`-prefixed, set by adapters and system code):
@@ -430,7 +430,7 @@ type Message struct {
     From      string
     To        string
     Tag       string
-    Payload   map[string]any
+    Content   string
     Metadata  map[string]any
     Timestamp string
 }

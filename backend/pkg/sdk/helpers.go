@@ -7,28 +7,24 @@ import (
 	"github.com/google/uuid"
 )
 
-func NewMessage(from, to, tag string, payload map[string]any) Message {
-	if payload == nil {
-		payload = map[string]any{}
-	}
-
+func NewMessage(from, to, tag, content string) Message {
 	return Message{
 		ID:        uuid.NewString(),
 		From:      from,
 		To:        to,
 		Tag:       tag,
-		Payload:   payload,
+		Content:   content,
 		Metadata:  map[string]any{"protocol_version": "1.0.0"},
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	}
 }
 
-func NewRequestMessage(from, to string, payload map[string]any) Message {
-	return NewMessage(from, to, protocol.TagRequestData, payload)
+func NewRequestMessage(from, to, content string) Message {
+	return NewMessage(from, to, protocol.TagRequestData, content)
 }
 
-func NewResponseMessage(from, to, requestID string, result map[string]any) Message {
-	msg := NewMessage(from, to, protocol.TagResponseSuccess, result)
+func NewResponseMessage(from, to, requestID, content string) Message {
+	msg := NewMessage(from, to, protocol.TagResponseSuccess, content)
 	msg.Metadata["request_id"] = requestID
 	return msg
 }

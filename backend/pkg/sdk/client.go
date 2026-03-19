@@ -123,7 +123,7 @@ func (c *Client) Send(ctx context.Context, msg Message) error {
 		From:      msg.From,
 		To:        msg.To,
 		Tag:       msg.Tag,
-		Payload:   msg.Payload,
+		Content:   msg.Content,
 		Metadata:  msg.Metadata,
 		Timestamp: msg.Timestamp,
 	}

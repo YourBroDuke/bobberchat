@@ -19,7 +19,7 @@ type Message struct {
 	From      string         `json:"from"`
 	To        string         `json:"to"`
 	Tag       string         `json:"tag"`
-	Payload   map[string]any `json:"payload"`
+	Content   string         `json:"content"`
 	Metadata  map[string]any `json:"metadata,omitempty"`
 	Timestamp string         `json:"timestamp"`
 }

@@ -8,7 +8,7 @@ import (
 )
 
 // System metadata key constants. All system-injected data lives under these
-// keys in Metadata so that Tag and Payload remain pure user input.
+// keys in Metadata so that Tag and Content remain pure user input.
 const (
 	MetaSysTag               = "_tag"
 	MetaSysAction            = "_action"
@@ -36,7 +36,7 @@ type Envelope struct {
 	From      string         `json:"from"`
 	To        string         `json:"to"`
 	Tag       string         `json:"tag,omitempty"`
-	Payload   map[string]any `json:"payload"`
+	Content   string         `json:"content"`
 	Metadata  map[string]any `json:"metadata,omitempty"`
 	Timestamp string         `json:"timestamp"`
 }
@@ -79,10 +79,6 @@ func (e *Envelope) Validate() error {
 	if strings.TrimSpace(e.Timestamp) == "" {
 		return errors.New("timestamp is required")
 	}
-	if e.Payload == nil {
-		return errors.New("payload must not be nil")
-	}
-
 	tag := EffectiveTag(e)
 	if tag == "" {
 		return errors.New("tag is required (set Tag field or Metadata[\"_tag\"])")

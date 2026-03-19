@@ -912,10 +912,9 @@ func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var original persistence.Message
-	var payloadRaw []byte
 	var metadataRaw []byte
 	err = a.db.Pool().QueryRow(r.Context(), `
-		SELECT id, from_id, conversation_id, tag, payload, metadata, "timestamp"
+		SELECT id, from_id, conversation_id, tag, content, metadata, "timestamp"
 		FROM messages
 		WHERE id = $1
 	`, originalID).Scan(
@@ -923,7 +922,7 @@ func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
 		&original.FromID,
 		&original.ConversationID,
 		&original.Tag,
-		&payloadRaw,
+		&original.Content,
 		&metadataRaw,
 		&original.Timestamp,
 	)
@@ -936,25 +935,12 @@ func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	original.Payload = map[string]any{}
-	if len(payloadRaw) > 0 {
-		if err := json.Unmarshal(payloadRaw, &original.Payload); err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to decode message payload")
-			return
-		}
-	}
-
 	original.Metadata = map[string]any{}
 	if len(metadataRaw) > 0 {
 		if err := json.Unmarshal(metadataRaw, &original.Metadata); err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to decode message metadata")
 			return
 		}
-	}
-
-	payload := make(map[string]any, len(original.Payload))
-	for k, v := range original.Payload {
-		payload[k] = v
 	}
 
 	metadata := make(map[string]any, len(original.Metadata)+4)
@@ -973,7 +959,7 @@ func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
 		ID:        newMessageID,
 		From:      original.FromID.String(),
 		To:        original.ConversationID.String(),
-		Payload:   payload,
+		Content:   original.Content,
 		Metadata:  metadata,
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	}

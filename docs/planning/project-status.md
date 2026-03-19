@@ -83,11 +83,11 @@ type Adapter interface {
 
 ### System Metadata Refactor (Tags & Payload → Metadata)
 
-All system-injected data has been moved from `Tag` and `Payload` fields into `Metadata` under underscore-prefixed keys. This ensures `Tag` and `Payload` remain purely user-controlled input.
+All system-injected data has been moved from `Tag` and `Payload` fields into `Metadata` under underscore-prefixed keys. This ensures `Tag` and `Content` remain purely user-controlled input. The `Payload map[string]any` field was subsequently replaced with `Content string` across the entire codebase.
 
 **Changes across all adapters** (gRPC, MCP, A2A):
-- `Ingest()` now writes system data to `Metadata` (e.g. `_tag`, `_action`, `_args`) instead of `Tag`/`Payload`
-- `Emit()` now reads system data from `Metadata` instead of `Tag`/`Payload`
+- `Ingest()` now writes system data to `Metadata` (e.g. `_tag`, `_action`, `_args`) instead of `Tag`/`Content`
+- `Emit()` now reads system data from `Metadata` instead of `Tag`/`Content`
 - All adapter tests updated to assert `Metadata` keys
 
 **Envelope changes** (`internal/protocol/envelope.go`):
@@ -102,7 +102,7 @@ All system-injected data has been moved from `Tag` and `Payload` fields into `Me
 
 **Broker & main server**: Use `protocol.EffectiveTag(env)` for routing, rate limiting, metrics, and audit.
 
-**Approval module**: System data (`_approval_id`, `_decision`, `_reason`, `_justification`) in Metadata; Payload is empty.
+**Approval module**: System data (`_approval_id`, `_decision`, `_reason`, `_justification`) in Metadata; Content is empty string.
 
 **Replay handler**: Replay keys (`_replayed`, `_original_message_id`, `_replay_reason`, `_tag`) in Metadata.
 
@@ -319,13 +319,13 @@ System:     GET /v1/health, /v1/metrics
   "from": "uuid",
   "to": "uuid",
   "tag": "(optional) user-supplied tag",
-  "payload": {},
+  "content": "",
   "metadata": { "_tag": "request.action", "_action": "...", "...": "..." },
   "timestamp": "RFC3339"
 }
 ```
 
-**Field semantics**: `tag` and `payload` are purely user-controlled. All system-injected data (adapter-derived routing tags, action names, error codes, replay/approval keys) lives in `metadata` under underscore-prefixed keys (e.g. `_tag`, `_action`, `_result`). When `tag` is empty, `protocol.EffectiveTag()` falls back to `metadata._tag`.
+**Field semantics**: `tag` and `content` are purely user-controlled. All system-injected data (adapter-derived routing tags, action names, error codes, replay/approval keys) lives in `metadata` under underscore-prefixed keys (e.g. `_tag`, `_action`, `_result`). When `tag` is empty, `protocol.EffectiveTag()` falls back to `metadata._tag`.
 
 ### 8 Tag Families
 

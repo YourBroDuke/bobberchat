@@ -106,7 +106,7 @@ func (a *MCPAdapter) Ingest(ctx context.Context, raw []byte, meta adapter.Transp
 		ID:        uuid.NewString(),
 		From:      from,
 		To:        to,
-		Payload:   map[string]any{},
+		Content:   "",
 		Metadata:  map[string]any{},
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	}
@@ -135,7 +135,7 @@ func (a *MCPAdapter) Ingest(ctx context.Context, raw []byte, meta adapter.Transp
 
 	case strings.TrimSpace(msg.Method) != "" && msg.ID == nil:
 		adapter.SetSystemMeta(env, protocol.MetaSysTag, protocol.TagContextProvide)
-		env.Payload["summary"] = buildNotificationSummary(msg.Method, msg.Params)
+		env.Content = buildNotificationSummary(msg.Method, msg.Params)
 
 	case msg.Method == "tools/call" && msg.ID != nil:
 		adapter.SetSystemMeta(env, protocol.MetaSysTag, protocol.TagRequestAction)

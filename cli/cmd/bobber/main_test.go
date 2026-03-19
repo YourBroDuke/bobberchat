@@ -1436,9 +1436,9 @@ func TestSendCommand(t *testing.T) {
 			if env["from"] != "" || env["to"] != "a-target" || env["tag"] != "request.data" {
 				t.Fatalf("unexpected envelope: %v", env)
 			}
-			payload, ok := env["payload"].(map[string]any)
-			if !ok || payload["content"] != "hello" {
-				t.Fatalf("unexpected payload: %v", env["payload"])
+			contentVal, ok := env["content"].(string)
+			if !ok || contentVal != "hello" {
+				t.Fatalf("unexpected content: %v", env["content"])
 			}
 		case <-time.After(2 * time.Second):
 			t.Fatal("timeout waiting for websocket envelope")

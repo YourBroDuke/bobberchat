@@ -667,10 +667,6 @@ func (r *pgMessageRepository) Save(ctx context.Context, message Message) (*Messa
 		message.Timestamp = time.Now().UTC()
 	}
 
-	payload, err := json.Marshal(message.Payload)
-	if err != nil {
-		return nil, fmt.Errorf("marshal message payload: %w", err)
-	}
 	metadata, err := json.Marshal(message.Metadata)
 	if err != nil {
 		return nil, fmt.Errorf("marshal message metadata: %w", err)
@@ -683,10 +679,10 @@ func (r *pgMessageRepository) Save(ctx context.Context, message Message) (*Messa
 	defer tx.Rollback(ctx) //nolint:errcheck
 
 	row := tx.QueryRow(ctx, `
-		INSERT INTO messages (id, from_id, conversation_id, tag, payload, metadata, "timestamp")
+		INSERT INTO messages (id, from_id, conversation_id, tag, content, metadata, "timestamp")
 		VALUES ($1,$2,$3,$4,$5,$6,$7)
-		RETURNING id, from_id, conversation_id, tag, payload, metadata, "timestamp"
-	`, message.ID, message.FromID, message.ConversationID, message.Tag, payload, metadata, message.Timestamp)
+		RETURNING id, from_id, conversation_id, tag, content, metadata, "timestamp"
+	`, message.ID, message.FromID, message.ConversationID, message.Tag, message.Content, metadata, message.Timestamp)
 
 	out, err := scanMessage(row)
 	if err != nil {
@@ -711,7 +707,7 @@ func (r *pgMessageRepository) Save(ctx context.Context, message Message) (*Messa
 
 func (r *pgMessageRepository) GetByID(ctx context.Context, messageID uuid.UUID) (*Message, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, from_id, conversation_id, tag, payload, metadata, "timestamp"
+		SELECT id, from_id, conversation_id, tag, content, metadata, "timestamp"
 		FROM messages
 		WHERE id = $1
 	`, messageID)
@@ -724,7 +720,7 @@ func (r *pgMessageRepository) GetByConversation(ctx context.Context, conversatio
 	}
 
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT id, from_id, conversation_id, tag, payload, metadata, "timestamp"
+		SELECT id, from_id, conversation_id, tag, content, metadata, "timestamp"
 		FROM messages
 		WHERE conversation_id = $1
 			AND ($2::timestamptz IS NULL OR "timestamp" > $2)
@@ -1058,7 +1054,6 @@ func scanAgent(scanner rowScanner) (*Agent, error) {
 
 func scanMessage(scanner rowScanner) (*Message, error) {
 	out := Message{}
-	var payloadRaw []byte
 	var metadataRaw []byte
 
 	err := scanner.Scan(
@@ -1066,7 +1061,7 @@ func scanMessage(scanner rowScanner) (*Message, error) {
 		&out.FromID,
 		&out.ConversationID,
 		&out.Tag,
-		&payloadRaw,
+		&out.Content,
 		&metadataRaw,
 		&out.Timestamp,
 	)
@@ -1075,13 +1070,6 @@ func scanMessage(scanner rowScanner) (*Message, error) {
 			return nil, ErrNotFound
 		}
 		return nil, fmt.Errorf("scan message: %w", err)
-	}
-
-	out.Payload = map[string]any{}
-	if len(payloadRaw) > 0 {
-		if err := json.Unmarshal(payloadRaw, &out.Payload); err != nil {
-			return nil, fmt.Errorf("unmarshal message payload: %w", err)
-		}
 	}
 
 	out.Metadata = map[string]any{}

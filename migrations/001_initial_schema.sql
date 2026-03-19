@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS messages (
   from_id UUID NOT NULL,
   to_id UUID NOT NULL,
   tag TEXT NOT NULL,
-  payload JSONB NOT NULL,
+  content TEXT NOT NULL DEFAULT '',
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   "timestamp" TIMESTAMPTZ NOT NULL,
   topic_id UUID REFERENCES topics(id) ON DELETE SET NULL

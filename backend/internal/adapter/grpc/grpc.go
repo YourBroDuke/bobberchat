@@ -126,7 +126,7 @@ func (a *GRPCAdapter) Ingest(ctx context.Context, raw []byte, meta adapter.Trans
 		ID:        uuid.NewString(),
 		From:      from,
 		To:        to,
-		Payload:   map[string]any{},
+		Content:   "",
 		Metadata:  map[string]any{},
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	}
@@ -278,10 +278,12 @@ func (a *GRPCAdapter) Emit(ctx context.Context, env *protocol.Envelope) ([]byte,
 				return nil, err
 			}
 			msg.Body = body
-		} else {
-			msg.Body = map[string]any{}
-			for k, v := range env.Payload {
-				msg.Body[k] = v
+		} else if env.Content != "" {
+			var contentMap map[string]any
+			if err := json.Unmarshal([]byte(env.Content), &contentMap); err == nil {
+				for k, v := range contentMap {
+					msg.Body[k] = v
+				}
 			}
 		}
 

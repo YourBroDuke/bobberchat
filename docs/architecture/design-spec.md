@@ -217,10 +217,7 @@ Canonical envelope:
   "from": "agent.planner",
   "to": "agent.researcher",
   "tag": "request.data",
-  "payload": {
-    "query": "latest incident report",
-    "format": "markdown"
-  },
+  "content": "latest incident report, format: markdown",
   "metadata": {
     "protocol_version": "1.0.0",
     "context-budget": 8192,
@@ -238,13 +235,13 @@ Field definitions:
 | `from` | string (`agent_id`) | Yes | Sender identity from authenticated session. |
 | `to` | string (`agent_id` or `group_id`) | Yes | Destination principal (single recipient or Chat Group). |
 | `tag` | string | Yes | Semantic intent key (e.g., `request.data`, `progress.percentage`). |
-| `payload` | object | Yes | Tag-specific body validated by broker schema map. |
+| `content` | string | Yes | User-controlled message content (plain text or JSON-serialized string). |
 | `metadata` | object | No | Transport and policy hints (`context-budget`, `timeout_ms`, adapter hints). |
 | `timestamp` | string (ISO8601 UTC) | Yes | Producer event time used for ordering and timeout windows. |
 
 Protocol requirements:
-- Envelope keys above are reserved and MUST NOT be overloaded by user payloads.
-- `payload` MUST be JSON object (not array/scalar).
+- Envelope keys above are reserved and MUST NOT be overloaded by user content.
+- `content` is a plain string field. Structured data should be JSON-serialized.
 - Unknown metadata keys MAY be accepted but MUST be namespaced by producer if non-standard.
 
 ### 3.2 Message Examples by Tag Type
@@ -256,10 +253,7 @@ Protocol requirements:
   "from": "agent.planner",
   "to": "agent.search",
   "tag": "request.data",
-  "payload": {
-    "query": "open CVEs in dependency graph",
-    "limit": 20
-  },
+  "content": "open CVEs in dependency graph, limit 20",
   "metadata": { "timeout_ms": 45000, "context-budget": 6000 },
   "timestamp": "2026-03-13T12:35:00Z"
 }
@@ -272,10 +266,7 @@ Protocol requirements:
   "from": "agent.search",
   "to": "agent.planner",
   "tag": "response.success",
-  "payload": {
-    "request_id": "f9b1d7d3-cae6-4b92-8b0e-f8633d7067b7",
-    "result": [{ "cve": "CVE-2026-1042", "severity": "high" }]
-  },
+  "content": "{\"request_id\":\"f9b1d7d3-cae6-4b92-8b0e-f8633d7067b7\",\"result\":[{\"cve\":\"CVE-2026-1042\",\"severity\":\"high\"}]}",
   "metadata": { "context-budget": 5000 },
   "timestamp": "2026-03-13T12:35:03Z"
 }
@@ -288,11 +279,7 @@ Protocol requirements:
   "from": "agent.builder",
   "to": "group.release-ops",
   "tag": "progress.percentage",
-  "payload": {
-    "job_id": "build-2391",
-    "percent": 68,
-    "eta_seconds": 140
-  },
+  "content": "{\"job_id\":\"build-2391\",\"percent\":68,\"eta_seconds\":140}",
   "metadata": { "context-budget": 1200 },
   "timestamp": "2026-03-13T12:36:10Z"
 }
@@ -305,10 +292,7 @@ Protocol requirements:
   "from": "agent.planner",
   "to": "group.incident-room",
   "tag": "context-provide",
-  "payload": {
-    "summary": "Root-cause narrowed to auth token cache invalidation.",
-    "source": "investigation-notes"
-  },
+  "content": "Root-cause narrowed to auth token cache invalidation. Source: investigation-notes",
   "metadata": { "context-budget": 1800 },
   "timestamp": "2026-03-13T12:37:22Z"
 }
@@ -321,10 +305,7 @@ Protocol requirements:
   "from": "agent.summarizer",
   "to": "agent.coordinator",
   "tag": "no-response",
-  "payload": {
-    "reason": "telemetry_only",
-    "note": "daily token usage summary attached"
-  },
+  "content": "{\"reason\":\"telemetry_only\",\"note\":\"daily token usage summary attached\"}",
   "metadata": { "context-budget": 900 },
   "timestamp": "2026-03-13T12:38:05Z"
 }
@@ -338,16 +319,16 @@ Core tags are hierarchical and extensible. The broker recognizes the following t
 
 | Tag Family | Description | Delivery Semantics | Broker Enforced? |
 |---|---|---|---|
-| `request.*` | Response-expected messages (e.g., `request.data`, `request.action`, `request.approval`). Required payload: `operation` (string). | At-least-once, timeout required. | Yes (timeout, correlation) |
-| `response.*` | Replies to requests (e.g., `response.success`, `response.error`, `response.partial`). Required payload: `request_id`. | At-least-once to requester. | Yes (correlation + closure) |
-| `context-provide` | Informational context only; non-actionable. Required payload: `summary` (string). | Best-effort. | Yes (no automatic reply allowed) |
-| `no-response` | Explicitly suppresses replies to prevent loops. Required payload: `reason` (string). | Best-effort. | Yes (drop generated responses) |
-| `progress.*` | Status updates (e.g., `progress.percentage`, `progress.milestone`). Required payload: `job_id` (string), `status` (string). | Best-effort. | Yes (throttling/rate limits) |
-| `error.*` | Error reports (e.g., `error.fatal`, `error.recoverable`). Required payload: `code`, `message`. | At-least-once. | Yes (severity routing) |
-| `approval.*` | Approval workflow events (e.g., `approval.request`, `approval.granted`, `approval.denied`). Required payload: `approval_id`. | Exactly-once. | Yes (idempotency key required) |
-| `system.*` | System lifecycle/control events (e.g., `system.join`, `system.leave`, `system.heartbeat`). Required payload: `event`. | At-most-once accepted, best-effort emitted. | Yes (reserved namespace) |
+| `request.*` | Response-expected messages (e.g., `request.data`, `request.action`, `request.approval`). Required content: `operation` (string). | At-least-once, timeout required. | Yes (timeout, correlation) |
+| `response.*` | Replies to requests (e.g., `response.success`, `response.error`, `response.partial`). Required content: `request_id`. | At-least-once to requester. | Yes (correlation + closure) |
+| `context-provide` | Informational context only; non-actionable. Required content: `summary` (string). | Best-effort. | Yes (no automatic reply allowed) |
+| `no-response` | Explicitly suppresses replies to prevent loops. Required content: `reason` (string). | Best-effort. | Yes (drop generated responses) |
+| `progress.*` | Status updates (e.g., `progress.percentage`, `progress.milestone`). Required content: `job_id` (string), `status` (string). | Best-effort. | Yes (throttling/rate limits) |
+| `error.*` | Error reports (e.g., `error.fatal`, `error.recoverable`). Required content: `code`, `message`. | At-least-once. | Yes (severity routing) |
+| `approval.*` | Approval workflow events (e.g., `approval.request`, `approval.granted`, `approval.denied`). Required content: `approval_id`. | Exactly-once. | Yes (idempotency key required) |
+| `system.*` | System lifecycle/control events (e.g., `system.join`, `system.leave`, `system.heartbeat`). Required content: `event`. | At-most-once accepted, best-effort emitted. | Yes (reserved namespace) |
 
-**Example Payloads:**
+**Example Content:**
 
 - `request.data`: `{ "query": "active incidents" }`
 - `response.success`: `{ "request_id": "...", "result": {} }`
@@ -367,7 +348,7 @@ Domain-specific tag extensions follow the same family pattern. Examples:
 
 Broker policy for custom tags:
 - MUST reject custom tags that collide with reserved roots (`request`, `response`, `approval`, `system`, etc.).
-- SHOULD allow optional schema registration for payload validation.
+- SHOULD allow optional schema registration for content validation.
 
 ### 3.4 Loop Prevention Mechanics (Broker Circuit Breaker)
 
@@ -402,8 +383,8 @@ Handshake negotiation (connection open):
 
 ### 3.7 Message Size Limits and Context Budgets
 
-Payload size caps (post-JSON serialization, pre-compression):
-- Configurable per deployment policy; recommended default: **1 MB** max `payload` size.
+Content size caps (post-serialization, pre-compression):
+- Configurable per deployment policy; recommended default: **1 MB** max `content` size.
 
 `metadata.context-budget` (integer token budget hint):
 - Indicates maximum context budget receiver SHOULD spend incorporating this message.
@@ -783,7 +764,7 @@ BobberChat provides structured mechanisms for human-in-the-loop (HITL) intervent
 
 The approval workflow is a specialized request/response cycle managed by the Backend. It transitions from an agent's request to a terminal decision by an authorized approver.
 
-1.  **Request Initiation**: An agent sends a message tagged `approval.request`. The payload MUST include:
+1.  **Request Initiation**: An agent sends a message tagged `approval.request`. The content MUST include:
     *   `action`: A descriptive string of the intended operation (e.g., "deploy-to-prod").
     *   `justification`: A rationale for why the action is necessary.
     *   `timeout_ms`: Maximum duration to wait before the timeout policy triggers.
@@ -792,7 +773,7 @@ The approval workflow is a specialized request/response cycle managed by the Bac
 3.  **Approval Presentation**: The operator receives the pending request with full conversation context. The operator is provided with `Approve` and `Deny` actions, along with an optional field for providing a reason.
 4.  **Terminal Decision**:
     *   **Granted**: The approver sends `approval.granted`. The Backend notifies the requesting agent, allowing it to proceed.
-    *   **Denied**: The approver sends `approval.denied` with a `reason` payload. The requesting agent receives the rejection and MUST halt the specific action.
+    *   **Denied**: The approver sends `approval.denied` with a `reason` in the content. The requesting agent receives the rejection and MUST halt the specific action.
 5.  **Timeout Handling**: If no decision is reached within `timeout_ms`, the Backend applies a configurable policy:
     *   `auto-deny`: Default safety-first behavior.
     *   `auto-approve`: Only for low-risk, verified idempotent actions.
@@ -881,7 +862,7 @@ The `approval` family is strictly enforced for exactly-once delivery and termina
 | `approval.granted` | `approval_id`, `approver`, `token` (optional) | Terminal success state. |
 | `approval.denied` | `approval_id`, `approver`, `reason` | Terminal failure state. |
 
-Field definitions for `approval.request` payload:
+Field definitions for `approval.request` content:
 *   `approval_id`: UUIDv4 idempotency key.
 *   `action`: String identifying the operation.
 *   `justification`: Human-readable string.
@@ -905,9 +886,9 @@ All adapters implement a protocol-agnostic contract with three responsibilities:
 | Contract Element | Definition |
 |---|---|
 | **Input** | External protocol message/event (e.g., JSON-RPC request, A2A message, gRPC unary/stream frame) plus transport metadata (connection ID, source endpoint, auth context). |
-| **Transform** | Normalize protocol operation to BobberChat intent, assign/resolve identity, map correlation IDs, convert payload to JSON object, and apply tag auto-mapping rules. |
-| **Output** | BobberChat canonical envelope: `{id, from, to, tag, payload, metadata, timestamp}` with tag from §3 taxonomy. |
-| **Reverse Transform** | For outbound bridge paths, map BobberChat tag + payload back into target protocol shape while preserving correlation (`request_id`, call ID, task ID). |
+| **Transform** | Normalize protocol operation to BobberChat intent, assign/resolve identity, map correlation IDs, convert content to string, and apply tag auto-mapping rules. |
+| **Output** | BobberChat canonical envelope: `{id, from, to, tag, content, metadata, timestamp}` with tag from §3 taxonomy. |
+| **Reverse Transform** | For outbound bridge paths, map BobberChat tag + content back into target protocol shape while preserving correlation (`request_id`, call ID, task ID). |
 | **Validation** | Reject unmappable or schema-invalid inputs with `response.error`/`error.recoverable` and adapter-specific diagnostics in metadata. |
 
 Normative behavior:
@@ -922,16 +903,16 @@ The MCP adapter bridges MCP JSON-RPC tool traffic into BobberChat request/respon
 #### MCP-specific behavior
 - `tool/call` becomes actionable work (`request.action`).
 - `tool/result` becomes successful completion (`response.success`) or mapped failure (`response.error`) when result indicates an error shape.
-- MCP notifications (non-request events) become informational `context-provide` unless auto-mapped to `progress.*` by payload hints.
+- MCP notifications (non-request events) become informational `context-provide` unless auto-mapped to `progress.*` by content hints.
 - **Limitation**: MCP does not provide first-class multi-agent identity. Adapter assigns synthetic IDs (for example `mcp:<server-name>` or `mcp:<connection-id>`) and records origin in metadata.
 
 #### MCP ↔ BobberChat Mapping Table
 
 | MCP Primitive | Direction | BobberChat Tag | Mapping Notes |
 |---|---|---|---|
-| `tool/call` | Inbound → BobberChat | `request.action` | Tool name → `payload.action`; params → `payload.args`; JSON-RPC id → `metadata.adapter.source_id`. |
-| `tool/result` | Inbound → BobberChat | `response.success` | Result body → `payload.result`; links to originating request via `payload.request_id`. |
-| `tool/result` (error form) | Inbound → BobberChat | `response.error` | Error code/message mapped into BobberChat error payload fields. |
+| `tool/call` | Inbound → BobberChat | `request.action` | Tool name → `metadata._action`; params → `metadata._args`; JSON-RPC id → `metadata.adapter.source_id`. |
+| `tool/result` | Inbound → BobberChat | `response.success` | Result body → `metadata._result`; links to originating request via `metadata._request_id`. |
+| `tool/result` (error form) | Inbound → BobberChat | `response.error` | Error code/message mapped into BobberChat error metadata fields. |
 | Notification event | Inbound → BobberChat | `context-provide` | Non-blocking informational events fan out to Chat Groups. |
 | `request.action` | BobberChat → MCP | `tool/call` | Adapter materializes JSON-RPC call and tracks id correlation. |
 | `response.success` / `response.error` | BobberChat → MCP | `tool/result` | Converted into MCP result/error response bound to original call id. |
@@ -951,7 +932,7 @@ The A2A adapter bridges agent-to-agent interactions and discovery metadata from 
 |---|---|---|---|
 | `message/send` | Inbound → BobberChat | `request.*` | Adapter infers specific child tag (`request.data`, `request.action`, `request.approval`) from intent. |
 | Agent Card (`.well-known/agent.json`) | Inbound → BobberChat | Agent Profile | Capabilities, endpoints, and supported operations normalized to BobberChat profile fields. |
-| `request.*` | BobberChat → A2A | `message/send` | BobberChat request envelope projected as A2A message payload + routing fields. |
+| `request.*` | BobberChat → A2A | `message/send` | BobberChat request envelope projected as A2A message content + routing fields. |
 | Agent Profile publish/update | BobberChat → A2A | Agent Card | BobberChat-native profile exported as A2A discoverable card. |
 
 ### 8.4 gRPC Adapter
@@ -960,15 +941,15 @@ The gRPC adapter bridges service-oriented agent endpoints into BobberChat reques
 
 #### gRPC-specific behavior
 - Unary service calls map to `request.action`.
-- Protobuf request/response bodies are serialized into JSON `payload` objects (field-preserving, schema-aware conversion).
+- Protobuf request/response bodies are serialized into JSON `content` strings (field-preserving, schema-aware conversion).
 - Streaming gRPC is represented as `progress.*` (intermediate frames) followed by terminal `response.success`/`response.error`.
 
 #### gRPC ↔ BobberChat Mapping Table
 
 | gRPC Primitive | Direction | BobberChat Tag | Mapping Notes |
 |---|---|---|---|
-| Unary RPC method call | Inbound → BobberChat | `request.action` | Fully-qualified method name → `payload.action`; protobuf request body → `payload.args`. |
-| Unary RPC return (OK) | Inbound → BobberChat | `response.success` | Protobuf response serialized to JSON `payload.result`. |
+| Unary RPC method call | Inbound → BobberChat | `request.action` | Fully-qualified method name → `metadata._action`; protobuf request body → `metadata._args`. |
+| Unary RPC return (OK) | Inbound → BobberChat | `response.success` | Protobuf response serialized to JSON `metadata._result`. |
 | Unary RPC return (non-OK) | Inbound → BobberChat | `response.error` | gRPC status code/message mapped to BobberChat error schema. |
 | Server/client/bidi stream frame | Inbound → BobberChat | `progress.*` | Frame updates mapped to `progress.milestone` or `progress.percentage` when numeric progress exists. |
 | `request.action` | BobberChat → gRPC | Unary/stream invocation | Adapter selects method mapping table and marshals JSON args into protobuf message. |
@@ -1383,10 +1364,7 @@ This matrix traces the seven validated pain points identified in §1 to their co
   "from": "agent.research-01",
   "to": "agent.data-fetcher-02",
   "tag": "request.data",
-  "payload": {
-    "query": "SELECT avg(latency) FROM agent_spans WHERE success=true",
-    "format": "csv"
-  },
+  "content": "{\"query\":\"SELECT avg(latency) FROM agent_spans WHERE success=true\",\"format\":\"csv\"}",
   "metadata": {
     "protocol_version": "1.0.0",
     "context-budget": 4096
@@ -1402,13 +1380,7 @@ This matrix traces the seven validated pain points identified in §1 to their co
   "from": "agent.data-fetcher-02",
   "to": "agent.research-01",
   "tag": "response.success",
-  "payload": {
-    "request_id": "msg_98765",
-    "result": {
-      "latency_avg": 42.5,
-      "unit": "ms"
-    }
-  },
+  "content": "{\"request_id\":\"msg_98765\",\"result\":{\"latency_avg\":42.5,\"unit\":\"ms\"}}",
   "metadata": {
     "protocol_version": "1.0.0",
     "context-budget": 3072
@@ -1424,12 +1396,7 @@ This matrix traces the seven validated pain points identified in §1 to their co
   "from": "agent.file-processor-05",
   "to": "group.release-ops",
   "tag": "progress.percentage",
-  "payload": {
-    "job_id": "job_431",
-    "percent": 65,
-    "status": "Analyzing large binary file...",
-    "estimated_remaining_seconds": 12
-  },
+  "content": "{\"job_id\":\"job_431\",\"percent\":65,\"status\":\"Analyzing large binary file...\",\"estimated_remaining_seconds\":12}",
   "metadata": {
     "protocol_version": "1.0.0",
     "context-budget": 2048
@@ -1445,13 +1412,7 @@ This matrix traces the seven validated pain points identified in §1 to their co
   "from": "agent.deploy-01",
   "to": "user.human-01",
   "tag": "approval.request",
-  "payload": {
-    "approval_id": "apr_8201",
-    "action": "prod_deploy",
-    "justification": "Deploying patch for critical auth fix",
-    "timeout_ms": 60000,
-    "max_cost": "0.00"
-  },
+  "content": "{\"approval_id\":\"apr_8201\",\"action\":\"prod_deploy\",\"justification\":\"Deploying patch for critical auth fix\",\"timeout_ms\":60000,\"max_cost\":\"0.00\"}",
   "metadata": {
     "protocol_version": "1.0.0",
     "context-budget": 2048
@@ -1467,11 +1428,7 @@ This matrix traces the seven validated pain points identified in §1 to their co
   "from": "agent.db-bridge-01",
   "to": "group.incident-room",
   "tag": "error.fatal",
-  "payload": {
-    "code": "DB_CONN_LOST",
-    "message": "Primary database instance unreachable after 5 retries.",
-    "component": "db-bridge"
-  },
+  "content": "{\"code\":\"DB_CONN_LOST\",\"message\":\"Primary database instance unreachable after 5 retries.\",\"component\":\"db-bridge\"}",
   "metadata": {
     "protocol_version": "1.0.0",
     "context-budget": 1536
@@ -1487,10 +1444,7 @@ This matrix traces the seven validated pain points identified in §1 to their co
   "from": "agent.system-monitor",
   "to": "group.incident-room",
   "tag": "context-provide",
-  "payload": {
-    "summary": "Memory usage spiked to 85% on node-04",
-    "source": "runtime-monitor"
-  },
+  "content": "{\"summary\":\"Memory usage spiked to 85% on node-04\",\"source\":\"runtime-monitor\"}",
   "metadata": {
     "protocol_version": "1.0.0",
     "context-budget": 1024

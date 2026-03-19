@@ -94,7 +94,7 @@ func (a *A2AAdapter) Ingest(ctx context.Context, raw []byte, meta adapter.Transp
 		ID:        uuid.NewString(),
 		From:      from,
 		To:        to,
-		Payload:   map[string]any{},
+		Content:   "",
 		Metadata:  map[string]any{},
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	}
@@ -106,7 +106,7 @@ func (a *A2AAdapter) Ingest(ctx context.Context, raw []byte, meta adapter.Transp
 			return nil, err
 		}
 		adapter.SetSystemMeta(env, protocol.MetaSysTag, tag)
-		env.Payload = payload
+		env.Content = mustMarshalString(payload)
 
 	case "agent/card":
 		adapter.SetSystemMeta(env, protocol.MetaSysTag, protocol.TagContextProvide)
@@ -114,7 +114,7 @@ func (a *A2AAdapter) Ingest(ctx context.Context, raw []byte, meta adapter.Transp
 		if err != nil {
 			return nil, err
 		}
-		env.Payload = payload
+		env.Content = mustMarshalString(payload)
 
 	case "task/create":
 		adapter.SetSystemMeta(env, protocol.MetaSysTag, protocol.TagRequestAction)
@@ -138,7 +138,7 @@ func (a *A2AAdapter) Ingest(ctx context.Context, raw []byte, meta adapter.Transp
 			adapter.SetSystemMeta(env, protocol.MetaSysResult, result)
 			delete(payload, "result")
 		}
-		env.Payload = payload
+		env.Content = mustMarshalString(payload)
 
 	case "task/update":
 		tag, payload, err := ingestTaskUpdate(msg.Params)
@@ -166,7 +166,7 @@ func (a *A2AAdapter) Ingest(ctx context.Context, raw []byte, meta adapter.Transp
 			adapter.SetSystemMeta(env, protocol.MetaSysCode, code)
 			delete(payload, "code")
 		}
-		env.Payload = payload
+		env.Content = mustMarshalString(payload)
 
 	default:
 		return nil, fmt.Errorf("unsupported a2a method: %s", msg.Method)
@@ -239,10 +239,12 @@ func (a *A2AAdapter) Emit(ctx context.Context, env *protocol.Envelope) ([]byte, 
 		}
 		if result, ok := adapter.SystemMeta(env, protocol.MetaSysResult); ok {
 			params["result"] = result
-		} else if progress, ok := env.Payload["progress"]; ok {
-			params["result"] = progress
-		} else if len(env.Payload) > 0 {
-			params["result"] = env.Payload
+		} else if contentMap := parseContentMap(env.Content); len(contentMap) > 0 {
+			if progress, ok := contentMap["progress"]; ok {
+				params["result"] = progress
+			} else {
+				params["result"] = contentMap
+			}
 		}
 		msg.Params = params
 
@@ -478,7 +480,7 @@ func buildOutboundMessagePayload(env *protocol.Envelope) map[string]any {
 	if taskID := strings.TrimSpace(adapter.SystemMetaString(env, protocol.MetaSysTaskID)); taskID != "" {
 		message["taskId"] = taskID
 	}
-	if contextID := strings.TrimSpace(asString(env.Payload["context_id"])); contextID != "" {
+	if contextID := strings.TrimSpace(asString(parseContentMap(env.Content)["context_id"])); contextID != "" {
 		message["contextId"] = contextID
 	}
 	return message
@@ -488,17 +490,16 @@ func outboundMessageText(env *protocol.Envelope) string {
 	if text := strings.TrimSpace(adapter.SystemMetaString(env, protocol.MetaSysMessage)); text != "" {
 		return text
 	}
-	if text := strings.TrimSpace(asString(env.Payload["message"])); text != "" {
+	if text := strings.TrimSpace(asString(parseContentMap(env.Content)["message"])); text != "" {
 		return text
 	}
 	if action := strings.TrimSpace(adapter.SystemMetaString(env, protocol.MetaSysAction)); action != "" {
 		return action
 	}
-	b, err := json.Marshal(env.Payload)
-	if err != nil {
-		return protocol.EffectiveTag(env)
+	if env.Content != "" {
+		return env.Content
 	}
-	return string(b)
+	return protocol.EffectiveTag(env)
 }
 
 func asString(v any) string {
@@ -526,4 +527,20 @@ func dataIntentTokens() []string {
 
 func approvalIntentTokens() []string {
 	return []string{"approve", "approval", "permission", "consent", "authorize", "allow", "deny", "reject", "sign off"}
+}
+
+func mustMarshalString(v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return "{}"
+	}
+	return string(b)
+}
+
+func parseContentMap(content string) map[string]any {
+	m := map[string]any{}
+	if content != "" {
+		_ = json.Unmarshal([]byte(content), &m)
+	}
+	return m
 }

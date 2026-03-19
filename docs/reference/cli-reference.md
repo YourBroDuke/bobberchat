@@ -510,9 +510,7 @@ bobber send <target_id> --tag <tag> --content <content>
     "from": "",
     "to": "660f9500-f3ac-52e5-b827-557766550111",
     "tag": "request.action",
-    "payload": {
-      "content": "hello world"
-    },
+    "content": "hello world",
     "metadata": {},
     "timestamp": "2026-03-17T12:00:00Z"
   }
@@ -544,7 +542,7 @@ bobber poll <target_id> [--limit <n>] [--since_ts <ts>] [--since_id <id>]
       "from_id": "660f9500-f3ac-52e5-b827-557766550111",
       "to_id": "550e8400-e29b-41d4-a716-446655440000",
       "tag": "request.action",
-      "payload": { "content": "hello" },
+      "content": "hello",
       "metadata": {},
       "timestamp": "2026-03-17T12:00:00Z"
     }

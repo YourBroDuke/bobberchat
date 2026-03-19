@@ -488,7 +488,7 @@ func sendCmd(cfg *cliConfig) *cobra.Command {
 				"from":      "",
 				"to":        args[0],
 				"tag":       tag,
-				"payload":   map[string]any{"content": content},
+				"content":   content,
 				"metadata":  map[string]any{},
 				"timestamp": time.Now().UTC().Format(time.RFC3339),
 			}

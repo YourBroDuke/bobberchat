@@ -1137,14 +1137,14 @@ components:
       type: object
       description: >
         Persisted message record. The `tag` field is optional — when empty,
-        the effective tag is stored in `metadata._tag`. Payload contains only
-        user-supplied data; system-injected keys live in metadata under
-        underscore-prefixed keys.
+        the effective tag is stored in `metadata._tag`. Content is a plain
+        string containing user-supplied data; system-injected keys live in
+        metadata under underscore-prefixed keys.
       required:
         - id
         - from_id
         - conversation_id
-        - payload
+        - content
         - metadata
         - timestamp
       properties:
@@ -1162,9 +1162,9 @@ components:
           description: >
             Optional user-supplied tag. May be empty for adapter-ingested
             messages where the system tag is in `metadata._tag`.
-        payload:
-          type: object
-          description: User-controlled payload data.
+        content:
+          type: string
+          description: User-controlled message content.
         metadata:
           type: object
           description: >
@@ -1272,7 +1272,7 @@ components:
     Envelope:
       type: object
       description: >
-        Wire envelope for all BobberChat messages. Tags and Payload are purely
+        Wire envelope for all BobberChat messages. Tags and Content are purely
         user-controlled fields. All system-injected information (adapter-derived
         routing tags, action names, error codes, replay/approval data, etc.)
         lives in Metadata under underscore-prefixed keys (e.g. `_tag`, `_action`).
@@ -1281,7 +1281,7 @@ components:
         - id
         - from
         - to
-        - payload
+        - content
         - metadata
         - timestamp
       properties:
@@ -1298,10 +1298,10 @@ components:
             Optional user-supplied message tag. When present, takes precedence
             over `metadata._tag` for routing. When absent, the system falls back
             to `metadata._tag` set by protocol adapters.
-        payload:
-          type: object
+        content:
+          type: string
           description: >
-            User-controlled payload. Contains application-specific data only;
+            User-controlled content string. Contains application-specific data only;
             no system-injected keys.
         metadata:
           type: object

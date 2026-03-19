@@ -9,8 +9,7 @@ import (
 )
 
 func TestNewMessage(t *testing.T) {
-	payload := map[string]any{"k": "v"}
-	msg := NewMessage("agent-a", "agent-b", "request.data", payload)
+	msg := NewMessage("agent-a", "agent-b", "request.data", `{"k":"v"}`)
 
 	if msg.From != "agent-a" {
 		t.Fatalf("expected From=agent-a, got %q", msg.From)
@@ -21,11 +20,11 @@ func TestNewMessage(t *testing.T) {
 	if msg.Tag != "request.data" {
 		t.Fatalf("expected Tag=request.data, got %q", msg.Tag)
 	}
-	if msg.Payload == nil {
-		t.Fatal("expected non-nil payload")
+	if msg.Content == "" {
+		t.Fatal("expected non-empty content")
 	}
-	if got := msg.Payload["k"]; got != "v" {
-		t.Fatalf("expected payload[k]=v, got %v", got)
+	if msg.Content != `{"k":"v"}` {
+		t.Fatalf("expected content={\"k\":\"v\"}, got %v", msg.Content)
 	}
 
 	if msg.Metadata == nil {
@@ -40,24 +39,21 @@ func TestNewMessage(t *testing.T) {
 }
 
 func TestNewMessageNilPayloadDefaultsToEmptyMap(t *testing.T) {
-	msg := NewMessage("from", "to", "request.data", nil)
-	if msg.Payload == nil {
-		t.Fatal("expected payload to default to empty map, got nil")
-	}
-	if len(msg.Payload) != 0 {
-		t.Fatalf("expected empty payload map, got len=%d", len(msg.Payload))
+	msg := NewMessage("from", "to", "request.data", "")
+	if msg.Content != "" {
+		t.Fatal("expected content to default to empty string, got non-empty")
 	}
 }
 
 func TestNewRequestMessageUsesRequestDataTag(t *testing.T) {
-	msg := NewRequestMessage("from", "to", map[string]any{"q": 1})
+	msg := NewRequestMessage("from", "to", `{"q":1}`)
 	if msg.Tag != protocol.TagRequestData {
 		t.Fatalf("expected tag %q, got %q", protocol.TagRequestData, msg.Tag)
 	}
 }
 
 func TestNewResponseMessageSetsSuccessTagAndRequestID(t *testing.T) {
-	msg := NewResponseMessage("from", "to", "req-123", map[string]any{"ok": true})
+	msg := NewResponseMessage("from", "to", "req-123", `{"ok":true}`)
 
 	if msg.Tag != protocol.TagResponseSuccess {
 		t.Fatalf("expected tag %q, got %q", protocol.TagResponseSuccess, msg.Tag)
