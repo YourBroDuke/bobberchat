@@ -837,7 +837,13 @@ func (a *app) handleConnectionInbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"requests": requests})
+	unreads, err := a.convSvc.ListUnreadConversations(r.Context(), agentID, persistence.ParticipantTypeAgent)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"requests": requests, "unreads": unreads})
 }
 
 func (a *app) handleConnectionAccept(w http.ResponseWriter, r *http.Request) {

@@ -1321,6 +1321,15 @@ func TestInboxCommand(t *testing.T) {
 						"updated_at": "2026-03-19T00:00:00Z",
 					},
 				},
+				"unreads": []any{
+					map[string]any{
+						"id":              "11111111-2222-3333-4444-555555555555",
+						"type":            "direct",
+						"name":            "peer-agent",
+						"last_message_at": "2026-03-19T01:00:00Z",
+						"unread_count":    3,
+					},
+				},
 			})
 		}))
 		defer srv.Close()
@@ -1350,6 +1359,23 @@ func TestInboxCommand(t *testing.T) {
 		}
 		if req["status"] != "PENDING" {
 			t.Fatalf("expected status=PENDING, got %v", req["status"])
+		}
+
+		unreads, ok := parsed["unreads"].([]any)
+		if !ok || len(unreads) != 1 {
+			t.Fatalf("expected 'unreads' array with 1 item, got: %v", parsed)
+		}
+		unread, ok := unreads[0].(map[string]any)
+		if !ok {
+			t.Fatalf("expected unread object, got: %v", unreads[0])
+		}
+		for _, field := range []string{"id", "type", "name", "last_message_at", "unread_count"} {
+			if _, exists := unread[field]; !exists {
+				t.Fatalf("missing field %q in unreads response: %v", field, unread)
+			}
+		}
+		if unread["type"] != "direct" {
+			t.Fatalf("expected type=direct, got %v", unread["type"])
 		}
 	})
 

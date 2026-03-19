@@ -745,6 +745,11 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/ConnectionRequest'
+                  unreads:
+                    type: array
+                    description: Conversations with unread messages
+                    items:
+                      $ref: '#/components/schemas/ConversationListItem'
 
   /v1/connections/{id}/accept:
     post:
@@ -1090,6 +1095,9 @@ components:
           format: date-time
           nullable: true
           description: Timestamp of the last message in this conversation
+        unread_count:
+          type: integer
+          description: Number of unread messages in this conversation
 
     Message:
       type: object

@@ -43,6 +43,7 @@ type ConversationRepository interface {
 	ListByParticipant(ctx context.Context, participantID uuid.UUID, kind ParticipantType) ([]Conversation, error)
 	ListByParticipantAndType(ctx context.Context, participantID uuid.UUID, kind ParticipantType, convType ConversationType) ([]Conversation, error)
 	ListItems(ctx context.Context, participantID uuid.UUID, kind ParticipantType, convType *ConversationType) ([]ConversationListItem, error)
+	ListUnreadByParticipant(ctx context.Context, participantID uuid.UUID, kind ParticipantType) ([]ConversationListItem, error)
 }
 
 type ConversationParticipantRepository interface {
@@ -530,6 +531,79 @@ func (r *pgConversationRepository) ListItems(ctx context.Context, participantID 
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate conversation list items: %w", err)
+	}
+
+	return out, nil
+}
+
+func (r *pgConversationRepository) ListUnreadByParticipant(ctx context.Context, participantID uuid.UUID, kind ParticipantType) ([]ConversationListItem, error) {
+	query := `
+		SELECT item_id, conv_type, item_name, last_message_at, unread_count FROM (
+			SELECT
+				CASE WHEN c.id_low = $1 THEN c.id_high ELSE c.id_low END AS item_id,
+				c.type AS conv_type,
+				COALESCE(u.email, a.display_name, 'unknown') AS item_name,
+				c.last_message_at,
+				(
+					SELECT COUNT(*)::int FROM messages m
+					WHERE m.conversation_id = c.id
+					AND m."timestamp" > COALESCE(
+						(SELECT mr."timestamp" FROM messages mr WHERE mr.id = cp.last_read_message_id),
+						cp.joined_at
+					)
+				) AS unread_count
+			FROM conversations c
+			JOIN conversation_participants cp ON cp.conversation_id = c.id
+			LEFT JOIN users u ON u.id = CASE WHEN c.id_low = $1 THEN c.id_high ELSE c.id_low END
+			LEFT JOIN agents a ON a.agent_id = CASE WHEN c.id_low = $1 THEN c.id_high ELSE c.id_low END
+			WHERE cp.participant_id = $1
+				AND cp.participant_kind = $2
+				AND c.type = 'direct'
+
+			UNION ALL
+
+			SELECT
+				g.id AS item_id,
+				c.type AS conv_type,
+				g.name AS item_name,
+				c.last_message_at,
+				(
+					SELECT COUNT(*)::int FROM messages m
+					WHERE m.conversation_id = c.id
+					AND m."timestamp" > COALESCE(
+						(SELECT mr."timestamp" FROM messages mr WHERE mr.id = cp.last_read_message_id),
+						cp.joined_at
+					)
+				) AS unread_count
+			FROM conversations c
+			JOIN conversation_participants cp ON cp.conversation_id = c.id
+			JOIN chat_groups g ON g.conversation_id = c.id
+			WHERE cp.participant_id = $1
+				AND cp.participant_kind = $2
+				AND c.type = 'group'
+		) sub
+		WHERE unread_count > 0
+		ORDER BY last_message_at DESC NULLS LAST
+	`
+
+	rows, err := r.db.Pool().Query(ctx, query, participantID, string(kind))
+	if err != nil {
+		return nil, fmt.Errorf("list unread conversations: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]ConversationListItem, 0)
+	for rows.Next() {
+		var item ConversationListItem
+		var ct string
+		if err := rows.Scan(&item.ID, &ct, &item.Name, &item.LastMessageAt, &item.UnreadCount); err != nil {
+			return nil, fmt.Errorf("scan unread conversation item: %w", err)
+		}
+		item.Type = ConversationType(ct)
+		out = append(out, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate unread conversation items: %w", err)
 	}
 
 	return out, nil
