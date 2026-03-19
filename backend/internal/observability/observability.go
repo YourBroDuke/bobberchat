@@ -9,14 +9,13 @@ import (
 )
 
 type Metrics struct {
-	MessagesSent     *prometheus.CounterVec
-	MessagesLatency  *prometheus.HistogramVec
-	AgentsOnline     prometheus.Gauge
-	ApprovalsPending prometheus.Gauge
-	ErrorsCount      *prometheus.CounterVec
-	RateLimited      *prometheus.CounterVec
-	AuditLogged      prometheus.Counter
-	ActiveWSConns    prometheus.Gauge
+	MessagesSent    *prometheus.CounterVec
+	MessagesLatency *prometheus.HistogramVec
+	AgentsOnline    prometheus.Gauge
+	ErrorsCount     *prometheus.CounterVec
+	RateLimited     *prometheus.CounterVec
+	AuditLogged     prometheus.Counter
+	ActiveWSConns   prometheus.Gauge
 }
 
 func NewMetrics(registry *prometheus.Registry) *Metrics {
@@ -40,12 +39,6 @@ func NewMetrics(registry *prometheus.Registry) *Metrics {
 			prometheus.GaugeOpts{
 				Name: "bobberchat_agents_online",
 				Help: "Number of online agents",
-			},
-		),
-		ApprovalsPending: prometheus.NewGauge(
-			prometheus.GaugeOpts{
-				Name: "bobberchat_approvals_pending",
-				Help: "Number of pending approvals",
 			},
 		),
 		ErrorsCount: prometheus.NewCounterVec(
@@ -81,7 +74,6 @@ func NewMetrics(registry *prometheus.Registry) *Metrics {
 			m.MessagesSent,
 			m.MessagesLatency,
 			m.AgentsOnline,
-			m.ApprovalsPending,
 			m.ErrorsCount,
 			m.RateLimited,
 			m.AuditLogged,

@@ -31,7 +31,6 @@ func TestIsValidTag(t *testing.T) {
 	known := []string{
 		TagRequestData,
 		TagRequestAction,
-		TagRequestApproval,
 		TagResponseSuccess,
 		TagResponseError,
 		TagResponsePartial,
@@ -41,9 +40,6 @@ func TestIsValidTag(t *testing.T) {
 		TagProgressStage,
 		TagErrorRecoverable,
 		TagErrorFatal,
-		TagApprovalRequest,
-		TagApprovalGranted,
-		TagApprovalDenied,
 		TagSystemHeartbeat,
 		TagSystemJoin,
 		TagSystemLeave,

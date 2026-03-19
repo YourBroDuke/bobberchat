@@ -176,23 +176,6 @@ func TestA2AAdapterIngestMessageSendDataIntent(t *testing.T) {
 	}
 }
 
-func TestA2AAdapterIngestMessageSendApprovalIntent(t *testing.T) {
-	a := NewA2AAdapter()
-	raw := []byte(`{"method":"message/send","id":"msg-3","params":{"message":{"role":"user","parts":[{"type":"text","text":"please approve this deploy"}]}}}`)
-
-	env, err := a.Ingest(context.Background(), raw, adapter.TransportMeta{ConnectionID: "conn-3"})
-	if err != nil {
-		t.Fatalf("Ingest() error = %v, want nil", err)
-	}
-
-	if env.Tag != "" {
-		t.Fatalf("env.Tag = %q, want empty", env.Tag)
-	}
-	if got := adapter.SystemMetaString(env, protocol.MetaSysTag); got != protocol.TagRequestApproval {
-		t.Fatalf("system meta tag = %q, want %q", got, protocol.TagRequestApproval)
-	}
-}
-
 func TestA2AAdapterIngestAgentCard(t *testing.T) {
 	a := NewA2AAdapter()
 	raw := []byte(`{"method":"agent/card","id":"card-1","params":{"name":"alpha-agent","description":"handles retrieval","capabilities":["Search","Summarize"],"endpoint":"https://agents.example/alpha"}}`)

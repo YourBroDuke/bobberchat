@@ -276,8 +276,6 @@ func ingestMessageSend(params map[string]any) (string, map[string]any, error) {
 	tag := protocol.TagRequestAction
 	if hasAnyToken(intent, dataIntentTokens()) {
 		tag = protocol.TagRequestData
-	} else if hasAnyToken(intent, approvalIntentTokens()) {
-		tag = protocol.TagRequestApproval
 	}
 
 	payload := map[string]any{
@@ -523,10 +521,6 @@ func hasAnyToken(text string, tokens []string) bool {
 
 func dataIntentTokens() []string {
 	return []string{"data", "fetch", "retrieve", "lookup", "search", "find", "query", "list", "show", "read", "load", "pull", "report"}
-}
-
-func approvalIntentTokens() []string {
-	return []string{"approve", "approval", "permission", "consent", "authorize", "allow", "deny", "reject", "sign off"}
 }
 
 func mustMarshalString(v any) string {

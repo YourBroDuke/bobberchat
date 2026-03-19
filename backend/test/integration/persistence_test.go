@@ -33,8 +33,8 @@ func setupDB(t *testing.T) (*persistence.DB, func()) {
 
 	// Drop existing schema before re-applying migration (handles pre-populated databases)
 	_, _ = db.Pool().Exec(ctx, `
-		DROP TABLE IF EXISTS blacklist_entries, connection_requests, audit_log, approval_requests, messages_default, messages, chat_group_members, chat_groups, agents, users CASCADE;
-		DROP TYPE IF EXISTS connection_request_status, participant_type, approval_status, group_visibility CASCADE;
+		DROP TABLE IF EXISTS blacklist_entries, connection_requests, audit_log, messages_default, messages, chat_group_members, chat_groups, agents, users CASCADE;
+		DROP TYPE IF EXISTS connection_request_status, participant_type, group_visibility CASCADE;
 	`)
 
 	migrationFiles, err := filepath.Glob("../../../migrations/*.sql")
@@ -60,8 +60,8 @@ func setupDB(t *testing.T) (*persistence.DB, func()) {
 	cleanup := func() {
 		cleanupCtx := context.Background()
 		_, _ = db.Pool().Exec(cleanupCtx, `
-		DROP TABLE IF EXISTS blacklist_entries, connection_requests, audit_log, approval_requests, messages_default, messages, chat_group_members, chat_groups, agents, users CASCADE;
-		DROP TYPE IF EXISTS connection_request_status, participant_type, approval_status, group_visibility CASCADE;
+		DROP TABLE IF EXISTS blacklist_entries, connection_requests, audit_log, messages_default, messages, chat_group_members, chat_groups, agents, users CASCADE;
+		DROP TYPE IF EXISTS connection_request_status, participant_type, group_visibility CASCADE;
 	`)
 		db.Close()
 	}
@@ -223,77 +223,5 @@ func TestChatGroupRepository_CreateAndMembers(t *testing.T) {
 	}
 	if groups[0].ID != group.ID {
 		t.Errorf("group id mismatch: got %s want %s", groups[0].ID, group.ID)
-	}
-}
-
-func TestApprovalRepository_CreateDecide(t *testing.T) {
-	db, _ := setupDB(t)
-	repos := persistence.NewPostgresRepositories(db)
-	ctx := context.Background()
-
-	owner, err := repos.Users.Create(ctx, persistence.User{
-		Email:        "approval-owner@example.com",
-		PasswordHash: "owner-hash",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	agent, err := repos.Agents.Create(ctx, persistence.Agent{
-		DisplayName:   "approval-agent",
-		OwnerUserID:   owner.ID,
-		APISecretHash: "secret-hash",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	approvalID := uuid.New()
-	created, err := repos.Approvals.Create(ctx, persistence.ApprovalRequest{
-		ApprovalID:    approvalID,
-		AgentID:       agent.ID,
-		Action:        "deploy",
-		Justification: "integration approval test",
-		Status:        persistence.ApprovalStatusPending,
-		TimeoutMS:     60000,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	pending, err := repos.Approvals.GetPending(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(pending) != 1 {
-		t.Errorf("pending approvals length mismatch: got %d want 1", len(pending))
-	}
-	if pending[0].ApprovalID != created.ApprovalID {
-		t.Errorf("approval id mismatch: got %s want %s", pending[0].ApprovalID, created.ApprovalID)
-	}
-
-	decidedAt := time.Now().UTC()
-	if err := repos.Approvals.Decide(ctx, created.ApprovalID, owner.ID, persistence.ApprovalStatusGranted, decidedAt); err != nil {
-		t.Fatal(err)
-	}
-
-	pending, err = repos.Approvals.GetPending(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(pending) != 0 {
-		t.Errorf("expected no pending approvals after decision, got %d", len(pending))
-	}
-
-	var storedStatus string
-	if err := db.Pool().QueryRow(ctx, `
-		SELECT status
-		FROM approval_requests
-		WHERE approval_id = $1
-	`, created.ApprovalID).Scan(&storedStatus); err != nil {
-		t.Fatal(err)
-	}
-	if storedStatus != string(persistence.ApprovalStatusGranted) {
-		t.Errorf("stored approval status mismatch: got %s want %s", storedStatus, persistence.ApprovalStatusGranted)
 	}
 }

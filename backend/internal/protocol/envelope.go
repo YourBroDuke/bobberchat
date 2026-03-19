@@ -23,10 +23,6 @@ const (
 	MetaSysReplayed          = "_replayed"
 	MetaSysOriginalMessageID = "_original_message_id"
 	MetaSysReplayReason      = "_replay_reason"
-	MetaSysApprovalID        = "_approval_id"
-	MetaSysDecision          = "_decision"
-	MetaSysReason            = "_reason"
-	MetaSysJustification     = "_justification"
 	MetaSysTaskID            = "_task_id"
 	MetaSysStatus            = "_status"
 )

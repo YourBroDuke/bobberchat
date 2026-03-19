@@ -19,11 +19,11 @@ go test ./backend/... ./cli/...     # ✅ 15 packages pass (~245+ subtests)
 
 # Docker-based E2E
 docker compose up -d
-./scripts/e2e-test.sh                    # ✅ 29/29 pass
+./scripts/e2e-test.sh                    # ✅ 27/27 pass
 
 # Integration tests (requires running PostgreSQL via Docker Compose)
 BOBBERCHAT_TEST_DSN="postgres://bobberchat:bobberchat@localhost:5432/bobberchat?sslmode=disable" \
-  go test -tags=integration ./backend/test/integration/ -v    # ✅ 5/5 pass
+go test -tags=integration ./backend/test/integration/ -v    # ✅ 3/3 pass
 ```
 
 ---
@@ -51,13 +51,12 @@ BOBBERCHAT_TEST_DSN="postgres://bobberchat:bobberchat@localhost:5432/bobberchat?
 
 | Package | File | Lines | Description |
 |---------|------|-------|-------------|
-| `backend/internal/protocol` | `envelope.go`, `tags.go`, `version.go` | ~350 | Wire envelope, 8-family tag taxonomy, version negotiation |
+| `backend/internal/protocol` | `envelope.go`, `tags.go`, `version.go` | ~350 | Wire envelope, 7-family tag taxonomy, version negotiation |
 | `backend/internal/persistence` | `postgres.go`, `models.go`, `repositories.go` | ~1,250 | 11 repository interfaces with PostgreSQL implementations, including conversations (with last_message tracking), conversation participants, connection requests and blacklist persistence |
 | `backend/internal/auth` | `auth.go` | ~503 | Argon2id hashing, JWT (HS256, 1hr TTL), bcrypt for passwords, email verification and resend flows |
 | `backend/internal/email` | `email.go`, `azurecs/azurecs.go`, `console/console.go` | ~214 | Provider-agnostic email sender interface with console and Azure Communication Services (ACS) sender implementations. ACS sender uses HMAC-SHA256 signed REST API calls (`/emails:send`) with connection-string auth |
 | `backend/internal/registry` | `registry.go` | ~115 | Agent discovery and listing |
 | `backend/internal/broker` | `broker.go` | ~232 | NATS JetStream message routing, 3 streams, subject mapping |
-| `backend/internal/approval` | `approval.go` | ~123 | Human-in-the-loop approval workflows with escalation |
 | `backend/internal/conversation` | `conversation.go` | ~202 | Conversations (DM & group), membership via conversation_participants, message history, list by type |
 | `backend/internal/observability` | `observability.go` | ~110 | Prometheus metrics (incl. rate limit, audit, active WS conn gauges), structured logging |
 
@@ -101,8 +100,6 @@ All system-injected data has been moved from `Tag` and `Payload` fields into `Me
 - `SystemMeta(env, key)` / `SystemMetaString(env, key)` — read system metadata
 
 **Broker & main server**: Use `protocol.EffectiveTag(env)` for routing, rate limiting, metrics, and audit.
-
-**Approval module**: System data (`_approval_id`, `_decision`, `_reason`, `_justification`) in Metadata; Content is empty string.
 
 **Replay handler**: Replay keys (`_replayed`, `_original_message_id`, `_replay_reason`, `_tag`) in Metadata.
 
@@ -155,7 +152,6 @@ Key implementation details:
 | `backend/internal/broker/broker_test.go` | 8 | Subject construction, routing logic |
 | `backend/internal/registry/registry_test.go` | — | Input validation |
 | `backend/internal/conversation/conversation_test.go` | — | Input validation |
-| `backend/internal/approval/approval_test.go` | — | Approval validation |
 | `backend/internal/adapter/mcp/mcp_test.go` | 13 | MCP ingest/emit, validation, error cases |
 | `backend/internal/adapter/a2a/a2a_test.go` | 20 | A2A ingest/emit, intent inference, error cases |
 | `backend/internal/adapter/grpc/grpc_test.go` | 22 | gRPC ingest/emit, stream frames, error cases |
@@ -163,8 +159,8 @@ Key implementation details:
 | `backend/cmd/bobberd/main_test.go` | 8 | Cross-owner denial, rate limiting, audit trail, disabled limiter |
 | `backend/pkg/sdk/helpers_test.go` | 4 | Message helper functions |
 | `cli/cmd/bobber/main_test.go` | — | CLI unit tests: account register/login, agent create/use/rotate-secret/delete, login/whoami/logout, ls, connect/inbox/accept/reject/blacklist, info, send, poll, group create/leave/invite, config/flag precedence |
-| `backend/test/integration/persistence_test.go` | 5 | User, Agent, Group, Approval CRUD (build-tagged `//go:build integration`) |
-| `scripts/e2e-test.sh` | 29 | Full API lifecycle: auth, agents, groups, approvals |
+| `backend/test/integration/persistence_test.go` | 3 | User, Agent, Group CRUD (build-tagged `//go:build integration`) |
+| `scripts/e2e-test.sh` | 27 | API checks for auth, agents, groups, adapters, metrics, and negative auth/error paths |
 
 ### Infrastructure
 
@@ -179,8 +175,8 @@ Key implementation details:
 | `migrations/005_remove_agent_version_heartbeat.sql` | Removes `version`, `connected_at`, `last_heartbeat` columns from agents table |
 | `configs/backend.yaml` | Default backend configuration |
 | `Makefile` | Build, test, lint, migrate, run targets |
-| `scripts/e2e-test.sh` | 29-test curl-based API e2e test script |
-| `backend/test/integration/persistence_test.go` | 5 integration tests (build-tagged `//go:build integration`) |
+| `scripts/e2e-test.sh` | 27-test curl-based API e2e test script |
+| `backend/test/integration/persistence_test.go` | 3 integration tests (build-tagged `//go:build integration`) |
 ---
 
 ## What's Left To Do
@@ -276,8 +272,8 @@ Backend config: `configs/backend.yaml`
 ### Database
 
 - PostgreSQL 15+
-- 7 tables: `users`, `agents`, `chat_groups`, `conversations`, `conversation_participants`, `messages`, `approval_requests`, `audit_log`
-- 3 enum types: `approval_status`, `participant_type`, `conversation_type`
+- 7 tables: `users`, `agents`, `chat_groups`, `conversations`, `conversation_participants`, `messages`, `audit_log`
+- 2 enum types: `participant_type`, `conversation_type`
 - `conversations` table unifies DMs and groups; DMs identified by canonical `(id_low, id_high)` pair (generic UUIDs, no FK constraint)
 - `conversation_participants` replaces `chat_group_members` and handles both DM and group membership with `muted`, `last_read_message_id` fields
 - `messages` table uses `conversation_id` FK (replaced `to_id`), time-based partitioning by `timestamp` (monthly ranges)
@@ -291,11 +287,10 @@ Backend config: `configs/backend.yaml`
 |--------|----------------|-----------|
 | `BOBBER_MSG` | `bobberchat.msg.>`, `bobberchat.group.>` | 30 days |
 | `BOBBER_SYSTEM` | `bobberchat.system.>` | 24 hours |
-| `BOBBER_APPROVAL` | `bobberchat.approval.>` | 7 days |
 
 Subject pattern: `bobberchat.msg.{to_id}` for direct messages, `bobberchat.group.{group_id}` for groups
 
-### REST API Endpoints (32 total)
+### REST API Endpoints (28 total)
 
 ```
 Auth:       POST /v1/auth/register, /v1/auth/login, /v1/auth/verify-email, /v1/auth/resend-verification, GET /v1/auth/me
@@ -305,7 +300,6 @@ Groups:     POST/GET /v1/groups, POST /v1/groups/:id/join, /v1/groups/:id/leave
 Messages:   GET /v1/messages/poll, POST /v1/messages/:id/replay
 Connections: POST /v1/connections/request, GET /v1/connections/inbox, POST /v1/connections/:id/accept, POST /v1/connections/:id/reject
 Blacklist:  POST /v1/blacklist, DELETE /v1/blacklist/:id
-Approvals:  GET /v1/approvals/pending, POST /v1/approvals/:id/decide
 Adapters:   POST /v1/adapter/{name}/ingest, GET /v1/adapter
 WebSocket:  GET /v1/ws/connect
 System:     GET /v1/health, /v1/metrics
@@ -325,11 +319,11 @@ System:     GET /v1/health, /v1/metrics
 }
 ```
 
-**Field semantics**: `tag` and `content` are purely user-controlled. All system-injected data (adapter-derived routing tags, action names, error codes, replay/approval keys) lives in `metadata` under underscore-prefixed keys (e.g. `_tag`, `_action`, `_result`). When `tag` is empty, `protocol.EffectiveTag()` falls back to `metadata._tag`.
+**Field semantics**: `tag` and `content` are purely user-controlled. All system-injected data (adapter-derived routing tags, action names, error codes, replay keys) lives in `metadata` under underscore-prefixed keys (e.g. `_tag`, `_action`, `_result`). When `tag` is empty, `protocol.EffectiveTag()` falls back to `metadata._tag`.
 
-### 8 Tag Families
+### 7 Tag Families
 
-`request.*`, `response.*`, `context-provide`, `no-response`, `progress.*`, `error.*`, `approval.*`, `system.*`
+`request.*`, `response.*`, `context-provide`, `no-response`, `progress.*`, `error.*`, `system.*`
 
 ---
 
@@ -344,7 +338,7 @@ The project is a "Slack for Agents" — a multi-agent coordination layer built w
 
 The codebase uses a Go workspace (go.work) with 2 independent modules: backend/, cli/. Each has its own go.mod.
 
-All planned work is COMPLETE: core implementation, protocol adapters, production hardening, CI/CD & deployment, and CLI test coverage. All code compiles, unit tests pass (~245+ subtests across 15 packages), E2E tests pass (29/29), and integration tests pass (5/5).
+All planned work is COMPLETE: core implementation, protocol adapters, production hardening, CI/CD & deployment, and CLI test coverage. All code compiles, unit tests pass (~245+ subtests across 15 packages), E2E tests pass (27/27), and integration tests pass (3/3).
 
 Follow the existing codebase patterns. Run `go build ./backend/... ./cli/...` and `go test ./backend/... ./cli/...` to verify.
 For E2E: `docker compose up -d && ./scripts/e2e-test.sh`
@@ -379,7 +373,6 @@ bobberchat/
 │   │   │   ├── a2a/a2a_test.go          # A2A tests (~20 tests)
 │   │   │   ├── grpc/grpc.go             # gRPC adapter (401 lines)
 │   │   │   └── grpc/grpc_test.go        # gRPC tests (~22 tests)
-│   │   ├── approval/approval.go          # Approval workflows
 │   │   ├── auth/auth.go                  # Auth (Argon2id + JWT + email verification)
 │   │   ├── email/
 │   │   │   ├── email.go                  # Email sender interface
@@ -470,7 +463,7 @@ bobberchat/
 ├── migrations/009_rename_dm_ids.sql # Renames agent_id_low/agent_id_high → id_low/id_high in conversations
 ├── migrations/013_conversation_last_message.sql # Adds last_message_id, last_message_at to conversations with backfill
 ├── scripts/
-│   ├── e2e-test.sh                  # 29-test API e2e test
+│   ├── e2e-test.sh                  # 27-test API e2e test
 │   └── smoke-test.sh                # Quick deployment smoke test
 ├── Makefile
 └── README.md

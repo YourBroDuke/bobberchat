@@ -9,14 +9,12 @@ const (
 	TagNoResponse     = "no-response"
 	TagProgress       = "progress"
 	TagError          = "error"
-	TagApproval       = "approval"
 	TagSystem         = "system"
 )
 
 const (
-	TagRequestData     = "request.data"
-	TagRequestAction   = "request.action"
-	TagRequestApproval = "request.approval"
+	TagRequestData   = "request.data"
+	TagRequestAction = "request.action"
 
 	TagResponseSuccess = "response.success"
 	TagResponseError   = "response.error"
@@ -31,10 +29,6 @@ const (
 	TagErrorRecoverable = "error.recoverable"
 	TagErrorFatal       = "error.fatal"
 
-	TagApprovalRequest = "approval.request"
-	TagApprovalGranted = "approval.granted"
-	TagApprovalDenied  = "approval.denied"
-
 	TagSystemHeartbeat = "system.heartbeat"
 	TagSystemJoin      = "system.join"
 	TagSystemLeave     = "system.leave"
@@ -43,7 +37,6 @@ const (
 var knownTags = map[string]struct{}{
 	TagRequestData:           {},
 	TagRequestAction:         {},
-	TagRequestApproval:       {},
 	TagResponseSuccess:       {},
 	TagResponseError:         {},
 	TagResponsePartial:       {},
@@ -53,9 +46,6 @@ var knownTags = map[string]struct{}{
 	TagProgressStage:         {},
 	TagErrorRecoverable:      {},
 	TagErrorFatal:            {},
-	TagApprovalRequest:       {},
-	TagApprovalGranted:       {},
-	TagApprovalDenied:        {},
 	TagSystemHeartbeat:       {},
 	TagSystemJoin:            {},
 	TagSystemLeave:           {},
@@ -68,7 +58,6 @@ var knownFamilies = map[string]struct{}{
 	TagNoResponse:     {},
 	TagProgress:       {},
 	TagError:          {},
-	TagApproval:       {},
 	TagSystem:         {},
 }
 

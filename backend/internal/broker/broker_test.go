@@ -34,15 +34,6 @@ func TestSubjectForEnvelope(t *testing.T) {
 			wantSubject: "bobberchat.system.agent.connected",
 		},
 		{
-			name: "approval family routes to approval subject",
-			env: &protocol.Envelope{
-				To:       "ignored-for-approval",
-				Tag:      protocol.TagApprovalRequest,
-				Metadata: map[string]any{},
-			},
-			wantSubject: "bobberchat.approval.request",
-		},
-		{
 			name: "default family with group prefix routes to group subject",
 			env: &protocol.Envelope{
 				To:       "group:team-42",

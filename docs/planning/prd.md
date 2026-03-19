@@ -53,7 +53,7 @@ BobberChat aims to provide a reliable, transparent, and scalable environment for
 ### 3.3 Enterprise Evaluator
 *   **Goal**: Ensure AI systems comply with security, audit, and safety standards.
 *   **Pain Point**: Unauthenticated agent communication and lack of immutable audit trails.
-*   **Key Need**: Strong identity/auth (API secrets), access control, and exactly-once approval workflows.
+*   **Key Need**: Strong identity/auth (API secrets), access control, and immutable audit trails.
 
 ## 4. User Stories & Acceptance Criteria
 
@@ -84,9 +84,6 @@ Organized by the seven validated production pain points defined in §1.
 *   **User Story 1**: As an Operator, I want the system to automatically block message loops, so that I can prevent runaway token costs and system stalls.
     *   **AC1**: Broker enforces circuit-breaker policy for cyclical message oscillation per §3.4.
     *   **AC2**: Messages tagged `no-response` strictly block any reply generation.
-*   **User Story 2**: As an Agent, I want to request human approval for a sensitive action, so that I can safely execute privileged operations.
-    *   **AC1**: System supports `approval.request` tag with mandatory `approval_id` and `timeout_ms` per §7.6.
-    *   **AC2**: Broker enforces exactly-once delivery for approval events.
 
 ### 4.5 Protocol Fragmentation
 *   **User Story 1**: As a Developer, I want to bridge my MCP-compatible tools into the BobberChat fabric, so that my existing tools can coordinate with BobberChat agents.
@@ -116,7 +113,6 @@ Organized by the seven validated production pain points defined in §1.
 *   **Registry**: Capability-indexed directory with heartbeat monitoring (§6).
 *   **Auth**: API secret-based agent auth and JWT-based human auth (§5).
 *   **Protocol Adapters**: Core support for MCP, A2A, and gRPC translation (§8).
-*   **HITL**: Basic `approval.*` workflow with CLI-based intervention (§7).
 *   **Persistence**: Three-tier storage (In-memory, PostgreSQL, S3-compatible) (§4.4).
 
 ### 5.2 Out-of-Scope (Future Work)
@@ -135,7 +131,6 @@ Organized by the seven validated production pain points defined in §1.
 | Agent Registry | P0 | Core | Capability discovery and heartbeat-driven liveness. |
 | CLI Monitoring | P0 | Client | Real-time message streaming and agent discovery. |
 | API Secret Auth | P0 | Security | Mandatory machine credentials for agent connections. |
-| HITL Approvals | P1 | Workflow | Standardized `approval.*` tags and approval queue. |
 | Protocol Adapters | P1 | Integration | MCP, A2A, and gRPC bridging. |
 | Warm Persistence | P1 | Storage | PostgreSQL-based history for 30-day lookback. |
 | Cold Storage Export | P2 | Storage | S3/GCS export for long-term audit and replay. |
@@ -160,9 +155,9 @@ Organized by the seven validated production pain points defined in §1.
 *   Implement broker-enforced loop prevention and `no-response` logic.
 *   **Deliverable**: SDK and adapters enabling heterogeneous agent coordination.
 
-### M4: CLI & HITL Integration (Weeks 10-12)
-*   Enhance CLI with approval workflow commands.
-*   Implement the human-in-the-loop approval queue and intervention controls.
+### M4: CLI & Operator Controls Integration (Weeks 10-12)
+*   Enhance CLI with operator control and intervention commands.
+*   Implement human-in-the-loop operator controls for monitored workflows.
 *   Build out comprehensive CLI documentation and examples.
 *   **Deliverable**: Full-featured CLI client for human operators and automation.
 
@@ -182,7 +177,7 @@ Organized by the seven validated production pain points defined in §1.
 ### 8.2 Security (per §11)
 *   **Isolation**: Strict logical partitioning between agent namespaces.
 *   **Authentication**: Multi-factor for humans, unique secrets for machines.
-*   **Auditability**: Immutable logs for all `request.*` and `approval.*` events.
+*   **Auditability**: Immutable logs for all `request.*` events.
 
 ### 8.3 Availability
 *   **Resilience**: SDK must locally queue messages during backend downtime.

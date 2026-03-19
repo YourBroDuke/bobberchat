@@ -58,12 +58,6 @@ func (b *Broker) Setup(ctx context.Context) error {
 			Retention: jetstream.LimitsPolicy,
 			MaxAge:    24 * time.Hour,
 		},
-		{
-			Name:      "BOBBER_APPROVAL",
-			Subjects:  []string{"bobberchat.approval.>"},
-			Retention: jetstream.WorkQueuePolicy,
-			MaxAge:    7 * 24 * time.Hour,
-		},
 	}
 
 	for _, cfg := range streams {
@@ -204,9 +198,6 @@ func subjectForEnvelope(env *protocol.Envelope) (string, error) {
 	case protocol.TagSystem:
 		suffix := strings.TrimPrefix(tag, protocol.TagSystem+".")
 		return fmt.Sprintf("bobberchat.system.%s", suffix), nil
-	case protocol.TagApproval:
-		suffix := strings.TrimPrefix(tag, protocol.TagApproval+".")
-		return fmt.Sprintf("bobberchat.approval.%s", suffix), nil
 	default:
 		if strings.HasPrefix(env.To, "group:") {
 			groupID := strings.TrimPrefix(env.To, "group:")

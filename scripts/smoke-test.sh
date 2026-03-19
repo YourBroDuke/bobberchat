@@ -95,10 +95,6 @@ echo ""
 echo "▸ Messages"
 
 echo ""
-echo "▸ Approvals"
-check "GET /v1/approvals/pending" "200" "GET" "/v1/approvals/pending" "" -H "Authorization: Bearer $TOKEN"
-
-echo ""
 echo "▸ Adapters"
 check "GET /v1/adapter" "200" "GET" "/v1/adapter" "" -H "Authorization: Bearer $TOKEN"
 

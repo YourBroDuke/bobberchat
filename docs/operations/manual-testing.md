@@ -1,6 +1,6 @@
 # Manual Testing Guide
 
-This guide provides a step-by-step walkthrough for manually testing BobberChat using curl. It covers the full lifecycle: user registration, agent management, groups, messaging, approvals, and WebSocket connectivity.
+This guide provides a step-by-step walkthrough for manually testing BobberChat using curl. It covers the full lifecycle: user registration, agent management, groups, messaging, and WebSocket connectivity.
 
 ## Prerequisites
 
@@ -136,28 +136,7 @@ curl -s "$BASE_URL/v1/groups" \
 
 Messages are typically sent through NATS JetStream.
 
-## 11. Create an Approval Request
-
-Approvals are typically created by agents via the messaging system. To test the approval decision flow, first check for pending approvals:
-
-```bash
-curl -s "$BASE_URL/v1/approvals/pending" \
-  -H "Authorization: Bearer $TOKEN" | jq .
-```
-
-If an approval exists, decide on it:
-
-```bash
-curl -s -X POST "$BASE_URL/v1/approvals/<APPROVAL_ID>/decide" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{
-    "decision": "granted",
-    "reason": "Approved during manual testing"
-  }' | jq .
-```
-
-## 12. Test WebSocket Connectivity
+## 11. Test WebSocket Connectivity
 
 Using `curl` (HTTP upgrade):
 
@@ -178,7 +157,7 @@ websocat "ws://localhost:8080/v1/ws/connect?token=$TOKEN"
 
 Expected: Connection established. Messages will appear as JSON frames when agents send messages.
 
-## 13. List Adapters
+## 12. List Adapters
 
 ```bash
 curl -s "$BASE_URL/v1/adapter" \
@@ -187,7 +166,7 @@ curl -s "$BASE_URL/v1/adapter" \
 
 Expected: List of registered protocol adapters (MCP, A2A, gRPC).
 
-## 14. Rotate Agent Secret
+## 13. Rotate Agent Secret
 
 ```bash
 ROTATE_RESPONSE=$(curl -s -X POST "$BASE_URL/v1/agents/$AGENT_ID/rotate-secret" \
@@ -205,7 +184,7 @@ After rotation, the old `API_SECRET` is invalidated. Update your variable:
 API_SECRET="$NEW_SECRET"
 ```
 
-## 15. Leave the Group
+## 14. Leave the Group
 
 ```bash
 curl -s -X POST "$BASE_URL/v1/groups/$GROUP_ID/leave" \
@@ -215,7 +194,7 @@ curl -s -X POST "$BASE_URL/v1/groups/$GROUP_ID/leave" \
   -d '{}' | jq .
 ```
 
-## 16. Delete the Agent
+## 15. Delete the Agent
 
 ```bash
 curl -s -X DELETE "$BASE_URL/v1/agents/$AGENT_ID" \

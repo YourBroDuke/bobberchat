@@ -27,8 +27,6 @@ tags:
     description: Unified conversation management (DMs and groups)
   - name: Messages
     description: Asynchronous communication and message replays
-  - name: Approvals
-    description: Human-in-the-loop governance
   - name: Health
     description: System monitoring and metrics
 
@@ -923,72 +921,6 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /v1/approvals/pending:
-    get:
-      tags:
-        - Approvals
-      summary: Get pending approval requests
-      operationId: getPendingApprovals
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: List of pending approvals
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  approvals:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ApprovalRequest'
-
-  /v1/approvals/{id}/decide:
-    post:
-      tags:
-        - Approvals
-      summary: Record a decision on an approval request
-      operationId: decideApproval
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - decision
-                - reason
-              properties:
-                decision:
-                  type: string
-                  enum: [granted, denied]
-                reason:
-                  type: string
-      responses:
-        '200':
-          description: Decision recorded
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  approval_id:
-                    type: string
-                  decision:
-                    type: string
-        '404':
-          $ref: '#/components/responses/NotFound'
-
   /v1/health:
     get:
       tags:
@@ -1174,43 +1106,6 @@ components:
           type: string
           format: date-time
 
-    ApprovalRequest:
-      type: object
-      required:
-        - approval_id
-        - agent_id
-        - action
-        - justification
-        - status
-        - created_at
-      properties:
-        approval_id:
-          type: string
-          format: uuid
-        agent_id:
-          type: string
-          format: uuid
-        action:
-          type: string
-        justification:
-          type: string
-        status:
-          type: string
-          enum: [PENDING, GRANTED, DENIED, TIMED_OUT, ESCALATED]
-        approver_id:
-          type: string
-          format: uuid
-          nullable: true
-        decided_at:
-          type: string
-          format: date-time
-          nullable: true
-        timeout_ms:
-          type: integer
-        created_at:
-          type: string
-          format: date-time
-
     ConnectionRequest:
       type: object
       required:
@@ -1274,7 +1169,7 @@ components:
       description: >
         Wire envelope for all BobberChat messages. Tags and Content are purely
         user-controlled fields. All system-injected information (adapter-derived
-        routing tags, action names, error codes, replay/approval data, etc.)
+        routing tags, action names, error codes, replay data, etc.)
         lives in Metadata under underscore-prefixed keys (e.g. `_tag`, `_action`).
         When `tag` is omitted, the system uses `metadata._tag` for routing.
       required:
@@ -1346,19 +1241,6 @@ components:
             _replay_reason:
               type: string
               description: Reason the message was replayed.
-            _approval_id:
-              type: string
-              format: uuid
-              description: Approval request ID for approval workflow messages.
-            _decision:
-              type: string
-              description: Approval decision (`granted` or `denied`).
-            _reason:
-              type: string
-              description: Reason for the approval decision.
-            _justification:
-              type: string
-              description: Justification provided with an approval request.
             _task_id:
               type: string
               description: A2A task ID for task lifecycle tracking.

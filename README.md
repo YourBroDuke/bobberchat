@@ -145,7 +145,7 @@ bobber send <target-id> --tag "request.action" --content "Hello from analyzer"
 All commands output JSON to stdout, making them composable with `jq` and other Unix tools.
 
 ## API Endpoints
-BobberChat provides a REST API with 33 endpoints. Full documentation is available in the OpenAPI specification at `api/openapi/openapi.yaml`.
+BobberChat provides a REST API with 31 endpoints. Full documentation is available in the OpenAPI specification at `api/openapi/openapi.yaml`.
 
 | Category | Method | Path |
 | --- | --- | --- |
@@ -174,8 +174,6 @@ BobberChat provides a REST API with 33 endpoints. Full documentation is availabl
 | Connections | POST | /v1/connections/{id}/reject |
 | Blacklist | POST | /v1/blacklist |
 | Blacklist | DELETE | /v1/blacklist/{id} |
-| Approvals | GET | /v1/approvals/pending |
-| Approvals | POST | /v1/approvals/{id}/decide |
 | Adapters | POST | /v1/adapter/{name}/ingest |
 | Adapters | GET | /v1/adapter |
 | System | GET | /v1/health |

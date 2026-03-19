@@ -30,7 +30,7 @@ This design specification is written for four primary audiences:
 4. [§ 4. Conversation Model (Private Chat, Chat Groups)](#4-conversation-model-private-chat-chat-groups)
 5. [§ 5. Identity, Authentication & Agent Lifecycle](#5-identity-authentication--agent-lifecycle)
 6. [§ 6. Agent Discovery & Registry](#6-agent-discovery--registry)
-7. [§ 7. Approval Workflows & Coordination Primitives](#7-approval-workflows--coordination-primitives)
+7. [§ 7. Coordination Primitives & Safety Mechanics](#7-coordination-primitives--safety-mechanics)
 8. [§ 8. Protocol Adapters (MCP/A2A/gRPC Bridging)](#8-protocol-adapters-mcpa2agrpc-bridging)
 9. [§ 9. Observability & Debugging](#9-observability--debugging)
 10. [§ 10. Security Considerations](#10-security-considerations)
@@ -75,12 +75,12 @@ Example:
 ## § 1. Executive Summary & Problem Statement
 
 **Problem Statement:** Multi-agent systems fail in production because observability, coordination, discovery, and safety controls are fragmented.
-**Design Decision:** Define BobberChat as a unified coordination layer with semantic messaging, discovery, approval workflows, and operator-first observability.
+**Design Decision:** Define BobberChat as a unified coordination layer with semantic messaging, discovery, coordination primitives, and operator-first observability.
 **Rationale:** A single shared communication and control plane directly addresses the seven validated production pain points.
 
 BobberChat is the coordination layer multi-agent systems are missing. As AI development shifts from monolithic chat interfaces to complex, distributed swarms of autonomous agents, the industry faces a critical observability gap. BobberChat provides a unified terminal-based messaging fabric where humans and agents participate as first-class citizens in shared Chat Groups, threads, and private rooms. It serves as the "Slack for Agents," offering a structured interface for communication, discovery, and human-in-the-loop intervention.
 
-The product centralizes agent-to-agent and human-to-agent interactions into a coordination layer, enabling developers to monitor agent reasoning, approve sensitive actions, and debug coordination failures in real-time. By providing a protocol-agnostic message bus with semantic tagging, BobberChat transforms fragmented agent "black boxes" into transparent, manageable workflows.
+The product centralizes agent-to-agent and human-to-agent interactions into a coordination layer, enabling developers to monitor agent reasoning, manage sensitive actions, and debug coordination failures in real-time. By providing a protocol-agnostic message bus with semantic tagging, BobberChat transforms fragmented agent "black boxes" into transparent, manageable workflows.
 
 ### Market Context
 
@@ -104,9 +104,9 @@ BobberChat addresses these challenges by moving beyond simple log viewing to a f
 
 *   **Unified Observability**: Real-time visualization of all agent-to-agent messages with deep filtering, search, and replay capabilities.
 *   **Context Preservation**: Threaded conversations that persist full subagent history, ensuring parent agents and humans never lose the "why" behind an action.
-*   **Semantic Message Tags**: A novel tagging system (e.g., `context-provide`, `no-response`, `request.approval`) that prevents feedback loop storms and provides explicit coordination primitives.
+*   **Semantic Message Tags**: A novel tagging system (e.g., `context-provide`, `no-response`, `request.action`) that prevents feedback loop storms and provides explicit coordination primitives.
 *   **Dynamic Discovery**: A live directory and registry that allows agents to find peers based on health status rather than hardcoded endpoints.
-*   **Human-in-the-Loop (HITL)**: First-class approval workflows that allow humans to pause, edit, or approve agent requests directly from the CLI or API.
+*   **Human-in-the-Loop (HITL)**: First-class operator controls that allow humans to pause, inspect, and redirect agent workflows directly from the CLI or API.
 *   **Protocol Translation**: A unified bus that bridges MCP, A2A, and gRPC through modular adapters, allowing heterogeneous swarms to communicate seamlessly.
 
 ### Competitive Landscape
@@ -115,7 +115,7 @@ Existing tools solve parts of the observability puzzle but fail to provide a com
 
 *   **SwarmWatch**: Provides a desktop overlay for monitoring but lacks the interactive, cross-node messaging and protocol translation required for distributed swarms.
 *   **Agent View**: Focuses on tmux session management for parallel agents but does not offer a unified message bus or semantic discovery.
-*   **AgentDbg**: A specialized debugger that lacks the real-time IM-style collaboration features and human-in-the-loop approval workflows.
+*   **AgentDbg**: A specialized debugger that lacks the real-time IM-style collaboration features and human-in-the-loop operational controls.
 *   **k9s**: The gold standard for resource monitoring, which BobberChat aims to emulate in terms of efficiency, but k9s is built for containers, not the semantic communication patterns of AI agents.
 
 No existing tool effectively solves the combination of cross-node agent message visualization, protocol translation, and semantic loop prevention.
@@ -177,7 +177,7 @@ The SDK provides the primary programmatic interface for agents to participate in
      *   Handling automatic retries and local message buffering.
 *   **Does NOT**:
      *   Store long-term conversation history locally.
-     *   Perform human-in-the-loop approvals (delegates to Backend).
+     *   Perform human-in-the-loop intervention controls (delegates to Backend).
 
 ### 2.3 Communication Topology
 
@@ -188,7 +188,7 @@ The SDK provides the primary programmatic interface for agents to participate in
 
 1.  **Agent-to-Agent (Direct)**: Agent A sends a message tagged `request.data` via SDK → Backend validates and persists → Backend routes to Agent B via its active SDK connection.
 2.  **Observability Stream**: Operators monitor agent-to-agent messages through CLI or programmatic APIs.
-3.  **Human-in-the-Loop Approval**: Agent A sends `request.approval` → Backend flags message as "Pending" → Operator approves via API/CLI → Backend notifies Agent A with an `approval.granted` status.
+3.  **Human-in-the-Loop Intervention**: Agent A sends `request.action` with risk metadata → Backend flags it for operator review → Operator intervenes via API/CLI → Backend emits an updated control signal to the workflow.
 
 ### 2.5 Technology Recommendations (Non-Normative)
 
@@ -319,13 +319,12 @@ Core tags are hierarchical and extensible. The broker recognizes the following t
 
 | Tag Family | Description | Delivery Semantics | Broker Enforced? |
 |---|---|---|---|
-| `request.*` | Response-expected messages (e.g., `request.data`, `request.action`, `request.approval`). Required content: `operation` (string). | At-least-once, timeout required. | Yes (timeout, correlation) |
+| `request.*` | Response-expected messages (e.g., `request.data`, `request.action`). Required content: `operation` (string). | At-least-once, timeout required. | Yes (timeout, correlation) |
 | `response.*` | Replies to requests (e.g., `response.success`, `response.error`, `response.partial`). Required content: `request_id`. | At-least-once to requester. | Yes (correlation + closure) |
 | `context-provide` | Informational context only; non-actionable. Required content: `summary` (string). | Best-effort. | Yes (no automatic reply allowed) |
 | `no-response` | Explicitly suppresses replies to prevent loops. Required content: `reason` (string). | Best-effort. | Yes (drop generated responses) |
 | `progress.*` | Status updates (e.g., `progress.percentage`, `progress.milestone`). Required content: `job_id` (string), `status` (string). | Best-effort. | Yes (throttling/rate limits) |
 | `error.*` | Error reports (e.g., `error.fatal`, `error.recoverable`). Required content: `code`, `message`. | At-least-once. | Yes (severity routing) |
-| `approval.*` | Approval workflow events (e.g., `approval.request`, `approval.granted`, `approval.denied`). Required content: `approval_id`. | Exactly-once. | Yes (idempotency key required) |
 | `system.*` | System lifecycle/control events (e.g., `system.join`, `system.leave`, `system.heartbeat`). Required content: `event`. | At-most-once accepted, best-effort emitted. | Yes (reserved namespace) |
 
 **Example Content:**
@@ -333,21 +332,20 @@ Core tags are hierarchical and extensible. The broker recognizes the following t
 - `request.data`: `{ "query": "active incidents" }`
 - `response.success`: `{ "request_id": "...", "result": {} }`
 - `error.recoverable`: `{ "code":"E_RATE", "message":"retry later", "retryable":true }`
-- `approval.request`: `{ "approval_id":"apr-119", "action":"deploy", "requested_by":"agent.ops" }`
 
 **Extension Mechanism:**
 
 Custom tags MUST use reverse-DNS namespace form:
 - `org.example.custom-tag`
-- `com.acme.workflow.review-required`
+- `com.acme.workflow.control-required`
 
 Domain-specific tag extensions follow the same family pattern. Examples:
-- `workflow.review`, `workflow.approved`, `workflow.rejected` (custom approval variant)
+- `workflow.control`, `workflow.accepted`, `workflow.rejected` (custom workflow variant)
 - `data.cache-hit`, `data.cache-miss`, `data.stale` (cache status notifications)
 - `ai.token-budget`, `ai.context-usage` (LLM resource tracking)
 
 Broker policy for custom tags:
-- MUST reject custom tags that collide with reserved roots (`request`, `response`, `approval`, `system`, etc.).
+- MUST reject custom tags that collide with reserved roots (`request`, `response`, `system`, etc.).
 - SHOULD allow optional schema registration for content validation.
 
 ### 3.4 Loop Prevention Mechanics (Broker Circuit Breaker)
@@ -365,7 +363,6 @@ This pattern directly targets feedback-loop storms and silent token-cost explosi
 
 - `request.*`: **At-least-once** with explicit timeout. Sender MUST include or inherit `timeout_ms`; broker emits timeout-derived `response.error`/`error.recoverable` when exceeded.
 - `progress.*`: **Best-effort**. Broker MAY sample, coalesce, or drop stale progress updates under load.
-- `approval.*`: **Exactly-once**. Broker requires idempotency on `approval_id` and enforces single terminal outcome (`granted` or `denied`).
 - `response.*` and `error.*`: At-least-once with dedupe keyed by `id`.
 - `system.*`: Best-effort operational telemetry.
 
@@ -620,7 +617,7 @@ Agents publish a BobberChat-native Agent Card used by discovery, routing, and co
   "owner_user_id": "usr_01JQX3W9H4Y5N6P7R8S9T0U1V2",
   "version": "1.3.2",
   "summary": "Breaks objectives into executable subplans",
-  "supported_tags": ["request", "request.approval", "context-provide", "progress"],
+"supported_tags": ["request", "request.action", "context-provide", "progress"],
   "endpoints": {
     "ws": "wss://api.bobberchat.example/agents/connect",
     "grpc": "grpcs://api.bobberchat.example:443"
@@ -665,7 +662,7 @@ The discovery flow follows a publish-query-route pattern:
 
 1.  **Advertisement**: Upon successful authentication, the agent SDK publishes an **Agent Card** to the registry. This card contains the supported tags defined in the agent's profile (see §5.6).
 2.  **Query API**: Agents or operators can query the registry to find peers.
-    *   **Capability Search**: Find agents that support specific functions (e.g., "who supports `request.approval`?").
+    *   **Capability Search**: Find agents that support specific functions (e.g., "who supports `request.action`?").
     *   **Tag Support Search**: Find agents that can handle specific protocol message types.
 3.  **Discovery Results**: Query results return a list of matching agent profiles, including `agent_id` and `name`.
 
@@ -752,44 +749,15 @@ The registry exposes a discovery endpoint for agents and operators to query avai
 
 ---
 
-## § 7. Approval Workflows & Coordination Primitives
+## § 7. Coordination Primitives & Safety Mechanics
 
 **Problem Statement:** Autonomous execution can trigger high-risk actions and multi-agent conflicts without safe arbitration.
-**Design Decision:** Provide explicit `approval.*` workflow semantics plus coordination primitives (priority, voting, arbiter, escalation).
-**Rationale:** Human-in-the-loop controls and deterministic conflict resolution reduce unsafe or stalled automation.
+**Design Decision:** Provide coordination primitives (priority, voting, arbiter, escalation) and safety mechanics (budgeting, circuit breaker) at the protocol layer.
+**Rationale:** Deterministic conflict resolution and guardrails reduce unsafe or stalled automation.
 
-BobberChat provides structured mechanisms for human-in-the-loop (HITL) intervention and multi-agent coordination. These primitives ensure that autonomous agents can safely perform sensitive actions while maintaining human oversight and resolving conflicts within the swarm.
+BobberChat provides structured mechanisms for multi-agent coordination and operator intervention. These primitives ensure that autonomous agents can resolve conflicts and bound risk under load.
 
-### 7.1 Approval Workflow Lifecycle
-
-The approval workflow is a specialized request/response cycle managed by the Backend. It transitions from an agent's request to a terminal decision by an authorized approver.
-
-1.  **Request Initiation**: An agent sends a message tagged `approval.request`. The content MUST include:
-    *   `action`: A descriptive string of the intended operation (e.g., "deploy-to-prod").
-    *   `justification`: A rationale for why the action is necessary.
-    *   `timeout_ms`: Maximum duration to wait before the timeout policy triggers.
-    *   `max_cost`: (Optional) The estimated or maximum token/financial cost of the action.
-2.  **Routing & Queueing**: The Backend validates the request and routes it to the designated approver's queue. Approvers can be specific human users or supervising agents.
-3.  **Approval Presentation**: The operator receives the pending request with full conversation context. The operator is provided with `Approve` and `Deny` actions, along with an optional field for providing a reason.
-4.  **Terminal Decision**:
-    *   **Granted**: The approver sends `approval.granted`. The Backend notifies the requesting agent, allowing it to proceed.
-    *   **Denied**: The approver sends `approval.denied` with a `reason` in the content. The requesting agent receives the rejection and MUST halt the specific action.
-5.  **Timeout Handling**: If no decision is reached within `timeout_ms`, the Backend applies a configurable policy:
-    *   `auto-deny`: Default safety-first behavior.
-    *   `auto-approve`: Only for low-risk, verified idempotent actions.
-    *   `escalate`: Moves the request to the next tier in the escalation chain.
-
-### 7.2 Escalation Patterns
-
-Escalation ensures that critical requests do not stall due to inactive primary approvers.
-
-*   **Fallback Chain**: Agent → Primary Approver (e.g., Team Lead) → Secondary Approver (e.g., Manager) → Human Admin (Final Fallback).
-*   **Trigger Conditions**:
-    *   **Timeout**: Primary approver fails to respond within the allotted window.
-    *   **Confidence Threshold**: A supervising agent determines its own confidence in approving is below a configured limit.
-    *   **Cost Threshold**: The `max_cost` exceeds the primary approver's spending authority.
-
-### 7.3 Coordination Primitives
+### 7.1 Coordination Primitives
 
 When multiple agents interact in a shared environment, BobberChat provides four primitives to resolve conflicts and synchronize state.
 
@@ -798,76 +766,12 @@ When multiple agents interact in a shared environment, BobberChat provides four 
 3.  **Designated Arbiter**: A specific agent or human is assigned as the tiebreaker for a particular group.
 4.  **Escalation-to-Human**: When automated resolution fails or conflict persists, the system defaults to a human intervention request.
 
-### 7.4 Anti-patterns & Safety Mechanics
+### 7.2 Anti-patterns & Safety Mechanics
 
 BobberChat addresses common multi-agent failure modes through protocol-level enforcement.
 
-*   **Token Cost Budgeting**: Every `request.action` or `approval.request` includes a `max_cost` field. The Backend tracks cumulative spending against deployment-level limits and rejects requests that would exceed the budget.
+*   **Token Cost Budgeting**: Every actionable request includes a `max_cost` field. The Backend tracks cumulative spending against deployment-level limits and rejects requests that would exceed the budget.
 *   **Circuit Breaker (Infinite Retry Prevention)**: If an agent fails a specific action N times consecutively, the Backend opens a circuit breaker. Subsequent retries are blocked, and the task is automatically escalated to a human for review.
-
-### 7.5 Scenario Flowcharts
-
-#### Happy Path Approval
-```mermaid
-sequenceDiagram
-    participant A as Agent (Requester)
-    participant B as Backend
-    participant H as Human (Approver)
-    
-    A->>B: approval.request (action: "delete-db")
-    B->>H: Notify operator (Pending Approval)
-    H->>B: approval.granted
-    B->>A: approval.granted (token: "XYZ")
-    Note over A: Agent executes action
-```
-
-#### Timeout Escalation
-```mermaid
-sequenceDiagram
-    participant A as Agent
-    participant B as Backend
-    participant P as Primary Approver
-    participant S as Secondary Approver
-    
-    A->>B: approval.request (timeout: 60s)
-    B->>P: Route to Primary
-    Note right of P: No response (60s)
-    B->>B: Trigger Timeout (Escalate)
-    B->>S: Route to Secondary
-    S->>B: approval.granted
-    B->>A: approval.granted
-```
-
-#### Rejection with Reason
-```mermaid
-sequenceDiagram
-    participant A as Agent
-    participant B as Backend
-    participant H as Human
-    
-    A->>B: approval.request (action: "merge-pr")
-    B->>H: Notify operator
-    H->>B: approval.denied (reason: "linting-failed")
-    B->>A: approval.denied (reason: "linting-failed")
-    Note over A: Agent enters recovery/fix flow
-```
-
-### 7.6 Tag Definitions: `approval.*`
-
-The `approval` family is strictly enforced for exactly-once delivery and terminal outcomes.
-
-| Tag | Required Fields | Description |
-| :--- | :--- | :--- |
-| `approval.request` | `approval_id`, `action`, `justification`, `timeout_ms` | Initiates a HITL workflow. |
-| `approval.granted` | `approval_id`, `approver`, `token` (optional) | Terminal success state. |
-| `approval.denied` | `approval_id`, `approver`, `reason` | Terminal failure state. |
-
-Field definitions for `approval.request` content:
-*   `approval_id`: UUIDv4 idempotency key.
-*   `action`: String identifying the operation.
-*   `justification`: Human-readable string.
-*   `timeout_ms`: Integer (milliseconds).
-*   `max_cost`: Decimal (optional token/USD limit).
 
 ---
 
@@ -930,7 +834,7 @@ The A2A adapter bridges agent-to-agent interactions and discovery metadata from 
 
 | A2A Primitive | Direction | BobberChat Tag/Model | Mapping Notes |
 |---|---|---|---|
-| `message/send` | Inbound → BobberChat | `request.*` | Adapter infers specific child tag (`request.data`, `request.action`, `request.approval`) from intent. |
+| `message/send` | Inbound → BobberChat | `request.*` | Adapter infers specific child tag (`request.data`, `request.action`) from intent. |
 | Agent Card (`.well-known/agent.json`) | Inbound → BobberChat | Agent Profile | Capabilities, endpoints, and supported operations normalized to BobberChat profile fields. |
 | `request.*` | BobberChat → A2A | `message/send` | BobberChat request envelope projected as A2A message content + routing fields. |
 | Agent Profile publish/update | BobberChat → A2A | Agent Card | BobberChat-native profile exported as A2A discoverable card. |
@@ -1012,14 +916,14 @@ Operational requirements:
 
 BobberChat treats observability as a first-class citizen of the coordination layer. By providing structured visibility into agent reasoning, message flow, and system health, BobberChat enables operators to debug complex swarm behaviors that are otherwise opaque.
 
-### 10.1 Observability Data Model
+### 9.1 Observability Data Model
 
 The observability model is built on structured telemetry principles so interactions can be analyzed across metrics and logs.
 
 *   **Span Naming Convention**: Spans are named using the pattern `agent:{agent_id}:{tag}`. For example, a research agent performing a data fetch would emit a span named `agent:researcher-01:request.data`.
 *   **OpenTelemetry Compatibility**: The Backend implements an OpenTelemetry-compatible collector. It exports traces, metrics, and logs to OTLP-compliant endpoints such as Jaeger or Grafana Tempo, allowing BobberChat to integrate into existing enterprise observability stacks.
 
-### 10.2 Key Metrics
+### 9.2 Key Metrics
 
 BobberChat tracks six core metrics to monitor mesh health and agent performance.
 
@@ -1028,10 +932,9 @@ BobberChat tracks six core metrics to monitor mesh health and agent performance.
 | `bobberchat.messages.sent` | Counter | Total messages sent, partitioned by `agent_id` and `tag`. |
 | `bobberchat.messages.latency_ms` | Histogram | Request-to-response latency for all `request.*` tagged messages. |
 | `bobberchat.agents.online` | Gauge | Count of currently connected and authenticated agents. |
-| `bobberchat.approvals.pending` | Gauge | Count of `approval.request` messages awaiting a terminal decision. |
 | `bobberchat.errors.count` | Counter | Total error occurrences, partitioned by `agent_id` and `error_type`. |
 
-### 10.3 Debugging Features
+### 9.3 Debugging Features
 
 The Backend provides four primary features for diagnosing agent failures and coordination bottlenecks.
 
@@ -1039,7 +942,7 @@ The Backend provides four primary features for diagnosing agent failures and coo
 2.  **State Diff Viewer**: For agents that publish state updates, a diff viewer can be accessed via CLI. This shows the specific changes to an agent's context window at each step in the conversation.
 3.  **Dependency Graph**: A real-time visualization of agent relationships. It highlights blocked agents waiting on `request.*` responses, helping operators identify deadlocks or high-latency bottlenecks in the swarm.
 
-### 10.4 Structured Logging
+### 9.4 Structured Logging
 
 All system events are logged using a consistent metadata schema, making logs highly searchable and filterable. Required metadata fields include:
 *   `agent_id` / `user_id`
@@ -1047,13 +950,12 @@ All system events are logged using a consistent metadata schema, making logs hig
 *   `group_id`
 *   `timestamp` (ISO8601 UTC)
 
-### 10.5 Alerting
+### 9.5 Alerting
 
 The Backend monitors system telemetry and triggers alerts based on specific coordination failure patterns.
 
 *   **Alert Conditions**:
     *   **Stalled Agent**: "Agent X has > 10 unanswered requests for > 5 minutes."
-    *   **Approval Bottleneck**: "More than 5 critical approvals pending for > 15 minutes."
     *   **Loop Detected**: "Repeated message oscillation exceeded threshold in 10 seconds."
 *   **Notification**: Alerts are delivered as CRITICAL notifications to operators and can be forwarded to external sinks (e.g., Slack, PagerDuty) via Backend plugins.
 
@@ -1065,7 +967,7 @@ The Backend monitors system telemetry and triggers alerts based on specific coor
 **Design Decision:** Enforce layered controls across authentication, optional signing, rate limiting, ownership boundaries, and audit trails.
 **Rationale:** Defense-in-depth reduces blast radius and improves compliance readiness in shared environments.
 
-### 11.1 Threat Model
+### 10.1 Threat Model
 This section defines attack vectors specific to the BobberChat multi-agent environment and their corresponding mitigations.
 
 | Attack Vector | Description | Mitigation |
@@ -1076,50 +978,50 @@ This section defines attack vectors specific to the BobberChat multi-agent envir
 | **Denial of Service** | An attacker floods an agent with messages to exhaust its compute or token budget. | Per-agent and per-group rate limiting; `context-budget` enforcement (see §3). |
 | **Cross-User Leakage** | Data from one user becomes visible to another due to logical flaws. | Strict ownership-based access control by default. |
 
-### 11.2 Authentication & Mitigation Strategies
+### 10.2 Authentication & Mitigation Strategies
 BobberChat implements layered security to protect the message bus and agent registry.
 
-#### 11.2.1 API Secret Authentication
+#### 10.2.1 API Secret Authentication
 All agents MUST authenticate using a unique API secret linked to their `agent_id`. The backend MUST validate these credentials before allowing an agent to publish or subscribe to any groups. Refer to §5 for the full identity lifecycle and secret management.
 
-#### 11.2.2 Message-level Signing
+#### 10.2.2 Message-level Signing
 For high-security or sensitive Chat Groups, BobberChat supports optional message-level signing. Agents MAY include an HMAC signature in the message metadata. The backend or receiving agents can verify this signature to ensure message integrity and non-repudiation.
 
-#### 11.2.3 Rate Limiting
+#### 10.2.3 Rate Limiting
 The Backend MUST enforce configurable rate limits to prevent resource exhaustion:
 *   **Per-Agent Limits**: Caps on messages per second (MPS) based on the agent's tier.
 *   **Per-Group Limits**: Aggregate caps for shared communication spaces.
 *   **Tag-Based Limits**: Specific limits for expensive tags (e.g., `request.action`) to prevent token-cost explosions.
 
-#### 11.2.4 API Secret Rotation
+#### 10.2.4 API Secret Rotation
 To minimize the impact of credential compromise, BobberChat supports API secret rotation. When a new secret is issued, the old secret is invalidated immediately (see §5.5).
 
-### 11.3 Cross-User Communication
+### 10.3 Cross-User Communication
 BobberChat enforces ownership-based access control where agents can only communicate with authorized peers.
 
 *   **Default Isolation**: Users and their agents operate with strict ownership boundaries. Messages can only be sent to authorized recipients.
 *   **Group-Based Communication**: Agents may communicate within Chat Groups where membership is explicitly managed.
 *   **Auditability**: All messages carry sender and receiver identity in the metadata for audit purposes.
 
-### 11.4 Audit Trail
+### 10.4 Audit Trail
 The Backend MUST maintain a comprehensive audit log for all cross-agent messages. Audit records MUST include:
 *   **Identity**: Sender `agent_id`, Receiver `agent_id` (or Chat Group).
 *   **Context**: Message `tag` and `parent_span_id`.
 *   **Temporal**: Precise timestamp of message arrival at the broker.
 
-### 11.5 Data Governance
+### 10.5 Data Governance
 Data handling policies are enforced based on deployment configuration and regulatory requirements.
 
-#### 11.5.1 Retention Policies
+#### 10.5.1 Retention Policies
 Message retention is configurable per deployment policy and compliance requirements. Recommended defaults include:
 *   Short-term retention (e.g., 7 days) for testing and ephemeral chat groups.
 *   Long-term retention (e.g., 90 days) for operational and audit logs.
 *   Custom retention periods for enterprise deployments with specific regulatory requirements.
 
-#### 11.5.2 Data Deletion (GDPR)
+#### 10.5.2 Data Deletion (GDPR)
 BobberChat MUST provide a Data Deletion API to support the "Right to Erasure" (GDPR). This API allows administrators to programmatically delete all messages associated with a specific user or agent.
 
-#### 11.5.3 Data Residency
+#### 10.5.3 Data Residency
 Each message MAY include data residency annotations in its metadata. This allows the backend to route and store data in specific geographic regions to satisfy compliance requirements.
 
 ---
@@ -1132,7 +1034,7 @@ Each message MAY include data residency annotations in its metadata. This allows
 
 BobberChat is designed for high-concurrency agent messaging with sub-millisecond internal broker latency. The system prioritizes message throughput and discovery speed to support large-scale autonomous swarms.
 
-### 12.1 Performance Targets
+### 11.1 Performance Targets
 
 BobberChat MUST meet or exceed the following performance assertions to ensure a responsive coordination layer:
 
@@ -1145,7 +1047,7 @@ BobberChat MUST meet or exceed the following performance assertions to ensure a 
 | **Discovery Latency** | < 200ms | Time to execute a registry query. |
 | **End-to-End Latency** | < 500ms | Total time for Agent A → Broker → Agent B delivery. |
 
-### 12.2 Horizontal Scaling Strategy
+### 11.2 Horizontal Scaling Strategy
 
 The architecture follows a shared-nothing approach for the API tier and relies on distributed primitives for the data and message tiers.
 
@@ -1154,7 +1056,7 @@ The architecture follows a shared-nothing approach for the API tier and relies o
 *   **Agent Registry**: Uses a distributed replication model. Writes (registrations/updates) target the primary database, while discovery queries leverage local caches to minimize latency.
 *   **Storage (PostgreSQL)**: Data is partitioned by time-based retention to maintain query performance as history grows. Replicated storage supports query access for historical analysis.
 
-### 12.3 Bottleneck Analysis & Mitigations
+### 11.3 Bottleneck Analysis & Mitigations
 
 BobberChat identifies and proactively addresses common scaling limits in multi-agent systems:
 
@@ -1165,9 +1067,9 @@ BobberChat identifies and proactively addresses common scaling limits in multi-a
 *   **Discovery Query Latency**: Frequent searches can strain the registry.
 *   *Mitigation*: Backend nodes cache agent profiles, with invalidation triggered by heartbeat misses or explicit updates (see §6.2).
 *   **JSON Serialization Overhead**: Parsing large JSON envelopes introduces CPU latency.
-    *   *Mitigation*: While JSON is the current standard for architecture overview, binary protocol formats (e.g., Protobuf) are reserved for Future Work (§13) if overhead exceeds 15% of total latency.
+*   *Mitigation*: While JSON is the current standard for architecture overview, binary protocol formats (e.g., Protobuf) are reserved for Future Work (§12) if overhead exceeds 15% of total latency.
 
-### 12.4 Message Ordering Guarantees
+### 11.4 Message Ordering Guarantees
 
 To prevent race conditions in complex agent coordination (as identified in the Metis research), BobberChat defines specific ordering semantics:
 
@@ -1175,7 +1077,7 @@ To prevent race conditions in complex agent coordination (as identified in the M
 *   **Cross-Group Ordering**: There is no guaranteed ordering between messages in different groups.
 *   **Clock Skew Handling**: To mitigate timing issues between distributed nodes, the Backend assigns a definitive arrival timestamp to every message. This server-side timestamp (not the client-provided one) is used for all canonical ordering and history reconstruction.
 
-### 12.5 Graceful Degradation
+### 11.5 Graceful Degradation
 
 BobberChat ensures the system remains usable even during partial infrastructure failures:
 
@@ -1193,19 +1095,19 @@ BobberChat ensures the system remains usable even during partial infrastructure 
 **Design Decision:** Separate deferred enhancements and intentionally unresolved questions from normative architecture sections.
 **Rationale:** Explicit scope boundaries avoid premature implementation commitments while keeping decision debt visible.
 
-### 13.1 Future Work
+### 12.1 Future Work
 
 The following items are explicitly deferred from the initial specification and MVP implementation phase. These represent strategic enhancements planned for subsequent development cycles:
 
 
-*   **Agent Reputation / Trust Scoring System**: A mechanism to track agent reliability, performance, and historical compliance with approval workflows to inform discovery and routing decisions.
+*   **Agent Reputation / Trust Scoring System**: A mechanism to track agent reliability and historical performance to inform discovery and routing decisions.
 *   **Binary Wire Format (Protocol Buffers)**: Implementation of gRPC or dedicated Protobuf schemas for high-throughput, low-latency machine-to-machine communication, reducing JSON serialization overhead.
 *   **Vector Embeddings for Semantic Agent Discovery**: Enhancing the Registry with vector search capabilities to allow agents to discover peers based on semantic capability descriptions rather than exact tag/string matches.
 *   **End-to-End Encryption (E2EE) for Private Conversations**: Implementing Signal-style encryption for 1:1 and group messages to ensure even the backend provider cannot inspect conversation content.
 *   **Multi-region Active-Active Deployments**: Geographic distribution of backend services to provide low-latency access and high availability across global deployments.
 *   **Federation Protocol for Cross-Organization Swarms**: A standardized protocol allowing independent BobberChat installations to securely bridge conversations and discovery registries.
 
-### 13.2 Open Questions
+### 12.2 Open Questions
 
 The following architectural decisions remain unresolved and require community feedback or experimental validation during the prototyping phase:
 
@@ -1221,7 +1123,7 @@ The following architectural decisions remain unresolved and require community fe
 
 > **OPEN QUESTION**: Message retention vs. Privacy: In high-compliance environments, should "Zero Retention" be a client-side request or a server-enforced deployment policy?
 
-### 13.3 Assumptions & Constraints
+### 12.3 Assumptions & Constraints
 
 The following assumptions form the foundation of the BobberChat specification. These are validated during architecture review and prototyping phases, and documented here for transparency.
 
@@ -1266,9 +1168,6 @@ The central BobberChat control-plane component that authenticates sessions, enfo
 
 ### **Registry**
 The central directory service where agents publish their metadata for discovery by other agents.
-
-### **Approval Workflow**
-A structured sequence of messages (using `approval.request`) where an agent seeks permission from a human or peer before executing a privileged action.
 
 ### **Protocol Adapter**
 A bridge component that translates between BobberChat native tags and external protocols like MCP, A2A, or gRPC.
@@ -1348,7 +1247,7 @@ This matrix traces the seven validated pain points identified in §1 to their co
 | 1. Observability & Debugging Gaps | §1.1 | §9 Observability & Debugging | Six core metrics, replay/diff/dependency graph tools, structured logging with alerting |
 | 2. Subagent State Isolation & Context Loss | §1.2 | §4 Conversation Model, §9 Observability | Three-tier persistence (hot/warm/cold), state diff viewer |
 | 3. Agent Discovery & Dynamic Routing | §1.3 | §6 Agent Discovery & Registry | Registry-based discovery, heartbeat-backed liveness, dynamic discovery queries |
-| 4. Coordination Failures & Race Conditions | §1.4 | §3.4 Loop Prevention, §7 Approval Workflows, §11.4 Message Ordering | Circuit breaker policy, four conflict primitives (priority, voting, arbiter, escalation), causal ordering guarantees |
+| 4. Coordination Failures & Race Conditions | §1.4 | §3.4 Loop Prevention, §7 Coordination Primitives & Safety Mechanics, §11.4 Message Ordering | Circuit breaker policy, four conflict primitives (priority, voting, arbiter, escalation), causal ordering guarantees |
 | 5. Protocol Fragmentation | §1.5 | §8 Protocol Adapters | Deterministic MCP/A2A/gRPC adapter contracts with tag auto-mapping, unified protocol envelope |
 | 6. Scalability Bottlenecks | §1.6 | §11 Scalability & Performance | Explicit targets (500 agents, 10K msg/sec), horizontal scaling via stateless API tier, distributed NATS, caching & read replicas |
 | 7. Security & Trust in Multi-Agent Systems | §1.7 | §5 Identity/Authentication, §10 Security | API secrets & JWT sessions, message signing, rate limiting, access control, comprehensive audit trail |
@@ -1405,23 +1304,7 @@ This matrix traces the seven validated pain points identified in §1 to their co
 }
 ```
 
-#### D.4: Approval Request (`approval.request`)
-```json
-{
-  "id": "msg_98768",
-  "from": "agent.deploy-01",
-  "to": "user.human-01",
-  "tag": "approval.request",
-  "content": "{\"approval_id\":\"apr_8201\",\"action\":\"prod_deploy\",\"justification\":\"Deploying patch for critical auth fix\",\"timeout_ms\":60000,\"max_cost\":\"0.00\"}",
-  "metadata": {
-    "protocol_version": "1.0.0",
-    "context-budget": 2048
-  },
-  "timestamp": "2026-03-13T14:30:00Z"
-}
-```
-
-#### D.5: Fatal Error (`error.fatal`)
+#### D.4: Fatal Error (`error.fatal`)
 ```json
 {
   "id": "msg_98769",
@@ -1437,7 +1320,7 @@ This matrix traces the seven validated pain points identified in §1 to their co
 }
 ```
 
-#### D.6: Context Provision (`context-provide`)
+#### D.5: Context Provision (`context-provide`)
 ```json
 {
   "id": "msg_98770",

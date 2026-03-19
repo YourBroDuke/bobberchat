@@ -18,7 +18,7 @@ References:
 
 BobberChat is implemented as a two-component system (Design Spec §2):
 
-1. **Backend Service (`bobberd`)**: control plane for auth, routing, registry, approvals, persistence, adapters, and observability.
+1. **Backend Service (`bobberd`)**: control plane for auth, routing, registry, persistence, adapters, and observability.
 2. **Agent SDK/CLI (`pkg/sdk`, `bobber`)**: agent-facing integration surface for connect/send/subscribe/discover primitives.
 
 Confirmed technology stack (Design Spec §2.5, PRD §9.1):
@@ -34,7 +34,6 @@ Design alignment notes:
 - Conversation model follows §4.
 - Identity and auth follow §5.
 - Discovery follows §6.
-- Approval workflows follow §7.
 - Adapters follow §8.
 - Observability and security follow §10 and §11.
 
@@ -58,7 +57,6 @@ bobberchat/
 │   │   ├── auth/          # API secret & JWT authentication
 │   │   ├── protocol/      # Wire envelope, tag taxonomy, validation
 │   │   ├── conversation/  # Chat groups, private chats
-│   │   ├── approval/      # Approval workflow engine
 │   │   ├── persistence/   # PostgreSQL + storage tier management
 │   │   ├── adapter/       # Protocol adapters (MCP, A2A, gRPC)
 │   │   │   ├── mcp/
@@ -98,7 +96,6 @@ bobberchat/
 | `backend/internal/auth` | Handles human auth (JWT) and machine auth (API secret verification, rotation, revocation) (Design Spec §5, §11). |
 | `backend/internal/protocol` | Defines canonical envelope structs, tag taxonomy constants, content validators, and protocol version negotiation logic (Design Spec §3.6). |
 | `backend/internal/conversation` | Implements conversations (DM & group), conversation participants, membership policies, and message ordering context (Design Spec §4). |
-| `backend/internal/approval` | Implements `approval.request/granted/denied` state machine, timeout policy (`auto-deny`, `auto-approve`, `escalate`), and idempotency gates (Design Spec §7). |
 | `backend/internal/persistence` | PostgreSQL repositories, message archival orchestration (hot/warm/cold boundaries), and migration integration (Design Spec §4.4). |
 | `backend/internal/adapter/mcp` | Translates MCP JSON-RPC primitives to/from BobberChat envelope and tags (Design Spec §8.2). |
 | `backend/internal/adapter/a2a` | Translates A2A messages, cards, and task lifecycles to/from BobberChat models (Design Spec §8.3). |
@@ -113,8 +110,6 @@ Schema follows Design Spec §4, §5, §6, §7, §10, §11 and PRD acceptance cri
 ### 3.1 Enum types
 
 ```sql
-CREATE TYPE approval_status AS ENUM ('PENDING', 'GRANTED', 'DENIED', 'TIMED_OUT', 'ESCALATED');
-
 CREATE TYPE participant_type AS ENUM ('user', 'agent');
 
 CREATE TYPE conversation_type AS ENUM ('direct', 'group');
@@ -179,18 +174,6 @@ CREATE TABLE messages (
   "timestamp" TIMESTAMPTZ NOT NULL
 );
 
-CREATE TABLE approval_requests (
-  approval_id UUID PRIMARY KEY,
-  agent_id UUID NOT NULL REFERENCES agents(agent_id) ON DELETE CASCADE,
-  action TEXT NOT NULL,
-  justification TEXT NOT NULL,
-  status approval_status NOT NULL DEFAULT 'PENDING',
-  approver_id UUID,
-  decided_at TIMESTAMPTZ,
-  timeout_ms INTEGER NOT NULL CHECK (timeout_ms > 0),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 CREATE TABLE audit_log (
   id BIGSERIAL PRIMARY KEY,
   event_type TEXT NOT NULL,
@@ -221,21 +204,17 @@ CREATE INDEX idx_agents_owner ON agents (owner_user_id);
 
 CREATE INDEX idx_messages_conv_tag_time ON messages (conversation_id, tag, "timestamp" DESC);
 
-CREATE INDEX idx_approvals_pending ON approval_requests (status, created_at)
-WHERE status = 'PENDING';
-
 CREATE INDEX idx_audit_time ON audit_log (created_at DESC);
 CREATE INDEX idx_audit_event_type ON audit_log (event_type, created_at DESC);
 ```
 
 ## 4. NATS JetStream Subject & Stream Design
 
-Subject namespace (Design Spec §2.3, §3, §7, §11.3):
+Subject namespace (Design Spec §2.3, §3, §11.3):
 
 - `bobberchat.msg.{to_id}` — direct point-to-point messages.
 - `bobberchat.group.{group_id}` — group broadcasts.
 - `bobberchat.system.*` — lifecycle/system events (`system.heartbeat`, `system.join`, `system.leave`).
-- `bobberchat.approval.*` — approval workflow events.
 
 ### 4.1 Stream definitions
 
@@ -243,7 +222,6 @@ Subject namespace (Design Spec §2.3, §3, §7, §11.3):
 |---|---|---|---|---|---|
 | `BOBBER_MSG` | `bobberchat.msg.*`, `bobberchat.group.*` | Interest | 30d | 3 | Warm-tier replay source; dedupe window 2m using `Nats-Msg-Id`. |
 | `BOBBER_SYSTEM` | `bobberchat.system.*` | Limits | 24h | 3 | Heartbeat and lifecycle telemetry; high churn, short retention. |
-| `BOBBER_APPROVAL` | `bobberchat.approval.*` | WorkQueue | 7d | 3 | Exactly-once-ish workflow with idempotent `approval_id` state in DB. |
 | `BOBBER_AUDIT` | `bobberchat.>` | Limits | 90d | 3 | Optional full-bus append-only stream for compliance export. |
 
 ### 4.2 Consumer configuration (SDK clients)
@@ -253,7 +231,6 @@ Subject namespace (Design Spec §2.3, §3, §7, §11.3):
 | Agent inbox | Yes (`agent-{id}`) | Explicit | 30s | Instant | `bobberchat.msg.{agent_id}` | Direct delivery to an agent. |
 | Group stream | Yes (`group-{id}`) | Explicit | 30s | Instant | `bobberchat.group.{group_id}` | Group membership fanout. |
 | System observer | No (ephemeral) | None | n/a | Instant | `bobberchat.system.*` | Non-critical status updates. |
-| Approval queue | Yes (`approval-{approver}`) | Explicit | 60s | Instant | `bobberchat.approval.*` | Human/arbiter approval processing. |
 
 ### 4.3 Delivery guarantees mapped to tag families (Design Spec §3.5)
 
@@ -264,7 +241,6 @@ Subject namespace (Design Spec §2.3, §3, §7, §11.3):
 | `progress.*` | Interest retention + optional drop/coalesce on pressure | Best-effort |
 | `context-provide` | Interest retention; no reply expectation | Best-effort |
 | `no-response` | Standard delivery + broker reply suppression | Best-effort with policy enforcement |
-| `approval.*` | Dedicated work queue stream + DB idempotency on `approval_id` | Exactly-once workflow semantics |
 | `system.*` | Limits retention, no-ack observer path | At-most-once accepted / best-effort emitted |
 
 ## 5. API Contracts
@@ -274,7 +250,7 @@ All REST endpoints are under `/v1` and require TLS in production.
 ### 5.1 REST API Endpoints
 
 Authentication model:
-- **Human JWT** for user-driven operations (groups, approvals).
+- **Human JWT** for user-driven operations (groups, account and management APIs).
 - **Agent API secret** for agent registration/runtime operations.
 
 #### 5.1.1 Auth
@@ -311,20 +287,13 @@ Authentication model:
 | POST | `/v1/groups/{id}/join` | JWT or Agent Secret | `{ "participant_id": "uuid", "participant_kind": "user|agent" }` | `{ "group_id": "uuid", "joined": true, "joined_at": "..." }` | 200, 400, 401, 403, 404 |
 | POST | `/v1/groups/{id}/leave` | JWT or Agent Secret | `{ "participant_id": "uuid", "participant_kind": "user|agent" }` | `{ "group_id": "uuid", "left": true }` | 200, 400, 401, 403, 404 |
 
-#### 5.1.6 Messages
+#### 5.1.5 Messages
 
 | Method | Path | Auth | Request JSON | Response JSON | Status codes |
 |---|---|---|---|---|---|
 | POST | `/v1/messages/{id}/replay` | JWT | `{ "reason": "debug-replay" }` | `{ "replayed": true, "new_message_id": "uuid", "original_message_id": "uuid" }` | 202, 401, 403, 404 |
 
-#### 5.1.7 Approvals
-
-| Method | Path | Auth | Request JSON | Response JSON | Status codes |
-|---|---|---|---|---|---|
-| GET | `/v1/approvals/pending` | JWT | n/a | `{ "approvals": [{ "approval_id": "uuid", "agent_id": "uuid", "action": "deploy", "justification": "...", "timeout_ms": 60000, "created_at": "..." }], "total": 2 }` | 200, 401, 403 |
-| POST | `/v1/approvals/{id}/decide` | JWT | `{ "decision": "granted|denied", "reason": "optional" }` | `{ "approval_id": "uuid", "status": "GRANTED|DENIED", "approver_id": "uuid", "decided_at": "..." }` | 200, 400, 401, 403, 404, 409 |
-
-#### 5.1.8 Health
+#### 5.1.6 Health
 
 | Method | Path | Auth | Request | Response | Status codes |
 |---|---|---|---|---|---|
@@ -381,10 +350,6 @@ System metadata keys (`_`-prefixed, set by adapters and system code):
 | `_replayed` | bool | Replay handler | Replay flag |
 | `_original_message_id` | string | Replay handler | Original message ID |
 | `_replay_reason` | string | Replay handler | Replay reason |
-| `_approval_id` | string | Approval module | Approval request ID |
-| `_decision` | string | Approval module | Approval decision |
-| `_reason` | string | Approval module | Decision reason |
-| `_justification` | string | Approval module | Request justification |
 | `_task_id` | string | A2A adapter | A2A task ID |
 | `_status` | string | A2A adapter | A2A task status |
 
@@ -564,7 +529,7 @@ services:
 ### 9.3 Test strategy
 
 - **Unit tests**: per package in `backend/internal/*`, `backend/pkg/sdk`, and `cli/cmd/bobber`.
-- **Integration tests**: under `backend/test/`, covering discovery, routing, approval, replay, and access control.
+- **Integration tests**: under `backend/test/`, covering discovery, routing, replay, and access control.
 - **Contract tests**: OpenAPI schema validation for REST, envelope validation for WebSocket frames.
 - **Performance tests**: load profile for 10k msg/sec per deployment and p99 latency assertions (Design Spec §12.1).
 
@@ -628,7 +593,6 @@ Aligned with Design Spec §10.
   - `bobberchat.messages.sent` (counter)
   - `bobberchat.messages.latency_ms` (histogram)
   - `bobberchat.agents.connected` (gauge)
-  - `bobberchat.approvals.pending` (gauge)
   - `bobberchat.errors.count` (counter)
 
 ### 11.3 Structured logging format
@@ -638,7 +602,7 @@ JSON logs using zerolog with required fields:
 - `tag`
 - `agent_id` and/or `user_id`
 - `group_id` (when present)
-- `component` (`broker`, `registry`, `approval`, etc.)
+- `component` (`broker`, `registry`, `auth`, etc.)
 
 Example log event:
 
@@ -658,7 +622,6 @@ Example log event:
 Emit internal alert events (and optional external sink plugins) for:
 - loop detection thresholds,
 - stalled request backlog,
-- approval queue bottlenecks,
 - adapter degradation.
 
 ---
@@ -668,9 +631,9 @@ Emit internal alert events (and optional external sink plugins) for:
 | Technical Design Section | Design Spec | PRD |
 |---|---|---|
 | §1 Overview | §2 | §1, §5 |
-| §3 Database | §4, §5, §6, §7, §11 | §4 ACs, §8 |
-| §4 NATS/JetStream | §2.3, §3.5, §7 | §2 metrics, §5 |
-| §5 API Contracts | §3.1, §5.2, §6.7, §7.6, §10.3 | §4 user stories |
+| §3 Database | §4, §5, §6, §11 | §4 ACs, §8 |
+| §4 NATS/JetStream | §2.3, §3.5 | §2 metrics, §5 |
+| §5 API Contracts | §3.1, §5.2, §6.7, §10.3 | §4 user stories |
 | §6 SDK API | §2.2, §6 | §5 MVP |
 | §10 Security | §11 | §8.2 |
 | §11 Observability | §10 | §2.2, §4.1 |

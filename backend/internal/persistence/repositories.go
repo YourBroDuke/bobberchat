@@ -79,12 +79,6 @@ type BlacklistRepository interface {
 	ListByUser(ctx context.Context, userID uuid.UUID) ([]BlacklistEntry, error)
 }
 
-type ApprovalRepository interface {
-	Create(ctx context.Context, approval ApprovalRequest) (*ApprovalRequest, error)
-	GetPending(ctx context.Context) ([]ApprovalRequest, error)
-	Decide(ctx context.Context, approvalID, approverID uuid.UUID, status ApprovalStatus, decidedAt time.Time) error
-}
-
 type AuditLogRepository interface {
 	Append(ctx context.Context, entry AuditLogEntry) (*AuditLogEntry, error)
 	QueryRecent(ctx context.Context, limit int) ([]AuditLogEntry, error)
@@ -97,7 +91,6 @@ type PostgresRepositories struct {
 	ConversationParticipants ConversationParticipantRepository
 	Groups                   ChatGroupRepository
 	Messages                 MessageRepository
-	Approvals                ApprovalRepository
 	AuditLogs                AuditLogRepository
 	ConnectionRequests       ConnectionRequestRepository
 	Blacklist                BlacklistRepository
@@ -111,7 +104,6 @@ func NewPostgresRepositories(db *DB) *PostgresRepositories {
 		ConversationParticipants: &pgConversationParticipantRepository{db: db},
 		Groups:                   &pgChatGroupRepository{db: db},
 		Messages:                 &pgMessageRepository{db: db},
-		Approvals:                &pgApprovalRepository{db: db},
 		AuditLogs:                &pgAuditLogRepository{db: db},
 		ConnectionRequests:       &pgConnectionRequestRepository{db: db},
 		Blacklist:                &pgBlacklistRepository{db: db},
@@ -747,77 +739,6 @@ func (r *pgMessageRepository) GetByConversation(ctx context.Context, conversatio
 	return messages, nil
 }
 
-type pgApprovalRepository struct{ db *DB }
-
-func (r *pgApprovalRepository) Create(ctx context.Context, approval ApprovalRequest) (*ApprovalRequest, error) {
-	if approval.CreatedAt.IsZero() {
-		approval.CreatedAt = time.Now().UTC()
-	}
-	if approval.Status == "" {
-		approval.Status = ApprovalStatusPending
-	}
-
-	row := r.db.Pool().QueryRow(ctx, `
-		INSERT INTO approval_requests (
-			approval_id, agent_id, action, justification,
-			status, approver_id, decided_at, timeout_ms, created_at
-		)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-		RETURNING approval_id, agent_id, action, justification,
-			status, approver_id, decided_at, timeout_ms, created_at
-	`, approval.ApprovalID, approval.AgentID, approval.Action,
-		approval.Justification, string(approval.Status), approval.ApproverID,
-		approval.DecidedAt, approval.TimeoutMS, approval.CreatedAt)
-
-	out, err := scanApprovalRequest(row)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (r *pgApprovalRepository) GetPending(ctx context.Context) ([]ApprovalRequest, error) {
-	rows, err := r.db.Pool().Query(ctx, `
-		SELECT approval_id, agent_id, action, justification,
-			status, approver_id, decided_at, timeout_ms, created_at
-		FROM approval_requests
-		WHERE status = 'PENDING'
-		ORDER BY created_at ASC
-	`)
-	if err != nil {
-		return nil, fmt.Errorf("get pending approvals: %w", err)
-	}
-	defer rows.Close()
-
-	approvals := make([]ApprovalRequest, 0)
-	for rows.Next() {
-		approval, err := scanApprovalRequest(rows)
-		if err != nil {
-			return nil, err
-		}
-		approvals = append(approvals, *approval)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate pending approvals: %w", err)
-	}
-	return approvals, nil
-}
-
-func (r *pgApprovalRepository) Decide(ctx context.Context, approvalID, approverID uuid.UUID, status ApprovalStatus, decidedAt time.Time) error {
-	res, err := r.db.Pool().Exec(ctx, `
-		UPDATE approval_requests
-		SET status = $1, approver_id = $2, decided_at = $3
-		WHERE approval_id = $4 AND status = 'PENDING'
-	`, string(status), approverID, decidedAt, approvalID)
-	if err != nil {
-		return fmt.Errorf("decide approval: %w", err)
-	}
-	if res.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
 type pgAuditLogRepository struct{ db *DB }
 
 func (r *pgAuditLogRepository) Append(ctx context.Context, entry AuditLogEntry) (*AuditLogEntry, error) {
@@ -1126,30 +1047,6 @@ func scanConversationParticipant(scanner rowScanner) (*ConversationParticipant, 
 	}
 
 	out.ParticipantKind = ParticipantType(participantKind)
-	return &out, nil
-}
-
-func scanApprovalRequest(scanner rowScanner) (*ApprovalRequest, error) {
-	out := ApprovalRequest{}
-	var status string
-	err := scanner.Scan(
-		&out.ApprovalID,
-		&out.AgentID,
-		&out.Action,
-		&out.Justification,
-		&status,
-		&out.ApproverID,
-		&out.DecidedAt,
-		&out.TimeoutMS,
-		&out.CreatedAt,
-	)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNotFound
-		}
-		return nil, fmt.Errorf("scan approval request: %w", err)
-	}
-	out.Status = ApprovalStatus(status)
 	return &out, nil
 }
 

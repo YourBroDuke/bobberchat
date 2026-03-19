@@ -13,16 +13,6 @@ const (
 	ConversationTypeGroup  ConversationType = "group"
 )
 
-type ApprovalStatus string
-
-const (
-	ApprovalStatusPending   ApprovalStatus = "PENDING"
-	ApprovalStatusGranted   ApprovalStatus = "GRANTED"
-	ApprovalStatusDenied    ApprovalStatus = "DENIED"
-	ApprovalStatusTimedOut  ApprovalStatus = "TIMED_OUT"
-	ApprovalStatusEscalated ApprovalStatus = "ESCALATED"
-)
-
 type ParticipantType string
 
 const (
@@ -84,18 +74,6 @@ type Message struct {
 	Content        string         `json:"content"`
 	Metadata       map[string]any `json:"metadata"`
 	Timestamp      time.Time      `json:"timestamp"`
-}
-
-type ApprovalRequest struct {
-	ApprovalID    uuid.UUID      `json:"approval_id"`
-	AgentID       uuid.UUID      `json:"agent_id"`
-	Action        string         `json:"action"`
-	Justification string         `json:"justification"`
-	Status        ApprovalStatus `json:"status"`
-	ApproverID    *uuid.UUID     `json:"approver_id,omitempty"`
-	DecidedAt     *time.Time     `json:"decided_at,omitempty"`
-	TimeoutMS     int            `json:"timeout_ms"`
-	CreatedAt     time.Time      `json:"created_at"`
 }
 
 type AuditLogEntry struct {

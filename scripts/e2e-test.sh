@@ -6,7 +6,7 @@ BASE_URL="${BASE_URL:-http://localhost:8080}"
 
 PASS=0
 FAIL=0
-TOTAL=29
+TOTAL=27
 
 LAST_STATUS=""
 LAST_BODY=""
@@ -77,11 +77,11 @@ request() {
 
 echo "Running BobberChat E2E API checks against: $BASE_URL"
 
-print_step "1/31 Health check"
+print_step "1/27 Health check"
 request "GET" "/v1/health"
 assert_step "Health check" 200 "$LAST_STATUS" '"status":"ok"'
 
-print_step "2/31 Register user"
+print_step "2/27 Register user"
 request "POST" "/v1/auth/register" "{\"email\":\"test@example.com\",\"password\":\"testpass123\"}"
 assert_step "Register user" 201 "$LAST_STATUS" '"email":"test@example.com"'
 
@@ -99,7 +99,7 @@ else
   echo "  WARN: Could not extract verification token from logs — login may fail"
 fi
 
-print_step "3/31 Login"
+print_step "3/27 Login"
 request "POST" "/v1/auth/login" "{\"email\":\"test@example.com\",\"password\":\"testpass123\"}"
 TOKEN="$(echo "$LAST_BODY" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4 || true)"
 if [ "$LAST_STATUS" -eq 200 ] && [ -n "$TOKEN" ]; then
@@ -110,7 +110,7 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-print_step "4/31 Create agent"
+print_step "4/27 Create agent"
 request "POST" "/v1/agents" "{\"display_name\":\"test-agent\",\"capabilities\":[\"test\"]}" "$TOKEN"
 AGENT_ID="$(echo "$LAST_BODY" | grep -o '"id":"[^"]*"' | cut -d'"' -f4 || true)"
 API_SECRET="$(echo "$LAST_BODY" | grep -o '"api_secret":"[^"]*"' | cut -d'"' -f4 || true)"
@@ -122,19 +122,19 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-print_step "5/31 Get agent"
+print_step "5/27 Get agent"
 request "GET" "/v1/agents/$AGENT_ID" "" "$TOKEN"
 assert_step "Get agent" 200 "$LAST_STATUS" '"display_name":"test-agent"'
 
-print_step "6/31 List agents"
+print_step "6/27 List agents"
 request "GET" "/v1/registry/agents" "" "$TOKEN"
 assert_step "List agents" 200 "$LAST_STATUS" '"agents"'
 
-print_step "7/31 Discover agents"
+print_step "7/27 Discover agents"
 request "POST" "/v1/registry/discover" "{\"capability\":\"test\",\"status\":[\"REGISTERED\"],\"limit\":10}" "$TOKEN"
 assert_step "Discover" 200 "$LAST_STATUS" '"agents"'
 
-print_step "8/31 Create group"
+print_step "8/27 Create group"
 request "POST" "/v1/groups" "{\"name\":\"test-group\",\"description\":\"e2e test\",\"visibility\":\"private\"}" "$TOKEN"
 GROUP_ID="$(echo "$LAST_BODY" | grep -o '"id":"[^"]*"' | cut -d'"' -f4 || true)"
 if [ "$LAST_STATUS" -eq 201 ] && [ -n "$GROUP_ID" ] && [[ "$LAST_BODY" == *'"name":"test-group"'* ]]; then
@@ -145,92 +145,88 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-print_step "9/31 List groups"
+print_step "9/27 List groups"
 request "GET" "/v1/groups" "" "$TOKEN"
 assert_step "List groups" 200 "$LAST_STATUS" '"groups"'
 
-print_step "10/31 Join group"
+print_step "10/27 Join group"
 request "POST" "/v1/groups/$GROUP_ID/join" "{}" "$TOKEN"
 assert_status "Join group" 200 "$LAST_STATUS"
 
-print_step "11/29 Get pending approvals"
-request "GET" "/v1/approvals/pending" "" "$TOKEN"
-assert_step "Get pending approvals" 200 "$LAST_STATUS" '"approvals"'
-
-print_step "12/29 Metrics"
+print_step "11/27 Metrics"
 request "GET" "/v1/metrics"
 assert_status "Metrics" 200 "$LAST_STATUS"
 
 # NEGATIVE TEST CASES
 
-print_step "13/29 Register duplicate email"
+print_step "12/27 Register duplicate email"
 request "POST" "/v1/auth/register" "{\"email\":\"test@example.com\",\"password\":\"different123\"}"
 assert_status "Register duplicate email" 400 "$LAST_STATUS"
 
-print_step "14/29 Login wrong password"
+print_step "13/27 Login wrong password"
 request "POST" "/v1/auth/login" "{\"email\":\"test@example.com\",\"password\":\"wrongpass123\"}"
 assert_status "Login wrong password" 401 "$LAST_STATUS"
 
-print_step "15/29 Login non-existent user"
+print_step "14/27 Login non-existent user"
 request "POST" "/v1/auth/login" "{\"email\":\"nonexistent@example.com\",\"password\":\"testpass123\"}"
 assert_status "Login non-existent user" 401 "$LAST_STATUS"
 
-print_step "16/29 Create agent no auth"
+print_step "15/27 Create agent no auth"
 request "POST" "/v1/agents" "{\"display_name\":\"test-agent\",\"capabilities\":[\"test\"]}"
 assert_status "Create agent no auth" 401 "$LAST_STATUS"
 
-print_step "17/29 Get agent not found"
+print_step "16/27 Get agent not found"
 request "GET" "/v1/agents/00000000-0000-0000-0000-000000000000" "" "$TOKEN"
 assert_status "Get agent not found" 404 "$LAST_STATUS"
 
-print_step "18/29 List agents no auth"
+print_step "17/27 List agents no auth"
 request "GET" "/v1/registry/agents"
 assert_status "List agents no auth" 401 "$LAST_STATUS"
 
-print_step "19/29 Create group no auth"
+print_step "18/27 Create group no auth"
 request "POST" "/v1/groups" "{\"name\":\"test-group\",\"description\":\"e2e test\",\"visibility\":\"private\"}"
 assert_status "Create group no auth" 401 "$LAST_STATUS"
 
-print_step "20/29 Get pending approvals no auth"
-request "GET" "/v1/approvals/pending"
-assert_status "Get pending approvals no auth" 401 "$LAST_STATUS"
-
-print_step "21/29 Adapter ingest unknown adapter"
+print_step "19/27 Adapter ingest unknown adapter"
 request "POST" "/v1/adapter/unknown/ingest" "{\"test\":true}" "$TOKEN"
 assert_status "Adapter ingest unknown" 404 "$LAST_STATUS"
 
-print_step "22/29 Adapter list no auth"
+print_step "20/27 Adapter list no auth"
 request "GET" "/v1/adapter"
 assert_status "Adapter list no auth" 401 "$LAST_STATUS"
 
-print_step "23/29 Adapter ingest empty body"
+print_step "21/27 Adapter ingest empty body"
 body_file="$(mktemp)"
 LAST_STATUS="$(curl -s -o "$body_file" -w "%{http_code}" -X POST "$BASE_URL/v1/adapter/mcp/ingest" -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "")"
 LAST_BODY="$(<"$body_file")"
 rm -f "$body_file"
 assert_status "Adapter ingest empty body" 400 "$LAST_STATUS"
 
-print_step "25/29 Messages no auth"
+print_step "22/27 Messages no auth"
 request "GET" "/v1/messages"
 assert_status "Messages no auth" 401 "$LAST_STATUS"
 
-print_step "26/29 Discover no auth"
+print_step "23/27 Discover no auth"
 request "POST" "/v1/registry/discover" "{\"capability\":\"test\",\"status\":[\"REGISTERED\"],\"limit\":10}"
 assert_status "Discover no auth" 401 "$LAST_STATUS"
 
-print_step "27/29 Adapter list with auth"
+print_step "24/27 Adapter list with auth"
 request "GET" "/v1/adapter" "" "$TOKEN"
 assert_status "Adapter list with auth" 200 "$LAST_STATUS"
 
 # CLEANUP (moved to end)
 
-print_step "28/29 Leave group"
+print_step "25/27 Leave group"
 request "POST" "/v1/groups/$GROUP_ID/leave" "{}" "$TOKEN"
 assert_status "Leave group" 200 "$LAST_STATUS"
 
-print_step "29/29 Delete agent"
+print_step "26/27 Delete agent"
 request "DELETE" "/v1/agents/$AGENT_ID" "" "$TOKEN"
 assert_status "Delete agent" 200 "$LAST_STATUS"
+
+print_step "27/27 Get auth profile"
+request "GET" "/v1/auth/me" "" "$TOKEN"
+assert_status "Get auth profile" 200 "$LAST_STATUS"
 
 echo
 echo "$PASS/$TOTAL tests passed"

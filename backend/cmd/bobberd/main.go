@@ -21,7 +21,6 @@ import (
 	"github.com/bobberchat/bobberchat/backend/internal/adapter/a2a"
 	grpcadapter "github.com/bobberchat/bobberchat/backend/internal/adapter/grpc"
 	"github.com/bobberchat/bobberchat/backend/internal/adapter/mcp"
-	"github.com/bobberchat/bobberchat/backend/internal/approval"
 	"github.com/bobberchat/bobberchat/backend/internal/auth"
 	"github.com/bobberchat/bobberchat/backend/internal/broker"
 	"github.com/bobberchat/bobberchat/backend/internal/conversation"
@@ -90,7 +89,6 @@ type app struct {
 	authSvc      *auth.Service
 	registrySvc  *registry.Service
 	convSvc      *conversation.Service
-	approvalSvc  *approval.Service
 	broker       *broker.Broker
 	publisher    messagePublisher
 	adapters     map[string]adapter.Adapter
@@ -162,7 +160,6 @@ func main() {
 		authSvc:     auth.NewService(db, cfg.Auth.JWTSecret, emailSender, verificationTTL),
 		registrySvc: registry.NewService(db),
 		convSvc:     conversation.NewService(db),
-		approvalSvc: approval.NewService(db, brok),
 		broker:      brok,
 		publisher:   brok,
 		adapters:    adapters,
@@ -287,9 +284,6 @@ func (a *app) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/connections/{id}/reject", a.requireJWT(a.handleConnectionReject))
 	mux.HandleFunc("POST /v1/blacklist", a.requireJWT(a.handleBlacklist))
 	mux.HandleFunc("DELETE /v1/blacklist/{id}", a.requireJWT(a.handleUnblacklist))
-
-	mux.HandleFunc("GET /v1/approvals/pending", a.requireJWT(a.handlePendingApprovals))
-	mux.HandleFunc("POST /v1/approvals/{id}/decide", a.requireJWT(a.handleDecideApproval))
 
 	mux.HandleFunc("GET /v1/health", a.handleHealth)
 	mux.Handle("GET /v1/metrics", promhttp.HandlerFor(a.metricsReg, promhttp.HandlerOpts{}))
@@ -978,38 +972,6 @@ func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
 		"new_message_id":      newMessageID,
 		"original_message_id": original.ID.String(),
 	})
-}
-
-func (a *app) handlePendingApprovals(w http.ResponseWriter, r *http.Request) {
-	items, err := a.approvalSvc.GetPending(r.Context())
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"approvals": items})
-}
-
-func (a *app) handleDecideApproval(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	var req struct {
-		Decision string `json:"decision"`
-		Reason   string `json:"reason"`
-	}
-	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	if err := a.approvalSvc.Decide(
-		r.Context(),
-		id,
-		persistence.ApprovalStatus(strings.ToUpper(req.Decision)),
-		contextString(r.Context(), ctxUserID),
-		req.Reason,
-	); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"approval_id": id, "decision": req.Decision})
 }
 
 func (a *app) handleAdapterIngest(w http.ResponseWriter, r *http.Request) {
