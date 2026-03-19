@@ -16,7 +16,7 @@ tags:
   - name: Connections
     description: User-to-user connection requests
   - name: Blacklist
-    description: User blacklist management
+    description: Entity blacklist management (user/agent/group pairs)
   - name: Agents
     description: Agent lifecycle management
   - name: Registry
@@ -829,10 +829,11 @@ paths:
     post:
       tags:
         - Blacklist
-      summary: Add a user to blacklist
+      summary: Add an entity to blacklist
       operationId: createBlacklistEntry
       security:
         - BearerAuth: []
+        - AgentSecret: []
       requestBody:
         required: true
         content:
@@ -860,10 +861,11 @@ paths:
     delete:
       tags:
         - Blacklist
-      summary: Remove a user from blacklist
+      summary: Remove an entity from blacklist
       operationId: deleteBlacklistEntry
       security:
         - BearerAuth: []
+        - AgentSecret: []
       parameters:
         - name: id
           in: path
@@ -1166,19 +1168,27 @@ components:
       type: object
       required:
         - id
-        - user_id
-        - blocked_user_id
+        - from_id
+        - from_kind
+        - to_id
+        - to_kind
         - created_at
       properties:
         id:
           type: string
           format: uuid
-        user_id:
+        from_id:
           type: string
           format: uuid
-        blocked_user_id:
+        from_kind:
+          type: string
+          enum: [user, agent, group]
+        to_id:
           type: string
           format: uuid
+        to_kind:
+          type: string
+          enum: [user, agent, group]
         created_at:
           type: string
           format: date-time

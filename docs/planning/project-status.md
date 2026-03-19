@@ -52,7 +52,7 @@ go test -tags=integration ./backend/test/integration/ -v    # ✅ 3/3 pass
 | Package | File | Lines | Description |
 |---------|------|-------|-------------|
 | `backend/internal/protocol` | `envelope.go`, `tags.go`, `version.go` | ~350 | Wire envelope, 7-family tag taxonomy, version negotiation |
-| `backend/internal/persistence` | `postgres.go`, `models.go`, `repositories.go` | ~1,250 | 11 repository interfaces with PostgreSQL implementations, including conversations (with last_message tracking), conversation participants, connection requests and blacklist persistence |
+| `backend/internal/persistence` | `postgres.go`, `models.go`, `repositories.go` | ~1,250 | 11 repository interfaces with PostgreSQL implementations, including conversations (with last_message tracking), conversation participants, polymorphic connection requests and polymorphic blacklist (user/agent/group pairs) persistence |
 | `backend/internal/auth` | `auth.go` | ~503 | Argon2id hashing, JWT (HS256, 1hr TTL), bcrypt for passwords, email verification and resend flows |
 | `backend/internal/email` | `email.go`, `azurecs/azurecs.go`, `console/console.go` | ~214 | Provider-agnostic email sender interface with console and Azure Communication Services (ACS) sender implementations. ACS sender uses HMAC-SHA256 signed REST API calls (`/emails:send`) with connection-string auth |
 | `backend/internal/registry` | `registry.go` | ~115 | Agent discovery and listing |
@@ -465,6 +465,7 @@ bobberchat/
 ├── migrations/016_agent_connections.sql # Renames connection_requests FKs from user to agent
 ├── migrations/017_add_message_participant_kind.sql # Adds participant_kind column to messages table
 ├── migrations/018_connection_request_polymorphic.sql # Polymorphic connection_requests: sender_id, from/to kind (agent/group)
+├── migrations/019_blacklist_polymorphic.sql # Polymorphic blacklist_entries: from/to id+kind (user/agent/group)
 ├── scripts/
 │   ├── e2e-test.sh                  # 27-test API e2e test
 │   └── smoke-test.sh                # Quick deployment smoke test
