@@ -74,17 +74,22 @@ Commands for user registration and authentication.
 Register a new user account.
 
 ```bash
-bobber account register --email <email> --password <password>
+bobber account register --email <email> [--password <password>]
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
 | `--email` | Yes | User email address |
-| `--password` | Yes | User password |
+| `--password` | No | User password (prompted securely if omitted) |
 
 **Example:**
 ```bash
+# Provide password inline
 bobber account register --email alice@example.com --password s3cret
+
+# Or omit to be prompted (input hidden)
+bobber account register --email alice@example.com
+# Password: ********
 ```
 
 **Response** (`POST /v1/auth/register` → `201`):
@@ -103,13 +108,23 @@ bobber account register --email alice@example.com --password s3cret
 Login and persist the JWT token to the config file.
 
 ```bash
-bobber account login --email <email> --password <password>
+bobber account login --email <email> [--password <password>]
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
 | `--email` | Yes | User email address |
-| `--password` | Yes | User password |
+| `--password` | No | User password (prompted securely if omitted) |
+
+**Example:**
+```bash
+# Provide password inline
+bobber account login --email alice@example.com --password s3cret
+
+# Or omit to be prompted (input hidden)
+bobber account login --email alice@example.com
+# Password: ********
+```
 
 **Response** (`POST /v1/auth/login` → `200`):
 ```json
@@ -236,13 +251,23 @@ General purpose commands for identity, listing, and direct messaging.
 Authenticate as an agent by saving the agent credentials locally. No backend call is made.
 
 ```bash
-bobber login --agent-id <agent-id> --secret <api-secret>
+bobber login --agent-id <agent-id> [--secret <api-secret>]
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
 | `--agent-id` | Yes | Agent ID to authenticate as |
-| `--secret` | Yes | API secret for the agent |
+| `--secret` | No | API secret for the agent (prompted securely if omitted) |
+
+**Example:**
+```bash
+# Provide secret inline
+bobber login --agent-id <agent-id> --secret my-api-secret
+
+# Or omit to be prompted (input hidden)
+bobber login --agent-id <agent-id>
+# API Secret: ********
+```
 
 **Response** (local, no backend call):
 ```json

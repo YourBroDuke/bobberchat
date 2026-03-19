@@ -560,9 +560,9 @@ func TestAccountRegister(t *testing.T) {
 		cmd := accountRegisterCmd(testConfig("http://localhost:8080", ""))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"--email", "", "--password", "pw"})
+		cmd.SetArgs([]string{"--email", ""})
 		err := cmd.Execute()
-		if err == nil || !strings.Contains(err.Error(), "--email and --password are required") {
+		if err == nil || !strings.Contains(err.Error(), "--email is required") {
 			t.Fatalf("unexpected err: %v", err)
 		}
 	})
@@ -571,9 +571,9 @@ func TestAccountRegister(t *testing.T) {
 		cmd := accountRegisterCmd(testConfig("http://localhost:8080", ""))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"--email", "u@example.com", "--password", ""})
+		cmd.SetArgs([]string{"--email", "u@example.com"})
 		err := cmd.Execute()
-		if err == nil || !strings.Contains(err.Error(), "--email and --password are required") {
+		if err == nil || !strings.Contains(err.Error(), "--password is required") {
 			t.Fatalf("unexpected err: %v", err)
 		}
 	})
@@ -657,9 +657,9 @@ func TestAccountLogin(t *testing.T) {
 		cmd := accountLoginCmd(testConfig("http://localhost:8080", ""))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"--email", "", "--password", "pw"})
+		cmd.SetArgs([]string{"--email", ""})
 		err := cmd.Execute()
-		if err == nil || !strings.Contains(err.Error(), "--email and --password are required") {
+		if err == nil || !strings.Contains(err.Error(), "--email is required") {
 			t.Fatalf("unexpected err: %v", err)
 		}
 	})
@@ -668,9 +668,9 @@ func TestAccountLogin(t *testing.T) {
 		cmd := accountLoginCmd(testConfig("http://localhost:8080", ""))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"--email", "u@example.com", "--password", ""})
+		cmd.SetArgs([]string{"--email", "u@example.com"})
 		err := cmd.Execute()
-		if err == nil || !strings.Contains(err.Error(), "--email and --password are required") {
+		if err == nil || !strings.Contains(err.Error(), "--password is required") {
 			t.Fatalf("unexpected err: %v", err)
 		}
 	})
@@ -1022,7 +1022,7 @@ func TestLoginCommand(t *testing.T) {
 		cmd := loginCmd(testConfig("http://localhost:8080", ""))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"--agent-id", "agent-1", "--secret", ""})
+		cmd.SetArgs([]string{"--agent-id", "agent-1"})
 		err := cmd.Execute()
 		if err == nil || !strings.Contains(err.Error(), "--secret is required") {
 			t.Fatalf("unexpected err: %v", err)

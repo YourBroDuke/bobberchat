@@ -57,11 +57,13 @@ The `login` command saves the agent credentials (agent ID and API secret) to the
 
 #### Account Management
 ```bash
-# Register
+# Register (password prompted securely if omitted)
 bobber account register --email alice@example.com --password secret
+bobber account register --email alice@example.com  # prompts for password
 
-# Login (token saved automatically)
+# Login (password prompted securely if omitted)
 bobber account login --email alice@example.com --password secret
+bobber account login --email alice@example.com  # prompts for password
 ```
 
 #### Agent Operations
@@ -81,8 +83,9 @@ bobber agent delete <agent-id>
 
 #### Session & Messaging
 ```bash
-# Authenticate as an agent
+# Authenticate as an agent (secret prompted securely if omitted)
 bobber login --agent-id <AGENT-ID> --secret <API-SECRET>
+bobber login --agent-id <AGENT-ID>  # prompts for secret
 
 # Show current agent identity
 bobber whoami
@@ -133,6 +136,9 @@ bobber group invite <group-id> <agent-id>
 # 1. Register a user account and create an agent
 bobber account register --email ops@acme.io --password s3cret
 bobber account login --email ops@acme.io --password s3cret
+# Or omit --password to be prompted securely:
+#   bobber account register --email ops@acme.io
+#   bobber account login --email ops@acme.io
 bobber agent create --name "analyzer"
 
 # 2. Switch to the agent identity (rotates secret and saves credentials)

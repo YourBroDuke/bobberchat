@@ -37,6 +37,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"golang.org/x/term"
 )
 
 type cliConfig struct{ v *viper.Viper }
@@ -102,8 +103,18 @@ func accountRegisterCmd(cfg *cliConfig) *cobra.Command {
 		Use:   "register",
 		Short: "Register a new user",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			if email == "" || password == "" {
-				return errors.New("--email and --password are required")
+			if email == "" {
+				return errors.New("--email is required")
+			}
+			if password == "" {
+				p, err := readSecret("Password: ")
+				if err != nil {
+					return fmt.Errorf("--password is required: %w", err)
+				}
+				password = p
+			}
+			if password == "" {
+				return errors.New("password must not be empty")
 			}
 			resp, err := doJSON(http.MethodPost, cfg.backendURL()+"/v1/auth/register", "", map[string]any{
 				"email":    email,
@@ -117,9 +128,8 @@ func accountRegisterCmd(cfg *cliConfig) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&email, "email", "", "user email")
-	cmd.Flags().StringVar(&password, "password", "", "user password")
+	cmd.Flags().StringVar(&password, "password", "", "user password (prompted if omitted)")
 	_ = cmd.MarkFlagRequired("email")
-	_ = cmd.MarkFlagRequired("password")
 	return cmd
 }
 
@@ -129,8 +139,18 @@ func accountLoginCmd(cfg *cliConfig) *cobra.Command {
 		Use:   "login",
 		Short: "Login and persist JWT token",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			if email == "" || password == "" {
-				return errors.New("--email and --password are required")
+			if email == "" {
+				return errors.New("--email is required")
+			}
+			if password == "" {
+				p, err := readSecret("Password: ")
+				if err != nil {
+					return fmt.Errorf("--password is required: %w", err)
+				}
+				password = p
+			}
+			if password == "" {
+				return errors.New("password must not be empty")
 			}
 
 			resp, err := doJSON(http.MethodPost, cfg.backendURL()+"/v1/auth/login", "", map[string]any{
@@ -152,9 +172,8 @@ func accountLoginCmd(cfg *cliConfig) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&email, "email", "", "user email")
-	cmd.Flags().StringVar(&password, "password", "", "user password")
+	cmd.Flags().StringVar(&password, "password", "", "user password (prompted if omitted)")
 	_ = cmd.MarkFlagRequired("email")
-	_ = cmd.MarkFlagRequired("password")
 	return cmd
 }
 
@@ -281,7 +300,14 @@ func loginCmd(cfg *cliConfig) *cobra.Command {
 				return errors.New("--agent-id is required")
 			}
 			if strings.TrimSpace(secret) == "" {
-				return errors.New("--secret is required")
+				s, err := readSecret("API Secret: ")
+				if err != nil {
+					return fmt.Errorf("--secret is required: %w", err)
+				}
+				secret = s
+			}
+			if strings.TrimSpace(secret) == "" {
+				return errors.New("secret must not be empty")
 			}
 			cfg.v.Set("agent_id", agentID)
 			cfg.v.Set("api_secret", secret)
@@ -293,9 +319,8 @@ func loginCmd(cfg *cliConfig) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&agentID, "agent-id", "", "agent ID")
-	cmd.Flags().StringVar(&secret, "secret", "", "agent API secret")
+	cmd.Flags().StringVar(&secret, "secret", "", "agent API secret (prompted if omitted)")
 	_ = cmd.MarkFlagRequired("agent-id")
-	_ = cmd.MarkFlagRequired("secret")
 	return cmd
 }
 
@@ -639,6 +664,23 @@ func groupInviteCmd(cfg *cliConfig) *cobra.Command {
 			return nil
 		},
 	}
+}
+
+// readSecret prints prompt to stderr and reads a line from the terminal with
+// echo disabled. It returns an error when stdin is not a terminal (e.g. piped
+// input) so callers can distinguish "interactive" from "scripted" usage.
+func readSecret(prompt string) (string, error) {
+	fd := int(os.Stdin.Fd())
+	if !term.IsTerminal(fd) {
+		return "", errors.New("not a terminal — provide the value via flag or environment variable")
+	}
+	fmt.Fprint(os.Stderr, prompt)
+	b, err := term.ReadPassword(fd)
+	fmt.Fprintln(os.Stderr)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
 
 func doJSON(method, url, token string, body any) (map[string]any, error) {
