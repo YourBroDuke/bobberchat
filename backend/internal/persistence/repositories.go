@@ -474,9 +474,10 @@ func (r *pgConversationRepository) ListByParticipantAndType(ctx context.Context,
 
 func (r *pgConversationRepository) ListItems(ctx context.Context, participantID uuid.UUID, kind ParticipantType, convType *ConversationType) ([]ConversationListItem, error) {
 	query := `
-		SELECT item_id, conv_type, item_name, last_message_at FROM (
+		SELECT item_id, conversation_id, conv_type, item_name, last_message_at FROM (
 			SELECT
 				CASE WHEN c.id_low = $1 THEN c.id_high ELSE c.id_low END AS item_id,
+				c.id AS conversation_id,
 				c.type AS conv_type,
 				COALESCE(u.email, a.display_name, 'unknown') AS item_name,
 				c.last_message_at
@@ -493,6 +494,7 @@ func (r *pgConversationRepository) ListItems(ctx context.Context, participantID 
 
 			SELECT
 				g.id AS item_id,
+				c.id AS conversation_id,
 				c.type AS conv_type,
 				g.name AS item_name,
 				c.last_message_at
@@ -523,7 +525,7 @@ func (r *pgConversationRepository) ListItems(ctx context.Context, participantID 
 	for rows.Next() {
 		var item ConversationListItem
 		var ct string
-		if err := rows.Scan(&item.ID, &ct, &item.Name, &item.LastMessageAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.ConversationID, &ct, &item.Name, &item.LastMessageAt); err != nil {
 			return nil, fmt.Errorf("scan conversation list item: %w", err)
 		}
 		item.Type = ConversationType(ct)
@@ -538,9 +540,10 @@ func (r *pgConversationRepository) ListItems(ctx context.Context, participantID 
 
 func (r *pgConversationRepository) ListUnreadByParticipant(ctx context.Context, participantID uuid.UUID, kind ParticipantType) ([]ConversationListItem, error) {
 	query := `
-		SELECT item_id, conv_type, item_name, last_message_at FROM (
+		SELECT item_id, conversation_id, conv_type, item_name, last_message_at FROM (
 			SELECT
 				CASE WHEN c.id_low = $1 THEN c.id_high ELSE c.id_low END AS item_id,
+				c.id AS conversation_id,
 				c.type AS conv_type,
 				COALESCE(u.email, a.display_name, 'unknown') AS item_name,
 				c.last_message_at,
@@ -564,6 +567,7 @@ func (r *pgConversationRepository) ListUnreadByParticipant(ctx context.Context, 
 
 			SELECT
 				g.id AS item_id,
+				c.id AS conversation_id,
 				c.type AS conv_type,
 				g.name AS item_name,
 				c.last_message_at,
@@ -596,7 +600,7 @@ func (r *pgConversationRepository) ListUnreadByParticipant(ctx context.Context, 
 	for rows.Next() {
 		var item ConversationListItem
 		var ct string
-		if err := rows.Scan(&item.ID, &ct, &item.Name, &item.LastMessageAt); err != nil {
+		if err := rows.Scan(&item.ID, &item.ConversationID, &ct, &item.Name, &item.LastMessageAt); err != nil {
 			return nil, fmt.Errorf("scan unread conversation item: %w", err)
 		}
 		item.Type = ConversationType(ct)

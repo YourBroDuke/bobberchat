@@ -334,6 +334,10 @@ paths:
                       owner_user_id:
                         type: string
                         format: uuid
+                      conversation_id:
+                        type: string
+                        format: uuid
+                        description: DM conversation ID between caller and this agent
                       created_at:
                         type: string
                         format: date-time
@@ -349,6 +353,10 @@ paths:
                         type: string
                       email_verified:
                         type: boolean
+                      conversation_id:
+                        type: string
+                        format: uuid
+                        description: DM conversation ID between caller and this user
                       created_at:
                         type: string
                         format: date-time
@@ -365,6 +373,10 @@ paths:
                       owner_id:
                         type: string
                         format: uuid
+                      conversation_id:
+                        type: string
+                        format: uuid
+                        description: Group conversation ID
                       created_at:
                         type: string
                         format: date-time
@@ -689,6 +701,10 @@ paths:
                   message_id:
                     type: string
                     format: uuid
+                  conversation_id:
+                    type: string
+                    format: uuid
+                    description: The conversation this message belongs to
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1158,6 +1174,7 @@ components:
       description: Unified conversation list item for both DMs and groups
       required:
         - id
+        - conversation_id
         - type
         - name
       properties:
@@ -1165,6 +1182,10 @@ components:
           type: string
           format: uuid
           description: For DMs, the peer user/agent ID. For groups, the group ID.
+        conversation_id:
+          type: string
+          format: uuid
+          description: The conversation UUID, usable with the poll endpoint.
         type:
           type: string
           enum: [direct, group]

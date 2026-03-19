@@ -108,10 +108,11 @@ type ConnectionRequest struct {
 // For DMs, ID is the peer's user/agent ID and Name is their email/display_name.
 // For groups, ID is the group ID and Name is the group name.
 type ConversationListItem struct {
-	ID            uuid.UUID        `json:"id"`
-	Type          ConversationType `json:"type"`
-	Name          string           `json:"name"`
-	LastMessageAt *time.Time       `json:"last_message_at,omitempty"`
+	ID             uuid.UUID        `json:"id"`
+	ConversationID uuid.UUID        `json:"conversation_id"`
+	Type           ConversationType `json:"type"`
+	Name           string           `json:"name"`
+	LastMessageAt  *time.Time       `json:"last_message_at,omitempty"`
 }
 
 type BlacklistEntry struct {

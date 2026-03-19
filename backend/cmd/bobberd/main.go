@@ -494,41 +494,77 @@ func (a *app) handleEntityInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Determine caller identity for conversation lookup.
+	var callerID uuid.UUID
+	var callerKind persistence.ParticipantType
+	if agentRaw := contextString(r.Context(), ctxAgentID); agentRaw != "" {
+		callerID, _ = uuid.Parse(agentRaw)
+		callerKind = persistence.ParticipantTypeAgent
+	} else if userRaw := contextString(r.Context(), ctxUserID); userRaw != "" {
+		callerID, _ = uuid.Parse(userRaw)
+		callerKind = persistence.ParticipantTypeUser
+	}
+
 	repos := persistence.NewPostgresRepositories(a.db)
+
+	// resolveDirectConvID looks up the DM conversation between caller and target.
+	// Returns nil if caller is unknown or lookup fails (best-effort).
+	resolveDirectConvID := func(targetID uuid.UUID, targetKind persistence.ParticipantType) *uuid.UUID {
+		if callerID == uuid.Nil {
+			return nil
+		}
+		conv, err := a.convSvc.GetOrCreateDirect(r.Context(), callerID, targetID, callerKind, targetKind)
+		if err != nil {
+			return nil
+		}
+		return &conv.ID
+	}
 
 	agent, err := repos.Agents.GetByID(r.Context(), uid)
 	if err == nil {
-		writeJSON(w, http.StatusOK, map[string]any{
+		resp := map[string]any{
 			"type":          "agent",
 			"id":            agent.ID,
 			"display_name":  agent.DisplayName,
 			"owner_user_id": agent.OwnerUserID,
 			"created_at":    agent.CreatedAt,
-		})
+		}
+		if convID := resolveDirectConvID(agent.ID, persistence.ParticipantTypeAgent); convID != nil {
+			resp["conversation_id"] = *convID
+		}
+		writeJSON(w, http.StatusOK, resp)
 		return
 	}
 
 	user, err := repos.Users.GetByID(r.Context(), uid)
 	if err == nil {
-		writeJSON(w, http.StatusOK, map[string]any{
+		resp := map[string]any{
 			"type":           "user",
 			"id":             user.ID,
 			"email":          user.Email,
 			"email_verified": user.EmailVerified,
 			"created_at":     user.CreatedAt,
-		})
+		}
+		if convID := resolveDirectConvID(user.ID, persistence.ParticipantTypeUser); convID != nil {
+			resp["conversation_id"] = *convID
+		}
+		writeJSON(w, http.StatusOK, resp)
 		return
 	}
 
 	group, err := repos.Groups.GetByID(r.Context(), uid)
 	if err == nil {
-		writeJSON(w, http.StatusOK, map[string]any{
+		resp := map[string]any{
 			"type":       "group",
 			"id":         group.ID,
 			"name":       group.Name,
 			"owner_id":   group.OwnerID,
 			"created_at": group.CreatedAt,
-		})
+		}
+		if group.ConversationID != nil {
+			resp["conversation_id"] = *group.ConversationID
+		}
+		writeJSON(w, http.StatusOK, resp)
 		return
 	}
 
@@ -1077,10 +1113,37 @@ func (a *app) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusAccepted, map[string]any{
+	resp := map[string]any{
 		"sent":       true,
 		"message_id": messageID,
-	})
+	}
+
+	fromID, _ := uuid.Parse(from)
+	toID, _ := uuid.Parse(req.To)
+	if fromID != uuid.Nil && toID != uuid.Nil {
+		var fromKind, toKind persistence.ParticipantType
+		if contextString(r.Context(), ctxAgentID) != "" {
+			fromKind = persistence.ParticipantTypeAgent
+		} else {
+			fromKind = persistence.ParticipantTypeUser
+		}
+
+		repos := persistence.NewPostgresRepositories(a.db)
+		if group, err := repos.Groups.GetByID(r.Context(), toID); err == nil && group.ConversationID != nil {
+			resp["conversation_id"] = *group.ConversationID
+		} else {
+			if _, err := repos.Agents.GetByID(r.Context(), toID); err == nil {
+				toKind = persistence.ParticipantTypeAgent
+			} else {
+				toKind = persistence.ParticipantTypeUser
+			}
+			if conv, err := a.convSvc.GetOrCreateDirect(r.Context(), fromID, toID, fromKind, toKind); err == nil {
+				resp["conversation_id"] = conv.ID
+			}
+		}
+	}
+
+	writeJSON(w, http.StatusAccepted, resp)
 }
 
 func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
