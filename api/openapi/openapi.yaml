@@ -712,6 +712,15 @@ paths:
                 target_id:
                   type: string
                   format: uuid
+                  description: ID of the target entity (agent or group). Server auto-detects the kind.
+                from_id:
+                  type: string
+                  format: uuid
+                  description: Override the from entity ID (e.g. group ID for group invites). Defaults to authenticated agent.
+                from_kind:
+                  type: string
+                  enum: [agent, group]
+                  description: Kind of the from entity. Required when from_id is provided.
       responses:
         '201':
           description: Connection request created
@@ -1113,8 +1122,11 @@ components:
       type: object
       required:
         - id
-        - from_agent_id
-        - to_agent_id
+        - sender_id
+        - from_id
+        - from_kind
+        - to_id
+        - to_kind
         - status
         - created_at
         - updated_at
@@ -1122,12 +1134,24 @@ components:
         id:
           type: string
           format: uuid
-        from_agent_id:
+        sender_id:
           type: string
           format: uuid
-        to_agent_id:
+          description: The agent who initiated the request.
+        from_id:
           type: string
           format: uuid
+          description: The source entity ID (agent or group).
+        from_kind:
+          type: string
+          enum: [agent, group]
+        to_id:
+          type: string
+          format: uuid
+          description: The target entity ID (agent or group).
+        to_kind:
+          type: string
+          enum: [agent, group]
         status:
           type: string
           enum: [PENDING, ACCEPTED, REJECTED]

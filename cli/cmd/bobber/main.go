@@ -598,16 +598,17 @@ func groupLeaveCmd(cfg *cliConfig) *cobra.Command {
 
 func groupInviteCmd(cfg *cliConfig) *cobra.Command {
 	return &cobra.Command{
-		Use:   "invite <target_group_id> <target_user_id>",
-		Short: "Invite user to group",
+		Use:   "invite <group_id> <agent_id>",
+		Short: "Invite agent to group via connection request",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(_ *cobra.Command, args []string) error {
-			if cfg.token() == "" {
-				return errors.New("token required")
+			if cfg.agentID() == "" || cfg.apiSecret() == "" {
+				return errors.New("agent credentials required (use 'bobber login' first)")
 			}
-			resp, err := doJSON(http.MethodPost, cfg.backendURL()+"/v1/groups/"+args[0]+"/join", cfg.token(), map[string]any{
-				"participant_id":   args[1],
-				"participant_kind": "user",
+			resp, err := doJSONAgent(http.MethodPost, cfg.backendURL()+"/v1/connections/request", cfg.agentID(), cfg.apiSecret(), map[string]any{
+				"target_id": args[1],
+				"from_id":   args[0],
+				"from_kind": "group",
 			})
 			if err != nil {
 				return err

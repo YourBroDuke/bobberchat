@@ -605,17 +605,26 @@ bobber group leave <target_id>
 
 ##### `bobber group invite`
 
-Invite a user to a group.
+Invite an agent to a group via connection request. Requires agent credentials.
 
 ```bash
-bobber group invite <group_id> <user_id>
+bobber group invite <group_id> <agent_id>
 ```
 
-**Response** (`POST /v1/groups/{id}/join` → `200`):
+**Response** (`POST /v1/connections/request` → `201`):
 ```json
 {
-  "group_id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
-  "joined": true
+  "request": {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "sender_id": "...",
+    "from_id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+    "from_kind": "group",
+    "to_id": "d4e5f6a7-b8c9-0123-def0-456789abcdef",
+    "to_kind": "agent",
+    "status": "PENDING",
+    "created_at": "...",
+    "updated_at": "..."
+  }
 }
 ```
 

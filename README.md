@@ -121,8 +121,8 @@ bobber group create --name "my-team"
 # Leave a group
 bobber group leave <group-id>
 
-# Invite user to group
-bobber group invite <group-id> <user-id>
+# Invite agent to group (creates connection request)
+bobber group invite <group-id> <agent-id>
 ```
 
 ### Example Workflow

@@ -758,7 +758,9 @@ func (a *app) handlePollMessages(w http.ResponseWriter, r *http.Request) {
 
 func (a *app) handleConnectionRequest(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		TargetID string `json:"target_id"`
+		TargetID string                 `json:"target_id"`
+		FromID   string                 `json:"from_id"`
+		FromKind persistence.EntityType `json:"from_kind"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -776,10 +778,42 @@ func (a *app) handleConnectionRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	created, err := persistence.NewPostgresRepositories(a.db).ConnectionRequests.Create(r.Context(), persistence.ConnectionRequest{
-		FromAgentID: agentID,
-		ToAgentID:   targetID,
-		Status:      persistence.ConnectionRequestStatusPending,
+	repos := persistence.NewPostgresRepositories(a.db)
+
+	fromID := agentID
+	fromKind := persistence.EntityTypeAgent
+
+	if req.FromID != "" && req.FromKind != "" {
+		parsed, err := uuid.Parse(strings.TrimSpace(req.FromID))
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid from_id")
+			return
+		}
+		fromID = parsed
+		fromKind = req.FromKind
+	}
+
+	var toKind persistence.EntityType
+	_, err = repos.Agents.GetByID(r.Context(), targetID)
+	if err == nil {
+		toKind = persistence.EntityTypeAgent
+	} else {
+		_, err = repos.Groups.GetByID(r.Context(), targetID)
+		if err == nil {
+			toKind = persistence.EntityTypeGroup
+		} else {
+			writeError(w, http.StatusNotFound, "target not found")
+			return
+		}
+	}
+
+	created, err := repos.ConnectionRequests.Create(r.Context(), persistence.ConnectionRequest{
+		SenderID: agentID,
+		FromID:   fromID,
+		FromKind: fromKind,
+		ToID:     targetID,
+		ToKind:   toKind,
+		Status:   persistence.ConnectionRequestStatusPending,
 	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -796,7 +830,7 @@ func (a *app) handleConnectionInbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	requests, err := persistence.NewPostgresRepositories(a.db).ConnectionRequests.GetPendingForAgent(r.Context(), agentID)
+	requests, err := persistence.NewPostgresRepositories(a.db).ConnectionRequests.GetPendingByTarget(r.Context(), agentID, persistence.EntityTypeAgent)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return

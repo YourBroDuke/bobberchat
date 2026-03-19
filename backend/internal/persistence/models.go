@@ -77,6 +77,13 @@ type Message struct {
 	Timestamp       time.Time       `json:"timestamp"`
 }
 
+type EntityType string
+
+const (
+	EntityTypeAgent EntityType = "agent"
+	EntityTypeGroup EntityType = "group"
+)
+
 type ConnectionRequestStatus string
 
 const (
@@ -86,12 +93,15 @@ const (
 )
 
 type ConnectionRequest struct {
-	ID          uuid.UUID               `json:"id"`
-	FromAgentID uuid.UUID               `json:"from_agent_id"`
-	ToAgentID   uuid.UUID               `json:"to_agent_id"`
-	Status      ConnectionRequestStatus `json:"status"`
-	CreatedAt   time.Time               `json:"created_at"`
-	UpdatedAt   time.Time               `json:"updated_at"`
+	ID        uuid.UUID               `json:"id"`
+	SenderID  uuid.UUID               `json:"sender_id"`
+	FromID    uuid.UUID               `json:"from_id"`
+	FromKind  EntityType              `json:"from_kind"`
+	ToID      uuid.UUID               `json:"to_id"`
+	ToKind    EntityType              `json:"to_kind"`
+	Status    ConnectionRequestStatus `json:"status"`
+	CreatedAt time.Time               `json:"created_at"`
+	UpdatedAt time.Time               `json:"updated_at"`
 }
 
 type BlacklistEntry struct {

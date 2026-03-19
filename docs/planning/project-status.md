@@ -173,6 +173,7 @@ Key implementation details:
 | `migrations/004_remove_agent_status.sql` | Removes `agent_status` enum type, `status` column, and associated index from agents table |
 | `migrations/005_remove_agent_version_heartbeat.sql` | Removes `version`, `connected_at`, `last_heartbeat` columns from agents table |
 | `migrations/016_agent_connections.sql` | Renames `from_user_id`/`to_user_id` → `from_agent_id`/`to_agent_id` in `connection_requests`, re-points FKs to `agents(agent_id)` |
+| `migrations/018_connection_request_polymorphic.sql` | Refactors `connection_requests` to polymorphic model — adds `sender_id`, `from_kind`, `to_kind` (entity_type enum), renames columns to `from_id`/`to_id` |
 | `configs/backend.yaml` | Default backend configuration |
 | `Makefile` | Build, test, lint, migrate, run targets |
 | `scripts/e2e-test.sh` | 27-test curl-based API e2e test script |
@@ -463,6 +464,7 @@ bobberchat/
 ├── migrations/013_conversation_last_message.sql # Adds last_message_id, last_message_at to conversations with backfill
 ├── migrations/016_agent_connections.sql # Renames connection_requests FKs from user to agent
 ├── migrations/017_add_message_participant_kind.sql # Adds participant_kind column to messages table
+├── migrations/018_connection_request_polymorphic.sql # Polymorphic connection_requests: sender_id, from/to kind (agent/group)
 ├── scripts/
 │   ├── e2e-test.sh                  # 27-test API e2e test
 │   └── smoke-test.sh                # Quick deployment smoke test

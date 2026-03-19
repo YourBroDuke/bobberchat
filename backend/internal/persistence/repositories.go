@@ -67,9 +67,9 @@ type MessageRepository interface {
 
 type ConnectionRequestRepository interface {
 	Create(ctx context.Context, req ConnectionRequest) (*ConnectionRequest, error)
-	GetPendingForAgent(ctx context.Context, agentID uuid.UUID) ([]ConnectionRequest, error)
+	GetPendingByTarget(ctx context.Context, toID uuid.UUID, toKind EntityType) ([]ConnectionRequest, error)
 	UpdateStatus(ctx context.Context, requestID uuid.UUID, status ConnectionRequestStatus) error
-	GetByFromAndTo(ctx context.Context, fromAgentID, toAgentID uuid.UUID) (*ConnectionRequest, error)
+	GetByFromAndTo(ctx context.Context, fromID uuid.UUID, fromKind EntityType, toID uuid.UUID, toKind EntityType) (*ConnectionRequest, error)
 }
 
 type BlacklistRepository interface {
@@ -750,10 +750,10 @@ func (r *pgConnectionRequestRepository) Create(ctx context.Context, req Connecti
 	}
 
 	row := r.db.Pool().QueryRow(ctx, `
-		INSERT INTO connection_requests (id, from_agent_id, to_agent_id, status, created_at, updated_at)
-		VALUES ($1,$2,$3,$4,$5,$6)
-		RETURNING id, from_agent_id, to_agent_id, status, created_at, updated_at
-	`, req.ID, req.FromAgentID, req.ToAgentID, string(req.Status), req.CreatedAt, req.UpdatedAt)
+		INSERT INTO connection_requests (id, sender_id, from_id, from_kind, to_id, to_kind, status, created_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+		RETURNING id, sender_id, from_id, from_kind, to_id, to_kind, status, created_at, updated_at
+	`, req.ID, req.SenderID, req.FromID, string(req.FromKind), req.ToID, string(req.ToKind), string(req.Status), req.CreatedAt, req.UpdatedAt)
 
 	created, err := scanConnectionRequest(row)
 	if err != nil {
@@ -762,13 +762,13 @@ func (r *pgConnectionRequestRepository) Create(ctx context.Context, req Connecti
 	return created, nil
 }
 
-func (r *pgConnectionRequestRepository) GetPendingForAgent(ctx context.Context, agentID uuid.UUID) ([]ConnectionRequest, error) {
+func (r *pgConnectionRequestRepository) GetPendingByTarget(ctx context.Context, toID uuid.UUID, toKind EntityType) ([]ConnectionRequest, error) {
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT id, from_agent_id, to_agent_id, status, created_at, updated_at
+		SELECT id, sender_id, from_id, from_kind, to_id, to_kind, status, created_at, updated_at
 		FROM connection_requests
-		WHERE to_agent_id = $1 AND status = 'PENDING'
+		WHERE to_id = $1 AND to_kind = $2 AND status = 'PENDING'
 		ORDER BY created_at DESC
-	`, agentID)
+	`, toID, string(toKind))
 	if err != nil {
 		return nil, fmt.Errorf("get pending connection requests: %w", err)
 	}
@@ -803,12 +803,12 @@ func (r *pgConnectionRequestRepository) UpdateStatus(ctx context.Context, reques
 	return nil
 }
 
-func (r *pgConnectionRequestRepository) GetByFromAndTo(ctx context.Context, fromAgentID, toAgentID uuid.UUID) (*ConnectionRequest, error) {
+func (r *pgConnectionRequestRepository) GetByFromAndTo(ctx context.Context, fromID uuid.UUID, fromKind EntityType, toID uuid.UUID, toKind EntityType) (*ConnectionRequest, error) {
 	row := r.db.Pool().QueryRow(ctx, `
-		SELECT id, from_agent_id, to_agent_id, status, created_at, updated_at
+		SELECT id, sender_id, from_id, from_kind, to_id, to_kind, status, created_at, updated_at
 		FROM connection_requests
-		WHERE from_agent_id = $1 AND to_agent_id = $2
-	`, fromAgentID, toAgentID)
+		WHERE from_id = $1 AND from_kind = $2 AND to_id = $3 AND to_kind = $4
+	`, fromID, string(fromKind), toID, string(toKind))
 	return scanConnectionRequest(row)
 }
 
@@ -994,10 +994,14 @@ func scanConversationParticipant(scanner rowScanner) (*ConversationParticipant, 
 func scanConnectionRequest(scanner rowScanner) (*ConnectionRequest, error) {
 	out := ConnectionRequest{}
 	var status string
+	var fromKind, toKind string
 	err := scanner.Scan(
 		&out.ID,
-		&out.FromAgentID,
-		&out.ToAgentID,
+		&out.SenderID,
+		&out.FromID,
+		&fromKind,
+		&out.ToID,
+		&toKind,
 		&status,
 		&out.CreatedAt,
 		&out.UpdatedAt,
@@ -1009,6 +1013,8 @@ func scanConnectionRequest(scanner rowScanner) (*ConnectionRequest, error) {
 		return nil, fmt.Errorf("scan connection request: %w", err)
 	}
 	out.Status = ConnectionRequestStatus(status)
+	out.FromKind = EntityType(fromKind)
+	out.ToKind = EntityType(toKind)
 	return &out, nil
 }
 
