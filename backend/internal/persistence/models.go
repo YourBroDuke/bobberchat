@@ -104,6 +104,16 @@ type ConnectionRequest struct {
 	UpdatedAt time.Time               `json:"updated_at"`
 }
 
+// ConversationListItem is a unified DTO for "bobber ls" responses.
+// For DMs, ID is the peer's user/agent ID and Name is their email/display_name.
+// For groups, ID is the group ID and Name is the group name.
+type ConversationListItem struct {
+	ID            uuid.UUID        `json:"id"`
+	Type          ConversationType `json:"type"`
+	Name          string           `json:"name"`
+	LastMessageAt *time.Time       `json:"last_message_at,omitempty"`
+}
+
 type BlacklistEntry struct {
 	ID        uuid.UUID  `json:"id"`
 	FromID    uuid.UUID  `json:"from_id"`

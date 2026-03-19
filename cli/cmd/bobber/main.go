@@ -332,26 +332,23 @@ func logoutCmd(cfg *cliConfig) *cobra.Command {
 func lsCmd(cfg *cliConfig) *cobra.Command {
 	return &cobra.Command{
 		Use:   "ls [dms|groups]",
-		Short: "List DM conversations or groups",
+		Short: "List conversations",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			if cfg.token() == "" {
 				return errors.New("token required")
 			}
 
-			kind := "dms"
+			endpoint := "/v1/conversations"
 			if len(args) == 1 {
-				kind = args[0]
-			}
-
-			var endpoint string
-			switch kind {
-			case "dms":
-				endpoint = "/v1/conversations?type=direct"
-			case "groups":
-				endpoint = "/v1/groups"
-			default:
-				return errors.New("invalid list target: must be dms or groups")
+				switch args[0] {
+				case "dms":
+					endpoint += "?type=direct"
+				case "groups":
+					endpoint += "?type=group"
+				default:
+					return errors.New("invalid list target: must be dms or groups")
+				}
 			}
 
 			resp, err := doJSON(http.MethodGet, cfg.backendURL()+endpoint, cfg.token(), nil)

@@ -85,6 +85,17 @@ func (s *Service) ListConversationsByType(ctx context.Context, participantID uui
 	return repos.Conversations.ListByParticipantAndType(ctx, participantID, kind, convType)
 }
 
+func (s *Service) ListConversationItems(ctx context.Context, participantID uuid.UUID, kind persistence.ParticipantType, convType *persistence.ConversationType) ([]persistence.ConversationListItem, error) {
+	if s == nil || s.db == nil {
+		return nil, persistence.ErrInvalidInput
+	}
+	if participantID == uuid.Nil {
+		return nil, persistence.ErrInvalidInput
+	}
+	repos := persistence.NewPostgresRepositories(s.db)
+	return repos.Conversations.ListItems(ctx, participantID, kind, convType)
+}
+
 func (s *Service) JoinGroup(ctx context.Context, groupID, participantID string, kind persistence.ParticipantType) error {
 	if s == nil || s.db == nil || groupID == "" || participantID == "" || kind == "" {
 		return persistence.ErrInvalidInput

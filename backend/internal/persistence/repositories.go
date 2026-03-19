@@ -42,6 +42,7 @@ type ConversationRepository interface {
 	GetDirectByPair(ctx context.Context, idLow, idHigh uuid.UUID) (*Conversation, error)
 	ListByParticipant(ctx context.Context, participantID uuid.UUID, kind ParticipantType) ([]Conversation, error)
 	ListByParticipantAndType(ctx context.Context, participantID uuid.UUID, kind ParticipantType, convType ConversationType) ([]Conversation, error)
+	ListItems(ctx context.Context, participantID uuid.UUID, kind ParticipantType, convType *ConversationType) ([]ConversationListItem, error)
 }
 
 type ConversationParticipantRepository interface {
@@ -465,6 +466,70 @@ func (r *pgConversationRepository) ListByParticipantAndType(ctx context.Context,
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate conversations by participant and type: %w", err)
+	}
+
+	return out, nil
+}
+
+func (r *pgConversationRepository) ListItems(ctx context.Context, participantID uuid.UUID, kind ParticipantType, convType *ConversationType) ([]ConversationListItem, error) {
+	query := `
+		SELECT item_id, conv_type, item_name, last_message_at FROM (
+			SELECT
+				CASE WHEN c.id_low = $1 THEN c.id_high ELSE c.id_low END AS item_id,
+				c.type AS conv_type,
+				COALESCE(u.email, a.display_name, 'unknown') AS item_name,
+				c.last_message_at
+			FROM conversations c
+			JOIN conversation_participants cp ON cp.conversation_id = c.id
+			LEFT JOIN users u ON u.id = CASE WHEN c.id_low = $1 THEN c.id_high ELSE c.id_low END
+			LEFT JOIN agents a ON a.agent_id = CASE WHEN c.id_low = $1 THEN c.id_high ELSE c.id_low END
+			WHERE cp.participant_id = $1
+				AND cp.participant_kind = $2
+				AND c.type = 'direct'
+				AND ($3::text IS NULL OR c.type = $3)
+
+			UNION ALL
+
+			SELECT
+				g.id AS item_id,
+				c.type AS conv_type,
+				g.name AS item_name,
+				c.last_message_at
+			FROM conversations c
+			JOIN conversation_participants cp ON cp.conversation_id = c.id
+			JOIN chat_groups g ON g.conversation_id = c.id
+			WHERE cp.participant_id = $1
+				AND cp.participant_kind = $2
+				AND c.type = 'group'
+				AND ($3::text IS NULL OR c.type = $3)
+		) sub
+		ORDER BY last_message_at DESC NULLS LAST
+	`
+
+	var convTypeArg *string
+	if convType != nil {
+		s := string(*convType)
+		convTypeArg = &s
+	}
+
+	rows, err := r.db.Pool().Query(ctx, query, participantID, string(kind), convTypeArg)
+	if err != nil {
+		return nil, fmt.Errorf("list conversation items: %w", err)
+	}
+	defer rows.Close()
+
+	out := make([]ConversationListItem, 0)
+	for rows.Next() {
+		var item ConversationListItem
+		var ct string
+		if err := rows.Scan(&item.ID, &ct, &item.Name, &item.LastMessageAt); err != nil {
+			return nil, fmt.Errorf("scan conversation list item: %w", err)
+		}
+		item.Type = ConversationType(ct)
+		out = append(out, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate conversation list items: %w", err)
 	}
 
 	return out, nil

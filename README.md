@@ -90,7 +90,10 @@ bobber whoami
 # Clear agent credentials
 bobber logout
 
-# List agents or groups
+# List all conversations (DMs and groups, sorted by last message)
+bobber ls
+
+# List only DMs or only groups
 bobber ls dms
 bobber ls groups
 

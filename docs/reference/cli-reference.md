@@ -290,7 +290,7 @@ Local-only operation. Clears the agent ID, API secret, and any JWT token from th
 
 ##### `bobber ls`
 
-List DM conversations or groups.
+List conversations. With no argument, returns all conversations (DMs and groups) sorted by last message time descending.
 
 ```bash
 bobber ls [dms|groups]
@@ -298,37 +298,31 @@ bobber ls [dms|groups]
 
 | Argument | Default | Description |
 |----------|---------|-------------|
-| `[dms\|groups]` | `dms` | Target to list |
+| `[dms\|groups]` | *(none — all types)* | Optional filter by conversation type |
 
-**Response for `bobber ls dms`** (`GET /v1/conversations?type=direct` → `200`):
+**Response for `bobber ls`** (`GET /v1/conversations` → `200`) — all conversations:
 ```json
 {
   "conversations": [
     {
       "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
       "type": "direct",
-      "id_low": "550e8400-e29b-41d4-a716-446655440000",
-      "id_high": "660f9500-f3ac-52e5-b827-557766550111",
-      "created_at": "2026-03-17T12:00:00Z"
+      "name": "alice@example.com",
+      "last_message_at": "2026-03-19T08:30:00Z"
+    },
+    {
+      "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+      "type": "group",
+      "name": "my-team",
+      "last_message_at": "2026-03-18T15:00:00Z"
     }
   ]
 }
 ```
 
-**Response for `bobber ls groups`** (`GET /v1/groups` → `200`):
-```json
-{
-  "groups": [
-    {
-      "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
-      "name": "my-team",
-      "description": "",
-      "owner_id": "550e8400-e29b-41d4-a716-446655440000",
-      "created_at": "2026-03-17T12:00:00Z"
-    }
-  ]
-}
-```
+**Response for `bobber ls dms`** (`GET /v1/conversations?type=direct` → `200`) — same structure, filtered to DMs only.
+
+**Response for `bobber ls groups`** (`GET /v1/conversations?type=group` → `200`) — same structure, filtered to groups only.
 
 ---
 
@@ -667,7 +661,8 @@ bobber account login --email ops@acme.io --password s3cret
 bobber agent create --name "analyzer"
 bobber agent use <AGENT-ID>
 
-# 3. List DM conversations and groups
+# 3. List all conversations (or filter by type)
+bobber ls
 bobber ls dms
 bobber ls groups
 

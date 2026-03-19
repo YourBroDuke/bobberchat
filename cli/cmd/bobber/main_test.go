@@ -1144,9 +1144,9 @@ func TestLogoutCommand(t *testing.T) {
 }
 
 func TestLsCommand(t *testing.T) {
-	t.Run("Default (no arg): GET /v1/conversations?type=direct", func(t *testing.T) {
+	t.Run("Default (no arg): GET /v1/conversations (all types)", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet || r.URL.Path != "/v1/conversations" || r.URL.Query().Get("type") != "direct" {
+			if r.Method != http.MethodGet || r.URL.Path != "/v1/conversations" || r.URL.Query().Get("type") != "" {
 				t.Fatalf("unexpected request: %s %s?%s", r.Method, r.URL.Path, r.URL.RawQuery)
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"conversations": []any{}})
@@ -1179,12 +1179,12 @@ func TestLsCommand(t *testing.T) {
 		}
 	})
 
-	t.Run("ls groups: GET /v1/groups", func(t *testing.T) {
+	t.Run("ls groups: GET /v1/conversations?type=group", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet || r.URL.Path != "/v1/groups" {
-				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+			if r.Method != http.MethodGet || r.URL.Path != "/v1/conversations" || r.URL.Query().Get("type") != "group" {
+				t.Fatalf("unexpected request: %s %s?%s", r.Method, r.URL.Path, r.URL.RawQuery)
 			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"groups": []any{}})
+			_ = json.NewEncoder(w).Encode(map[string]any{"conversations": []any{}})
 		}))
 		defer srv.Close()
 

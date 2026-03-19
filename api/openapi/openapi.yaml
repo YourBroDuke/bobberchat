@@ -471,21 +471,21 @@ paths:
     get:
       tags:
         - Conversations
-      summary: List conversations by type for the authenticated user
+      summary: List conversations for the authenticated user, optionally filtered by type
       operationId: listConversations
       security:
         - BearerAuth: []
       parameters:
         - name: type
           in: query
-          required: true
+          required: false
           schema:
             type: string
             enum: [direct, group]
-          description: Conversation type to filter by
+          description: Optional conversation type filter. If omitted, returns all conversations.
       responses:
         '200':
-          description: List of conversations
+          description: List of conversations sorted by last_message_at descending
           content:
             application/json:
               schema:
@@ -494,9 +494,7 @@ paths:
                   conversations:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Conversation'
-        '400':
-          description: Missing or invalid type parameter
+                      $ref: '#/components/schemas/ConversationListItem'
         '401':
           description: Unauthorized
 
@@ -1068,6 +1066,30 @@ components:
         created_at:
           type: string
           format: date-time
+
+    ConversationListItem:
+      type: object
+      description: Unified conversation list item for both DMs and groups
+      required:
+        - id
+        - type
+        - name
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: For DMs, the peer user/agent ID. For groups, the group ID.
+        type:
+          type: string
+          enum: [direct, group]
+        name:
+          type: string
+          description: For DMs, the peer's email or agent display name. For groups, the group name.
+        last_message_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp of the last message in this conversation
 
     Message:
       type: object
