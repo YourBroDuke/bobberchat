@@ -37,7 +37,7 @@ go test -tags=integration ./backend/test/integration/ -v    # ✅ 3/3 pass
 | `docs/architecture/design-spec.md` | 1,693 | Authoritative design spec — 13 sections + glossary + 4 appendices |
 | `docs/planning/prd.md` | 212 | Product requirements document |
 | `docs/architecture/tech-design.md` | 721 | Technical design document |
-| `api/openapi/openapi.yaml` | ~1,475 | OpenAPI 3.1.0 spec — 30 endpoint paths |
+| `api/openapi/openapi.yaml` | ~1,530 | OpenAPI 3.1.0 spec — 31 endpoint paths |
 | `README.md` | ~280 | Comprehensive project README |
 | `docs/reference/cli-reference.md` | ~770 | Complete CLI reference for bobber and bobberd |
 | `docs/operations/deploy-docker-compose.md` | ~120 | Docker Compose deployment guide |
@@ -122,13 +122,13 @@ Key implementation details:
 - **Ownership-based access control**: `publishAndAudit` verifies message sender ownership and group membership (returns 403 on violation)
 - **Rate limiting**: Token bucket per-agent, per-group, per-tag. Configurable via `configs/backend.yaml`. Returns 429 when exceeded
 - **Graceful shutdown**: `activeConns sync.WaitGroup` tracks live WebSocket connections; shutdown drains with timeout
-- **All 3 publish call sites** (`handleReplayMessage`, `handleAdapterIngest`, `handleWebSocket`) route through `publishAndAudit`
+- **All 4 publish call sites** (`handleSendMessage`, `handleReplayMessage`, `handleAdapterIngest`, `handleWebSocket`) route through `publishAndAudit`
 
 ### Binaries (2 commands — Go Workspace)
 
 | Binary | Source | Lines | Description |
 |--------|--------|-------|-------------|
-| `bobberd` | `backend/cmd/bobberd/main.go` | ~1,374 | Backend server — 35 REST endpoints + WebSocket + message replay + adapter ingest + production hardening |
+| `bobberd` | `backend/cmd/bobberd/main.go` | ~1,374 | Backend server — 36 REST endpoints + WebSocket + message replay + adapter ingest + production hardening |
 | `bobber` | `cli/cmd/bobber/main.go` | ~880 | CLI tool — account, agent (create/use/rotate-secret/delete), session, connection, messaging, conversation, blacklist (add/remove/list), and group management commands. `agent use` fetches info, rotates secret, and saves credentials. Tests in `main_test.go` |
 
 ### SDK
@@ -257,7 +257,6 @@ Go Workspace (go.work) with 2 independent modules:
     cobra v1.10.2           — CLI framework
     viper v1.21.0           — Configuration
     uuid v1.6.0             — UUID generation
-    gorilla/websocket v1.5.3 — WebSocket client
 
 Go version: 1.25.0 (go.mod)
 ```
@@ -290,14 +289,14 @@ Backend config: `configs/backend.yaml`
 
 Subject pattern: `bobberchat.msg.{to_id}` for direct messages, `bobberchat.group.{group_id}` for groups
 
-### REST API Endpoints (29 total)
+### REST API Endpoints (30 total)
 
 ```
 Auth:       POST /v1/auth/register, /v1/auth/login, /v1/auth/verify-email, /v1/auth/resend-verification, GET /v1/auth/me
 Agents:     POST /v1/agents, GET/DELETE /v1/agents/:id, POST /v1/agents/:id/rotate-secret
 Registry:   GET /v1/registry/agents, POST /v1/registry/discover
 Groups:     POST/GET /v1/groups, POST /v1/groups/:id/join, /v1/groups/:id/leave
-Messages:   GET /v1/messages/poll, POST /v1/messages/:id/replay
+Messages:   GET /v1/messages/poll, POST /v1/messages/send, POST /v1/messages/:id/replay
 Connections: POST /v1/connections/request, GET /v1/connections/inbox, POST /v1/connections/:id/accept, POST /v1/connections/:id/reject
 Blacklist:  GET /v1/blacklist, POST /v1/blacklist, DELETE /v1/blacklist/:id
 Adapters:   POST /v1/adapter/{name}/ingest, GET /v1/adapter

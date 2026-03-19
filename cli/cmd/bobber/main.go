@@ -22,7 +22,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -34,7 +33,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"golang.org/x/term"
@@ -550,42 +548,25 @@ func sendCmd(cfg *cliConfig) *cobra.Command {
 	var tag, content string
 	cmd := &cobra.Command{
 		Use:   "send <target_id>",
-		Short: "Send one message over websocket",
+		Short: "Send a message to a target",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			if cfg.token() == "" {
-				return errors.New("token required")
+			if cfg.agentID() == "" || cfg.apiSecret() == "" {
+				return errors.New("agent credentials required (use 'bobber login' first)")
 			}
 			if tag == "" || content == "" {
 				return errors.New("--tag and --content are required")
 			}
 
-			url := strings.TrimSuffix(cfg.backendURL(), "/")
-			url = strings.Replace(url, "http://", "ws://", 1)
-			url = strings.Replace(url, "https://", "wss://", 1)
-			wsURL := url + "/v1/ws/connect?token=" + cfg.token()
-
-			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-			defer cancel()
-			conn, _, err := websocket.DefaultDialer.DialContext(ctx, wsURL, nil)
+			resp, err := doJSONAgent(http.MethodPost, cfg.backendURL()+"/v1/messages/send", cfg.agentID(), cfg.apiSecret(), map[string]any{
+				"to":      args[0],
+				"tag":     tag,
+				"content": content,
+			})
 			if err != nil {
 				return err
 			}
-			defer conn.Close()
-
-			env := map[string]any{
-				"id":        uuidString(),
-				"from":      "",
-				"to":        args[0],
-				"tag":       tag,
-				"content":   content,
-				"metadata":  map[string]any{},
-				"timestamp": time.Now().UTC().Format(time.RFC3339),
-			}
-			if err := conn.WriteJSON(env); err != nil {
-				return err
-			}
-			prettyPrint(map[string]any{"sent": true, "envelope": env})
+			prettyPrint(resp)
 			return nil
 		},
 	}

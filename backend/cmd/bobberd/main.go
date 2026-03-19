@@ -272,6 +272,7 @@ func (a *app) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /v1/groups/{id}/leave", a.requireAuth(true, true, a.handleLeaveGroup))
 
 	mux.HandleFunc("GET /v1/messages/poll", a.requireJWT(a.handlePollMessages))
+	mux.HandleFunc("POST /v1/messages/send", a.requireAuth(true, true, a.handleSendMessage))
 	mux.HandleFunc("POST /v1/messages/{id}/replay", a.requireJWT(a.handleReplayMessage))
 
 	mux.HandleFunc("POST /v1/connections/request", a.requireAuth(false, true, a.handleConnectionRequest))
@@ -1015,6 +1016,71 @@ func (a *app) handleUnblacklist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"removed": true, "target_id": targetID})
+}
+
+func (a *app) handleSendMessage(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		To       string         `json:"to"`
+		Tag      string         `json:"tag"`
+		Content  string         `json:"content"`
+		Metadata map[string]any `json:"metadata"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if strings.TrimSpace(req.To) == "" {
+		writeError(w, http.StatusBadRequest, "to is required")
+		return
+	}
+	if strings.TrimSpace(req.Tag) == "" {
+		writeError(w, http.StatusBadRequest, "tag is required")
+		return
+	}
+
+	from := contextString(r.Context(), ctxAgentID)
+	if from == "" {
+		from = contextString(r.Context(), ctxUserID)
+	}
+	if from == "" {
+		writeError(w, http.StatusBadRequest, "unable to determine sender identity")
+		return
+	}
+
+	if req.Metadata == nil {
+		req.Metadata = map[string]any{}
+	}
+
+	messageID := uuid.NewString()
+	env := &protocol.Envelope{
+		ID:        messageID,
+		From:      from,
+		To:        req.To,
+		Tag:       req.Tag,
+		Content:   req.Content,
+		Metadata:  req.Metadata,
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	}
+
+	if err := env.Validate(); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if err := a.publishAndAudit(r.Context(), env); err != nil {
+		if errors.Is(err, errRateLimited) {
+			writeError(w, http.StatusTooManyRequests, "rate limited")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"sent":       true,
+		"message_id": messageID,
+	})
 }
 
 func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {

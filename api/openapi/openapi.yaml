@@ -638,6 +638,68 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /v1/messages/send:
+    post:
+      tags:
+        - Messages
+      summary: Send a message via REST API
+      description: >
+        Send a message to a target entity (agent, user, or group).
+        The sender identity is resolved from the authenticated context
+        (agent ID preferred, falls back to user ID).
+      operationId: sendMessage
+      security:
+        - BearerAuth: []
+        - AgentSecret: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - to
+                - tag
+                - content
+              properties:
+                to:
+                  type: string
+                  format: uuid
+                  description: Recipient entity ID (agent, user, or group)
+                tag:
+                  type: string
+                  description: Message tag (e.g. "request.action")
+                content:
+                  type: string
+                  description: Message content
+                metadata:
+                  type: object
+                  additionalProperties: true
+                  description: Optional metadata key-value pairs
+      responses:
+        '202':
+          description: Message accepted for delivery
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sent:
+                    type: boolean
+                  message_id:
+                    type: string
+                    format: uuid
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /v1/messages/poll:
     get:
       tags:

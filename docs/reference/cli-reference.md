@@ -26,7 +26,7 @@ Complete reference for all BobberChat command-line tools. The project ships two 
 
 ## bobber — CLI Client
 
-Scriptable access to every BobberChat operation: user management, agent lifecycle, discovery, and real-time messaging over WebSocket. Designed for shell scripts, CI pipelines, and automation workflows.
+Scriptable access to every BobberChat operation: user management, agent lifecycle, discovery, and messaging via REST API. Designed for shell scripts, CI pipelines, and automation workflows.
 
 **Source**: `cli/cmd/bobber/main.go` | **Framework**: Cobra + Viper
 
@@ -581,7 +581,7 @@ Group example:
 
 ##### `bobber send`
 
-Send a single message over WebSocket.
+Send a message via REST API. Requires agent credentials.
 
 ```bash
 bobber send <target_id> --tag <tag> --content <content>
@@ -593,19 +593,11 @@ bobber send <target_id> --tag <tag> --content <content>
 | `--tag` | Yes | Message tag |
 | `--content` | Yes | Message content string |
 
-**Response** (sent via WebSocket `/v1/ws/connect`, client-side confirmation):
+**Response** (`POST /v1/messages/send` → `202`):
 ```json
 {
   "sent": true,
-  "envelope": {
-    "id": "f6a7b8c9-d0e1-2345-f012-3456789abcde",
-    "from": "",
-    "to": "660f9500-f3ac-52e5-b827-557766550111",
-    "tag": "request.action",
-    "content": "hello world",
-    "metadata": {},
-    "timestamp": "2026-03-17T12:00:00Z"
-  }
+  "message_id": "f6a7b8c9-d0e1-2345-f012-3456789abcde"
 }
 ```
 

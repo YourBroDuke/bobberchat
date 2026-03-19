@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -1674,30 +1673,21 @@ func TestInfoCommand(t *testing.T) {
 }
 
 func TestSendCommand(t *testing.T) {
-	t.Run("Success: connects WS and sends envelope", func(t *testing.T) {
-		received := make(chan map[string]any, 1)
+	t.Run("Success: POST /v1/messages/send with agent credentials", func(t *testing.T) {
+		var gotBody map[string]any
+		var gotHeaders http.Header
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path != "/v1/ws/connect" {
-				t.Fatalf("unexpected ws path: %s", r.URL.Path)
+			if r.Method != http.MethodPost || r.URL.Path != "/v1/messages/send" {
+				t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
 			}
-			if r.URL.Query().Get("token") != "tok" {
-				t.Fatalf("expected token query param, got %q", r.URL.Query().Get("token"))
-			}
-			up := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
-			c, err := up.Upgrade(w, r, nil)
-			if err != nil {
-				t.Fatalf("upgrade failed: %v", err)
-			}
-			defer c.Close()
-			msg := map[string]any{}
-			if err := c.ReadJSON(&msg); err != nil {
-				t.Fatalf("read json failed: %v", err)
-			}
-			received <- msg
+			gotHeaders = r.Header
+			b, _ := io.ReadAll(r.Body)
+			gotBody = mustJSONMap(t, string(b))
+			_ = json.NewEncoder(w).Encode(map[string]any{"sent": true, "message_id": "msg-123"})
 		}))
 		defer srv.Close()
 
-		cmd := sendCmd(testConfig(srv.URL, "tok"))
+		cmd := sendCmd(testAgentConfig(srv.URL, "agent-1", "secret-1"))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
 		cmd.SetArgs([]string{"a-target", "--tag", "request.data", "--content", "hello"})
@@ -1709,23 +1699,29 @@ func TestSendCommand(t *testing.T) {
 		if !strings.Contains(out, `"sent": true`) {
 			t.Fatalf("expected sent output, got: %q", out)
 		}
+		if !strings.Contains(out, `"message_id"`) {
+			t.Fatalf("expected message_id in output, got: %q", out)
+		}
 
-		select {
-		case env := <-received:
-			if env["from"] != "" || env["to"] != "a-target" || env["tag"] != "request.data" {
-				t.Fatalf("unexpected envelope: %v", env)
-			}
-			contentVal, ok := env["content"].(string)
-			if !ok || contentVal != "hello" {
-				t.Fatalf("unexpected content: %v", env["content"])
-			}
-		case <-time.After(2 * time.Second):
-			t.Fatal("timeout waiting for websocket envelope")
+		if gotBody["to"] != "a-target" {
+			t.Fatalf("expected to=a-target, got %v", gotBody["to"])
+		}
+		if gotBody["tag"] != "request.data" {
+			t.Fatalf("expected tag=request.data, got %v", gotBody["tag"])
+		}
+		if gotBody["content"] != "hello" {
+			t.Fatalf("expected content=hello, got %v", gotBody["content"])
+		}
+		if gotHeaders.Get("X-Agent-ID") != "agent-1" {
+			t.Fatalf("expected X-Agent-ID=agent-1, got %q", gotHeaders.Get("X-Agent-ID"))
+		}
+		if gotHeaders.Get("X-API-Secret") != "secret-1" {
+			t.Fatalf("expected X-API-Secret=secret-1, got %q", gotHeaders.Get("X-API-Secret"))
 		}
 	})
 
 	t.Run("Missing tag", func(t *testing.T) {
-		cmd := sendCmd(testConfig("http://localhost:8080", "tok"))
+		cmd := sendCmd(testAgentConfig("http://localhost:8080", "agent-1", "secret-1"))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
 		cmd.SetArgs([]string{"a-target", "--tag", "", "--content", "hello"})
@@ -1736,7 +1732,7 @@ func TestSendCommand(t *testing.T) {
 	})
 
 	t.Run("Missing content", func(t *testing.T) {
-		cmd := sendCmd(testConfig("http://localhost:8080", "tok"))
+		cmd := sendCmd(testAgentConfig("http://localhost:8080", "agent-1", "secret-1"))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
 		cmd.SetArgs([]string{"a-target", "--tag", "request.data", "--content", ""})
@@ -1746,65 +1742,31 @@ func TestSendCommand(t *testing.T) {
 		}
 	})
 
-	t.Run("No token", func(t *testing.T) {
-		cmd := sendCmd(testConfig("http://localhost:8080", ""))
+	t.Run("No agent credentials", func(t *testing.T) {
+		cmd := sendCmd(testAgentConfig("http://localhost:8080", "", ""))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
 		cmd.SetArgs([]string{"a-target", "--tag", "request.data", "--content", "hello"})
 		err := cmd.Execute()
-		if err == nil || !strings.Contains(err.Error(), "token required") {
+		if err == nil || !strings.Contains(err.Error(), "agent credentials required") {
 			t.Fatalf("unexpected err: %v", err)
 		}
 	})
 
-	t.Run("Connection failed", func(t *testing.T) {
-		cmd := sendCmd(testConfig("http://127.0.0.1:1", "tok"))
+	t.Run("Server error", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": "broker down"})
+		}))
+		defer srv.Close()
+
+		cmd := sendCmd(testAgentConfig(srv.URL, "agent-1", "secret-1"))
 		cmd.SetOut(io.Discard)
 		cmd.SetErr(io.Discard)
 		cmd.SetArgs([]string{"a-target", "--tag", "request.data", "--content", "hello"})
 		err := cmd.Execute()
-		if err == nil {
-			t.Fatal("expected dial error, got nil")
-		}
-	})
-
-	t.Run("Envelope fields: valid UUIDs and RFC3339 timestamp", func(t *testing.T) {
-		received := make(chan map[string]any, 1)
-		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			up := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
-			c, err := up.Upgrade(w, r, nil)
-			if err != nil {
-				t.Fatalf("upgrade failed: %v", err)
-			}
-			defer c.Close()
-			msg := map[string]any{}
-			if err := c.ReadJSON(&msg); err != nil {
-				t.Fatalf("read json failed: %v", err)
-			}
-			received <- msg
-		}))
-		defer srv.Close()
-
-		cmd := sendCmd(testConfig(srv.URL, "tok"))
-		cmd.SetOut(io.Discard)
-		cmd.SetErr(io.Discard)
-		cmd.SetArgs([]string{"a-target", "--tag", "request.data", "--content", "hello"})
-		if err := cmd.Execute(); err != nil {
-			t.Fatalf("execute failed: %v", err)
-		}
-
-		select {
-		case env := <-received:
-			id, _ := env["id"].(string)
-			ts, _ := env["timestamp"].(string)
-			if _, err := uuid.Parse(id); err != nil {
-				t.Fatalf("invalid id uuid: %q (%v)", id, err)
-			}
-			if _, err := time.Parse(time.RFC3339, ts); err != nil {
-				t.Fatalf("invalid timestamp: %q (%v)", ts, err)
-			}
-		case <-time.After(2 * time.Second):
-			t.Fatal("timeout waiting for envelope")
+		if err == nil || !strings.Contains(err.Error(), "broker down") {
+			t.Fatalf("expected broker down error, got: %v", err)
 		}
 	})
 }

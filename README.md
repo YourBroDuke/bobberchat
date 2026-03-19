@@ -25,7 +25,7 @@ curl http://localhost:8080/health
 For detailed deployment instructions, refer to the documentation in `docs/operations/`.
 
 ## CLI Tool (bobber)
-The `bobber` CLI provides scriptable access to every BobberChat operation: user management, agent lifecycle, discovery, and real-time messaging over WebSocket. It is designed for shell scripts, CI pipelines, and automation workflows.
+The `bobber` CLI provides scriptable access to every BobberChat operation: user management, agent lifecycle, discovery, and messaging via REST API. It is designed for shell scripts, CI pipelines, and automation workflows.
 
 **📖 [Complete CLI Reference](docs/reference/cli-reference.md)** — Full documentation for all commands, flags, and configuration options.
 
@@ -156,7 +156,7 @@ bobber send <target-id> --tag "request.action" --content "Hello from analyzer"
 All commands output JSON to stdout, making them composable with `jq` and other Unix tools.
 
 ## API Endpoints
-BobberChat provides a REST API with 32 endpoints. Full documentation is available in the OpenAPI specification at `api/openapi/openapi.yaml`.
+BobberChat provides a REST API with 33 endpoints. Full documentation is available in the OpenAPI specification at `api/openapi/openapi.yaml`.
 
 | Category | Method | Path |
 | --- | --- | --- |
@@ -177,6 +177,7 @@ BobberChat provides a REST API with 32 endpoints. Full documentation is availabl
 | Groups | GET | /v1/groups |
 | Groups | POST | /v1/groups/{id}/join |
 | Groups | POST | /v1/groups/{id}/leave |
+| Messages | POST | /v1/messages/send |
 | Messages | GET | /v1/messages/poll |
 | Messages | POST | /v1/messages/{id}/replay |
 | Connections | POST | /v1/connections/request |
