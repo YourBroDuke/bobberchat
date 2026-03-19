@@ -474,12 +474,11 @@ func (r *pgConversationRepository) ListByParticipantAndType(ctx context.Context,
 
 func (r *pgConversationRepository) ListItems(ctx context.Context, participantID uuid.UUID, kind ParticipantType, convType *ConversationType) ([]ConversationListItem, error) {
 	query := `
-		SELECT conversation_id, reference_id, reference_type, conv_type, item_name, last_message_at FROM (
+		SELECT conversation_id, reference_id, reference_type, item_name, last_message_at FROM (
 			SELECT
 				c.id AS conversation_id,
 				CASE WHEN c.id_low = $1 THEN c.id_high ELSE c.id_low END AS reference_id,
 				CASE WHEN u.id IS NOT NULL THEN 'user' ELSE 'agent' END AS reference_type,
-				c.type AS conv_type,
 				COALESCE(u.email, a.display_name, 'unknown') AS item_name,
 				c.last_message_at
 			FROM conversations c
@@ -497,7 +496,6 @@ func (r *pgConversationRepository) ListItems(ctx context.Context, participantID 
 				c.id AS conversation_id,
 				g.id AS reference_id,
 				'group' AS reference_type,
-				c.type AS conv_type,
 				g.name AS item_name,
 				c.last_message_at
 			FROM conversations c
@@ -526,11 +524,10 @@ func (r *pgConversationRepository) ListItems(ctx context.Context, participantID 
 	out := make([]ConversationListItem, 0)
 	for rows.Next() {
 		var item ConversationListItem
-		var ct, refType string
-		if err := rows.Scan(&item.ID, &item.ReferenceID, &refType, &ct, &item.Name, &item.LastMessageAt); err != nil {
+		var refType string
+		if err := rows.Scan(&item.ID, &item.ReferenceID, &refType, &item.Name, &item.LastMessageAt); err != nil {
 			return nil, fmt.Errorf("scan conversation list item: %w", err)
 		}
-		item.Type = ConversationType(ct)
 		item.ReferenceType = EntityType(refType)
 		out = append(out, item)
 	}
@@ -543,12 +540,11 @@ func (r *pgConversationRepository) ListItems(ctx context.Context, participantID 
 
 func (r *pgConversationRepository) ListUnreadByParticipant(ctx context.Context, participantID uuid.UUID, kind ParticipantType) ([]ConversationListItem, error) {
 	query := `
-		SELECT conversation_id, reference_id, reference_type, conv_type, item_name, last_message_at FROM (
+		SELECT conversation_id, reference_id, reference_type, item_name, last_message_at FROM (
 			SELECT
 				c.id AS conversation_id,
 				CASE WHEN c.id_low = $1 THEN c.id_high ELSE c.id_low END AS reference_id,
 				CASE WHEN u.id IS NOT NULL THEN 'user' ELSE 'agent' END AS reference_type,
-				c.type AS conv_type,
 				COALESCE(u.email, a.display_name, 'unknown') AS item_name,
 				c.last_message_at,
 				(
@@ -573,7 +569,6 @@ func (r *pgConversationRepository) ListUnreadByParticipant(ctx context.Context, 
 				c.id AS conversation_id,
 				g.id AS reference_id,
 				'group' AS reference_type,
-				c.type AS conv_type,
 				g.name AS item_name,
 				c.last_message_at,
 				(
@@ -604,11 +599,10 @@ func (r *pgConversationRepository) ListUnreadByParticipant(ctx context.Context, 
 	out := make([]ConversationListItem, 0)
 	for rows.Next() {
 		var item ConversationListItem
-		var ct, refType string
-		if err := rows.Scan(&item.ID, &item.ReferenceID, &refType, &ct, &item.Name, &item.LastMessageAt); err != nil {
+		var refType string
+		if err := rows.Scan(&item.ID, &item.ReferenceID, &refType, &item.Name, &item.LastMessageAt); err != nil {
 			return nil, fmt.Errorf("scan unread conversation item: %w", err)
 		}
-		item.Type = ConversationType(ct)
 		item.ReferenceType = EntityType(refType)
 		out = append(out, item)
 	}

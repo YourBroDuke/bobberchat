@@ -108,12 +108,11 @@ type ConnectionRequest struct {
 // ID is the conversation UUID. ReferenceID is the peer user/agent ID (for DMs)
 // or the group ID (for groups). ReferenceType indicates the entity kind.
 type ConversationListItem struct {
-	ID            uuid.UUID        `json:"id"`
-	ReferenceID   uuid.UUID        `json:"reference_id"`
-	ReferenceType EntityType       `json:"reference_type"`
-	Type          ConversationType `json:"type"`
-	Name          string           `json:"name"`
-	LastMessageAt *time.Time       `json:"last_message_at,omitempty"`
+	ID            uuid.UUID  `json:"id"`
+	ReferenceID   uuid.UUID  `json:"reference_id"`
+	ReferenceType EntityType `json:"reference_type"`
+	Name          string     `json:"name"`
+	LastMessageAt *time.Time `json:"last_message_at,omitempty"`
 }
 
 type BlacklistEntry struct {

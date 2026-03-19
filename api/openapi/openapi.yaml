@@ -1176,7 +1176,6 @@ components:
         - id
         - reference_id
         - reference_type
-        - type
         - name
       properties:
         id:
@@ -1191,9 +1190,6 @@ components:
           type: string
           enum: [user, agent, group]
           description: The entity type of the reference_id.
-        type:
-          type: string
-          enum: [direct, group]
         name:
           type: string
           description: For DMs, the peer's email or agent display name. For groups, the group name.
