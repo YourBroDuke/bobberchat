@@ -74,9 +74,9 @@ type ConnectionRequestRepository interface {
 
 type BlacklistRepository interface {
 	Create(ctx context.Context, entry BlacklistEntry) (*BlacklistEntry, error)
-	Delete(ctx context.Context, userID, blockedUserID uuid.UUID) error
-	IsBlocked(ctx context.Context, userID, blockedUserID uuid.UUID) (bool, error)
-	ListByUser(ctx context.Context, userID uuid.UUID) ([]BlacklistEntry, error)
+	Delete(ctx context.Context, fromID uuid.UUID, fromKind EntityType, toID uuid.UUID, toKind EntityType) error
+	IsBlocked(ctx context.Context, fromID uuid.UUID, fromKind EntityType, toID uuid.UUID, toKind EntityType) (bool, error)
+	ListByEntity(ctx context.Context, entityID uuid.UUID, entityKind EntityType) ([]BlacklistEntry, error)
 }
 
 type PostgresRepositories struct {
@@ -823,10 +823,10 @@ func (r *pgBlacklistRepository) Create(ctx context.Context, entry BlacklistEntry
 	}
 
 	row := r.db.Pool().QueryRow(ctx, `
-		INSERT INTO blacklist_entries (id, user_id, blocked_user_id, created_at)
-		VALUES ($1,$2,$3,$4)
-		RETURNING id, user_id, blocked_user_id, created_at
-	`, entry.ID, entry.UserID, entry.BlockedUserID, entry.CreatedAt)
+		INSERT INTO blacklist_entries (id, from_id, from_kind, to_id, to_kind, created_at)
+		VALUES ($1,$2,$3,$4,$5,$6)
+		RETURNING id, from_id, from_kind, to_id, to_kind, created_at
+	`, entry.ID, entry.FromID, string(entry.FromKind), entry.ToID, string(entry.ToKind), entry.CreatedAt)
 
 	created, err := scanBlacklistEntry(row)
 	if err != nil {
@@ -835,39 +835,39 @@ func (r *pgBlacklistRepository) Create(ctx context.Context, entry BlacklistEntry
 	return created, nil
 }
 
-func (r *pgBlacklistRepository) Delete(ctx context.Context, userID, blockedUserID uuid.UUID) error {
+func (r *pgBlacklistRepository) Delete(ctx context.Context, fromID uuid.UUID, fromKind EntityType, toID uuid.UUID, toKind EntityType) error {
 	_, err := r.db.Pool().Exec(ctx, `
 		DELETE FROM blacklist_entries
-		WHERE user_id = $1 AND blocked_user_id = $2
-	`, userID, blockedUserID)
+		WHERE from_id = $1 AND from_kind = $2 AND to_id = $3 AND to_kind = $4
+	`, fromID, string(fromKind), toID, string(toKind))
 	if err != nil {
 		return fmt.Errorf("delete blacklist entry: %w", err)
 	}
 	return nil
 }
 
-func (r *pgBlacklistRepository) IsBlocked(ctx context.Context, userID, blockedUserID uuid.UUID) (bool, error) {
+func (r *pgBlacklistRepository) IsBlocked(ctx context.Context, fromID uuid.UUID, fromKind EntityType, toID uuid.UUID, toKind EntityType) (bool, error) {
 	var exists bool
 	err := r.db.Pool().QueryRow(ctx, `
 		SELECT EXISTS(
 			SELECT 1
 			FROM blacklist_entries
-			WHERE user_id = $1 AND blocked_user_id = $2
+			WHERE from_id = $1 AND from_kind = $2 AND to_id = $3 AND to_kind = $4
 		)
-	`, userID, blockedUserID).Scan(&exists)
+	`, fromID, string(fromKind), toID, string(toKind)).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("check blacklist entry: %w", err)
 	}
 	return exists, nil
 }
 
-func (r *pgBlacklistRepository) ListByUser(ctx context.Context, userID uuid.UUID) ([]BlacklistEntry, error) {
+func (r *pgBlacklistRepository) ListByEntity(ctx context.Context, entityID uuid.UUID, entityKind EntityType) ([]BlacklistEntry, error) {
 	rows, err := r.db.Pool().Query(ctx, `
-		SELECT id, user_id, blocked_user_id, created_at
+		SELECT id, from_id, from_kind, to_id, to_kind, created_at
 		FROM blacklist_entries
-		WHERE user_id = $1
+		WHERE from_id = $1 AND from_kind = $2
 		ORDER BY created_at DESC
-	`, userID)
+	`, entityID, string(entityKind))
 	if err != nil {
 		return nil, fmt.Errorf("list blacklist entries: %w", err)
 	}
@@ -1020,10 +1020,13 @@ func scanConnectionRequest(scanner rowScanner) (*ConnectionRequest, error) {
 
 func scanBlacklistEntry(scanner rowScanner) (*BlacklistEntry, error) {
 	out := BlacklistEntry{}
+	var fromKind, toKind string
 	err := scanner.Scan(
 		&out.ID,
-		&out.UserID,
-		&out.BlockedUserID,
+		&out.FromID,
+		&fromKind,
+		&out.ToID,
+		&toKind,
 		&out.CreatedAt,
 	)
 	if err != nil {
@@ -1032,5 +1035,7 @@ func scanBlacklistEntry(scanner rowScanner) (*BlacklistEntry, error) {
 		}
 		return nil, fmt.Errorf("scan blacklist entry: %w", err)
 	}
+	out.FromKind = EntityType(fromKind)
+	out.ToKind = EntityType(toKind)
 	return &out, nil
 }

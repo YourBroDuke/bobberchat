@@ -278,8 +278,8 @@ func (a *app) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/connections/inbox", a.requireAuth(false, true, a.handleConnectionInbox))
 	mux.HandleFunc("POST /v1/connections/{id}/accept", a.requireAuth(false, true, a.handleConnectionAccept))
 	mux.HandleFunc("POST /v1/connections/{id}/reject", a.requireAuth(false, true, a.handleConnectionReject))
-	mux.HandleFunc("POST /v1/blacklist", a.requireJWT(a.handleBlacklist))
-	mux.HandleFunc("DELETE /v1/blacklist/{id}", a.requireJWT(a.handleUnblacklist))
+	mux.HandleFunc("POST /v1/blacklist", a.requireAuth(false, true, a.handleBlacklist))
+	mux.HandleFunc("DELETE /v1/blacklist/{id}", a.requireAuth(false, true, a.handleUnblacklist))
 
 	mux.HandleFunc("GET /v1/health", a.handleHealth)
 	mux.Handle("GET /v1/metrics", promhttp.HandlerFor(a.metricsReg, promhttp.HandlerOpts{}))
@@ -802,8 +802,13 @@ func (a *app) handleConnectionRequest(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			toKind = persistence.EntityTypeGroup
 		} else {
-			writeError(w, http.StatusNotFound, "target not found")
-			return
+			_, err = repos.Users.GetByID(r.Context(), targetID)
+			if err == nil {
+				toKind = persistence.EntityTypeUser
+			} else {
+				writeError(w, http.StatusNotFound, "target not found")
+				return
+			}
 		}
 	}
 
@@ -876,20 +881,52 @@ func (a *app) handleBlacklist(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID, err := uuid.Parse(contextString(r.Context(), ctxUserID))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid user context")
-		return
-	}
 	targetID, err := uuid.Parse(strings.TrimSpace(req.TargetID))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid target_id")
 		return
 	}
 
-	entry, err := persistence.NewPostgresRepositories(a.db).Blacklist.Create(r.Context(), persistence.BlacklistEntry{
-		UserID:        userID,
-		BlockedUserID: targetID,
+	// Determine caller identity (from).
+	var fromID uuid.UUID
+	var fromKind persistence.EntityType
+	if agentRaw := contextString(r.Context(), ctxAgentID); agentRaw != "" {
+		parsed, err := uuid.Parse(agentRaw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid agent context")
+			return
+		}
+		fromID = parsed
+		fromKind = persistence.EntityTypeAgent
+	} else {
+		parsed, err := uuid.Parse(contextString(r.Context(), ctxUserID))
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid user context")
+			return
+		}
+		fromID = parsed
+		fromKind = persistence.EntityTypeUser
+	}
+
+	// Detect target entity kind.
+	repos := persistence.NewPostgresRepositories(a.db)
+	var toKind persistence.EntityType
+	if _, err := repos.Agents.GetByID(r.Context(), targetID); err == nil {
+		toKind = persistence.EntityTypeAgent
+	} else if _, err := repos.Groups.GetByID(r.Context(), targetID); err == nil {
+		toKind = persistence.EntityTypeGroup
+	} else if _, err := repos.Users.GetByID(r.Context(), targetID); err == nil {
+		toKind = persistence.EntityTypeUser
+	} else {
+		writeError(w, http.StatusNotFound, "target not found")
+		return
+	}
+
+	entry, err := repos.Blacklist.Create(r.Context(), persistence.BlacklistEntry{
+		FromID:   fromID,
+		FromKind: fromKind,
+		ToID:     targetID,
+		ToKind:   toKind,
 	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -900,18 +937,46 @@ func (a *app) handleBlacklist(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) handleUnblacklist(w http.ResponseWriter, r *http.Request) {
-	userID, err := uuid.Parse(contextString(r.Context(), ctxUserID))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid user context")
-		return
-	}
 	targetID, err := uuid.Parse(strings.TrimSpace(r.PathValue("id")))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid id")
 		return
 	}
 
-	if err := persistence.NewPostgresRepositories(a.db).Blacklist.Delete(r.Context(), userID, targetID); err != nil {
+	var fromID uuid.UUID
+	var fromKind persistence.EntityType
+	if agentRaw := contextString(r.Context(), ctxAgentID); agentRaw != "" {
+		parsed, err := uuid.Parse(agentRaw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid agent context")
+			return
+		}
+		fromID = parsed
+		fromKind = persistence.EntityTypeAgent
+	} else {
+		parsed, err := uuid.Parse(contextString(r.Context(), ctxUserID))
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid user context")
+			return
+		}
+		fromID = parsed
+		fromKind = persistence.EntityTypeUser
+	}
+
+	repos := persistence.NewPostgresRepositories(a.db)
+	var toKind persistence.EntityType
+	if _, err := repos.Agents.GetByID(r.Context(), targetID); err == nil {
+		toKind = persistence.EntityTypeAgent
+	} else if _, err := repos.Groups.GetByID(r.Context(), targetID); err == nil {
+		toKind = persistence.EntityTypeGroup
+	} else if _, err := repos.Users.GetByID(r.Context(), targetID); err == nil {
+		toKind = persistence.EntityTypeUser
+	} else {
+		writeError(w, http.StatusNotFound, "target not found")
+		return
+	}
+
+	if err := repos.Blacklist.Delete(r.Context(), fromID, fromKind, targetID, toKind); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}

@@ -82,6 +82,7 @@ type EntityType string
 const (
 	EntityTypeAgent EntityType = "agent"
 	EntityTypeGroup EntityType = "group"
+	EntityTypeUser  EntityType = "user"
 )
 
 type ConnectionRequestStatus string
@@ -105,8 +106,10 @@ type ConnectionRequest struct {
 }
 
 type BlacklistEntry struct {
-	ID            uuid.UUID `json:"id"`
-	UserID        uuid.UUID `json:"user_id"`
-	BlockedUserID uuid.UUID `json:"blocked_user_id"`
-	CreatedAt     time.Time `json:"created_at"`
+	ID        uuid.UUID  `json:"id"`
+	FromID    uuid.UUID  `json:"from_id"`
+	FromKind  EntityType `json:"from_kind"`
+	ToID      uuid.UUID  `json:"to_id"`
+	ToKind    EntityType `json:"to_kind"`
+	CreatedAt time.Time  `json:"created_at"`
 }
