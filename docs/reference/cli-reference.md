@@ -330,15 +330,17 @@ bobber ls [dms|groups]
 {
   "conversations": [
     {
-      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-      "conversation_id": "d4e5f6a7-b8c9-0123-def0-123456789abc",
+      "id": "d4e5f6a7-b8c9-0123-def0-123456789abc",
+      "reference_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "reference_type": "user",
       "type": "direct",
       "name": "alice@example.com",
       "last_message_at": "2026-03-19T08:30:00Z"
     },
     {
-      "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
-      "conversation_id": "e5f6a7b8-c9d0-1234-ef01-23456789abcd",
+      "id": "e5f6a7b8-c9d0-1234-ef01-23456789abcd",
+      "reference_id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+      "reference_type": "group",
       "type": "group",
       "name": "my-team",
       "last_message_at": "2026-03-18T15:00:00Z"
@@ -409,6 +411,8 @@ Returns pending connection requests addressed to the authenticated agent, along 
   "unreads": [
     {
       "id": "770a8400-e29b-41d4-a716-446655440000",
+      "reference_id": "880b9511-f3ac-52e5-b827-557766550222",
+      "reference_type": "agent",
       "type": "direct",
       "name": "peer-agent",
       "last_message_at": "2026-03-17T14:30:00Z"
