@@ -389,8 +389,8 @@ func (r *pgConversationRepository) Create(ctx context.Context, conv Conversation
 	}
 
 	row := r.db.Pool().QueryRow(ctx, `
-		INSERT INTO conversations (id, type, id_low, id_high, created_at)
-		VALUES ($1,$2,$3,$4,$5)
+		INSERT INTO conversations (id, type, id_low, id_high, created_at, last_message_at)
+		VALUES ($1,$2,$3,$4,$5,$5)
 		RETURNING id, type, id_low, id_high, created_at, last_message_id, last_message_at
 	`, conv.ID, string(conv.Type), conv.IDLow, conv.IDHigh, conv.CreatedAt)
 
