@@ -464,17 +464,60 @@ func rejectCmd(cfg *cliConfig) *cobra.Command {
 }
 
 func blacklistCmd(cfg *cliConfig) *cobra.Command {
+	bl := &cobra.Command{Use: "blacklist", Short: "Blacklist management commands"}
+	bl.AddCommand(blacklistAddCmd(cfg), blacklistRemoveCmd(cfg), blacklistListCmd(cfg))
+	return bl
+}
+
+func blacklistAddCmd(cfg *cliConfig) *cobra.Command {
 	return &cobra.Command{
-		Use:   "blacklist <target_id>",
-		Short: "Blacklist target",
+		Use:   "add <target_id>",
+		Short: "Blacklist a target entity",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
-			if cfg.token() == "" {
-				return errors.New("token required")
+			if cfg.agentID() == "" || cfg.apiSecret() == "" {
+				return errors.New("agent credentials required (use 'bobber login' first)")
 			}
-			resp, err := doJSON(http.MethodPost, cfg.backendURL()+"/v1/blacklist", cfg.token(), map[string]any{
+			resp, err := doJSONAgent(http.MethodPost, cfg.backendURL()+"/v1/blacklist", cfg.agentID(), cfg.apiSecret(), map[string]any{
 				"target_id": args[0],
 			})
+			if err != nil {
+				return err
+			}
+			prettyPrint(resp)
+			return nil
+		},
+	}
+}
+
+func blacklistRemoveCmd(cfg *cliConfig) *cobra.Command {
+	return &cobra.Command{
+		Use:   "remove <target_id>",
+		Short: "Remove a target from the blacklist",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(_ *cobra.Command, args []string) error {
+			if cfg.agentID() == "" || cfg.apiSecret() == "" {
+				return errors.New("agent credentials required (use 'bobber login' first)")
+			}
+			resp, err := doJSONAgent(http.MethodDelete, cfg.backendURL()+"/v1/blacklist/"+args[0], cfg.agentID(), cfg.apiSecret(), nil)
+			if err != nil {
+				return err
+			}
+			prettyPrint(resp)
+			return nil
+		},
+	}
+}
+
+func blacklistListCmd(cfg *cliConfig) *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List all blacklisted entities",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			if cfg.agentID() == "" || cfg.apiSecret() == "" {
+				return errors.New("agent credentials required (use 'bobber login' first)")
+			}
+			resp, err := doJSONAgent(http.MethodGet, cfg.backendURL()+"/v1/blacklist", cfg.agentID(), cfg.apiSecret(), nil)
 			if err != nil {
 				return err
 			}

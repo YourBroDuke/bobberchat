@@ -37,7 +37,7 @@ go test -tags=integration ./backend/test/integration/ -v    # ✅ 3/3 pass
 | `docs/architecture/design-spec.md` | 1,693 | Authoritative design spec — 13 sections + glossary + 4 appendices |
 | `docs/planning/prd.md` | 212 | Product requirements document |
 | `docs/architecture/tech-design.md` | 721 | Technical design document |
-| `api/openapi/openapi.yaml` | ~1,450 | OpenAPI 3.1.0 spec — 29 endpoint paths |
+| `api/openapi/openapi.yaml` | ~1,475 | OpenAPI 3.1.0 spec — 30 endpoint paths |
 | `README.md` | ~280 | Comprehensive project README |
 | `docs/reference/cli-reference.md` | ~770 | Complete CLI reference for bobber and bobberd |
 | `docs/operations/deploy-docker-compose.md` | ~120 | Docker Compose deployment guide |
@@ -128,8 +128,8 @@ Key implementation details:
 
 | Binary | Source | Lines | Description |
 |--------|--------|-------|-------------|
-| `bobberd` | `backend/cmd/bobberd/main.go` | ~1,370 | Backend server — 34 REST endpoints + WebSocket + message replay + adapter ingest + production hardening |
-| `bobber` | `cli/cmd/bobber/main.go` | ~800 | CLI tool — account, agent (create/use/rotate-secret/delete), session, connection, messaging, conversation, and group management commands. `agent use` fetches info, rotates secret, and saves credentials. Tests in `main_test.go` |
+| `bobberd` | `backend/cmd/bobberd/main.go` | ~1,374 | Backend server — 35 REST endpoints + WebSocket + message replay + adapter ingest + production hardening |
+| `bobber` | `cli/cmd/bobber/main.go` | ~880 | CLI tool — account, agent (create/use/rotate-secret/delete), session, connection, messaging, conversation, blacklist (add/remove/list), and group management commands. `agent use` fetches info, rotates secret, and saves credentials. Tests in `main_test.go` |
 
 ### SDK
 
@@ -157,7 +157,7 @@ Key implementation details:
 | `backend/internal/ratelimit/ratelimit_test.go` | 10 | Token bucket limiting, burst, refill, scoping, concurrent, cleanup |
 | `backend/cmd/bobberd/main_test.go` | 8 | Cross-owner denial, rate limiting, audit trail, disabled limiter |
 | `backend/pkg/sdk/helpers_test.go` | 4 | Message helper functions |
-| `cli/cmd/bobber/main_test.go` | — | CLI unit tests: account register/login, agent create/use/rotate-secret/delete, login/whoami/logout, ls, connect/inbox/accept/reject/blacklist, info, send, poll, group create/leave/invite, config/flag precedence |
+| `cli/cmd/bobber/main_test.go` | — | CLI unit tests: account register/login, agent create/use/rotate-secret/delete, login/whoami/logout, ls, connect/inbox/accept/reject/blacklist add/remove/list, info, send, poll, group create/leave/invite, config/flag precedence |
 | `backend/test/integration/persistence_test.go` | 3 | User, Agent, Group CRUD (build-tagged `//go:build integration`) |
 | `scripts/e2e-test.sh` | 27 | API checks for auth, agents, groups, adapters, metrics, and negative auth/error paths |
 
@@ -290,7 +290,7 @@ Backend config: `configs/backend.yaml`
 
 Subject pattern: `bobberchat.msg.{to_id}` for direct messages, `bobberchat.group.{group_id}` for groups
 
-### REST API Endpoints (28 total)
+### REST API Endpoints (29 total)
 
 ```
 Auth:       POST /v1/auth/register, /v1/auth/login, /v1/auth/verify-email, /v1/auth/resend-verification, GET /v1/auth/me
@@ -299,7 +299,7 @@ Registry:   GET /v1/registry/agents, POST /v1/registry/discover
 Groups:     POST/GET /v1/groups, POST /v1/groups/:id/join, /v1/groups/:id/leave
 Messages:   GET /v1/messages/poll, POST /v1/messages/:id/replay
 Connections: POST /v1/connections/request, GET /v1/connections/inbox, POST /v1/connections/:id/accept, POST /v1/connections/:id/reject
-Blacklist:  POST /v1/blacklist, DELETE /v1/blacklist/:id
+Blacklist:  GET /v1/blacklist, POST /v1/blacklist, DELETE /v1/blacklist/:id
 Adapters:   POST /v1/adapter/{name}/ingest, GET /v1/adapter
 WebSocket:  GET /v1/ws/connect
 System:     GET /v1/health, /v1/metrics

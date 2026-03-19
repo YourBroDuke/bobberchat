@@ -115,8 +115,10 @@ bobber inbox
 bobber accept <request-id>
 bobber reject <request-id>
 
-# Blacklist a user
-bobber blacklist <target-id>
+# Blacklist management
+bobber blacklist add <target-id>
+bobber blacklist remove <target-id>
+bobber blacklist list
 ```
 
 #### Group Management
@@ -154,7 +156,7 @@ bobber send <target-id> --tag "request.action" --content "Hello from analyzer"
 All commands output JSON to stdout, making them composable with `jq` and other Unix tools.
 
 ## API Endpoints
-BobberChat provides a REST API with 31 endpoints. Full documentation is available in the OpenAPI specification at `api/openapi/openapi.yaml`.
+BobberChat provides a REST API with 32 endpoints. Full documentation is available in the OpenAPI specification at `api/openapi/openapi.yaml`.
 
 | Category | Method | Path |
 | --- | --- | --- |
@@ -181,6 +183,7 @@ BobberChat provides a REST API with 31 endpoints. Full documentation is availabl
 | Connections | GET | /v1/connections/inbox |
 | Connections | POST | /v1/connections/{id}/accept |
 | Connections | POST | /v1/connections/{id}/reject |
+| Blacklist | GET | /v1/blacklist |
 | Blacklist | POST | /v1/blacklist |
 | Blacklist | DELETE | /v1/blacklist/{id} |
 | Adapters | POST | /v1/adapter/{name}/ingest |

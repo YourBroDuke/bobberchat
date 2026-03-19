@@ -824,13 +824,33 @@ paths:
                     enum: [REJECTED]
 
   /v1/blacklist:
+    get:
+      tags:
+        - Blacklist
+      summary: List blacklist entries for the authenticated entity
+      operationId: listBlacklistEntries
+      security:
+        - AgentSecret: []
+      responses:
+        '200':
+          description: Blacklist entries for the caller
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BlacklistEntry'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
     post:
       tags:
         - Blacklist
       summary: Add an entity to blacklist
       operationId: createBlacklistEntry
       security:
-        - BearerAuth: []
         - AgentSecret: []
       requestBody:
         required: true
@@ -862,7 +882,6 @@ paths:
       summary: Remove an entity from blacklist
       operationId: deleteBlacklistEntry
       security:
-        - BearerAuth: []
         - AgentSecret: []
       parameters:
         - name: id

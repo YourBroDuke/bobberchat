@@ -278,6 +278,7 @@ func (a *app) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /v1/connections/inbox", a.requireAuth(false, true, a.handleConnectionInbox))
 	mux.HandleFunc("POST /v1/connections/{id}/accept", a.requireAuth(false, true, a.handleConnectionAccept))
 	mux.HandleFunc("POST /v1/connections/{id}/reject", a.requireAuth(false, true, a.handleConnectionReject))
+	mux.HandleFunc("GET /v1/blacklist", a.requireAuth(false, true, a.handleListBlacklist))
 	mux.HandleFunc("POST /v1/blacklist", a.requireAuth(false, true, a.handleBlacklist))
 	mux.HandleFunc("DELETE /v1/blacklist/{id}", a.requireAuth(false, true, a.handleUnblacklist))
 
@@ -872,6 +873,36 @@ func (a *app) handleConnectionReject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"request_id": requestID, "status": persistence.ConnectionRequestStatusRejected})
+}
+
+func (a *app) handleListBlacklist(w http.ResponseWriter, r *http.Request) {
+	var fromID uuid.UUID
+	var fromKind persistence.EntityType
+	if agentRaw := contextString(r.Context(), ctxAgentID); agentRaw != "" {
+		parsed, err := uuid.Parse(agentRaw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid agent context")
+			return
+		}
+		fromID = parsed
+		fromKind = persistence.EntityTypeAgent
+	} else {
+		parsed, err := uuid.Parse(contextString(r.Context(), ctxUserID))
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid user context")
+			return
+		}
+		fromID = parsed
+		fromKind = persistence.EntityTypeUser
+	}
+
+	entries, err := persistence.NewPostgresRepositories(a.db).Blacklist.ListByEntity(r.Context(), fromID, fromKind)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"entries": entries})
 }
 
 func (a *app) handleBlacklist(w http.ResponseWriter, r *http.Request) {

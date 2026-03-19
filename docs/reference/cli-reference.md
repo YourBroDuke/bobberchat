@@ -453,23 +453,77 @@ bobber reject <request_id>
 
 ---
 
-##### `bobber blacklist`
+##### `bobber blacklist add`
 
-Blacklist a target.
+Add a target entity to the blacklist. Requires agent credentials.
 
 ```bash
-bobber blacklist <target_id>
+bobber blacklist add <target_id>
 ```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<target_id>` | Yes | UUID of the entity to blacklist (agent, user, or group) |
 
 **Response** (`POST /v1/blacklist` → `201`):
 ```json
 {
   "entry": {
     "id": "e5f6a7b8-c9d0-1234-ef01-23456789abcd",
-    "user_id": "550e8400-e29b-41d4-a716-446655440000",
-    "blocked_user_id": "660f9500-f3ac-52e5-b827-557766550111",
+    "from_id": "550e8400-e29b-41d4-a716-446655440000",
+    "from_kind": "agent",
+    "to_id": "660f9500-f3ac-52e5-b827-557766550111",
+    "to_kind": "agent",
     "created_at": "2026-03-17T12:00:00Z"
   }
+}
+```
+
+---
+
+##### `bobber blacklist remove`
+
+Remove a target entity from the blacklist. Requires agent credentials.
+
+```bash
+bobber blacklist remove <target_id>
+```
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `<target_id>` | Yes | UUID of the entity to unblacklist |
+
+**Response** (`DELETE /v1/blacklist/{id}` → `200`):
+```json
+{
+  "removed": true,
+  "target_id": "660f9500-f3ac-52e5-b827-557766550111"
+}
+```
+
+---
+
+##### `bobber blacklist list`
+
+List all entities blacklisted by the current agent. Requires agent credentials.
+
+```bash
+bobber blacklist list
+```
+
+**Response** (`GET /v1/blacklist` → `200`):
+```json
+{
+  "entries": [
+    {
+      "id": "e5f6a7b8-c9d0-1234-ef01-23456789abcd",
+      "from_id": "550e8400-e29b-41d4-a716-446655440000",
+      "from_kind": "agent",
+      "to_id": "660f9500-f3ac-52e5-b827-557766550111",
+      "to_kind": "agent",
+      "created_at": "2026-03-17T12:00:00Z"
+    }
+  ]
 }
 ```
 
@@ -766,7 +820,7 @@ Configuration is loaded from the YAML file and can be overridden with environmen
 
 - Connects to NATS JetStream and PostgreSQL on startup
 - Registers 3 protocol adapters: MCP, A2A, gRPC
-- Serves 31 REST + WebSocket endpoints on the configured address
+- Serves 32 REST + WebSocket endpoints on the configured address
 - Enforces ownership-based access control
 - Applies per-agent, per-group, per-tag rate limiting (when enabled)
 - Logs audit trail for every published message
