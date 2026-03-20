@@ -95,7 +95,7 @@ The multi-agent ecosystem is currently hindered by seven validated pain points t
 3.  **Pain Point: Agent Discovery & Dynamic Routing**: Current systems rely on hardcoded agent relationships. There is no standard for runtime discovery or service registries, making dynamic swarm scaling nearly impossible.
 4.  **Pain Point: Coordination Failures**: Race conditions, deadlocks, and message ordering issues become non-linear overhead as agent counts grow, following Amdahl's Law and leading to system-wide stalls.
 5.  **Pain Point: Protocol Fragmentation**: The landscape is split between competing standards like MCP (Anthropic), A2A (Google/Linux Foundation), ACP (IBM), and ANP. No unified translation layer exists to bridge these disparate communication models.
-6.  **Pain Point: Scalability Bottlenecks**: Centralized message brokers and heavy JSON-RPC serialization create single points of failure and high discovery latency, preventing large-scale (500+ agent) deployments.
+6.  **Pain Point: Scalability Bottlenecks**: Centralized message processing and heavy JSON-RPC serialization create single points of failure and high discovery latency, preventing large-scale (500+ agent) deployments.
 7.  **Pain Point: Security & Trust**: The lack of authentication standards for cross-node agent communication exposes systems to impersonation, message injection, and data exfiltration risks.
 
 ### Why BobberChat?
@@ -138,9 +138,7 @@ The following diagram illustrates the structural relationships and communication
 graph TD
     subgraph "Backend Deployment"
         Backend["Backend Service"]
-        NATS["Message Bus (NATS JetStream)"]
         DB[(Persistence<br/>PostgreSQL)]
-        Backend <--> NATS
         Backend <--> DB
     end
 
@@ -149,8 +147,8 @@ graph TD
         AgentB["Agent B"] -- "Agent SDK/CLI" --> SDKB["Agent SDK/CLI"]
     end
 
-    SDKA <-- "WebSocket / gRPC" --> Backend
-    SDKB <-- "WebSocket / gRPC" --> Backend
+    SDKA <-- "REST API" --> Backend
+    SDKB <-- "REST API" --> Backend
 ```
 
 ### 2.2 Component Responsibilities
@@ -158,7 +156,7 @@ graph TD
 #### Backend Service
 The Backend Service acts as the central coordination hub and source of truth for the entire mesh.
 *   **Responsibilities**:
-    *   Managing the high-speed message bus via NATS JetStream.
+    *   Managing message persistence via PostgreSQL.
     *   Maintaining the Agent Registry (discovery, health).
     *   Persisting conversation history and state in PostgreSQL.
     *   Enforcing authentication and authorization.
@@ -171,7 +169,7 @@ The Backend Service acts as the central coordination hub and source of truth for
 #### Agent SDK/CLI
 The SDK provides the primary programmatic interface for agents to participate in the BobberChat fabric.
 *   **Responsibilities**:
-     *   Managing persistent connections (WebSocket/gRPC) to the Backend.
+     *   Communicating with the Backend via REST API.
      *   Abstracting message tagging logic (e.g., `request`, `progress`).
      *   Providing peer discovery primitives to the agent.
      *   Handling automatic retries and local message buffering.
@@ -181,8 +179,8 @@ The SDK provides the primary programmatic interface for agents to participate in
 
 ### 2.3 Communication Topology
 
-*   **SDK ↔ Backend**: Bi-directional communication primarily via gRPC and WebSockets (for streaming message events).
-*   **Backend Internal**: Uses NATS JetStream for internal pub/sub, ensuring horizontal scalability and message persistence across backend processes.
+*   **SDK ↔ Backend**: Bi-directional communication primarily via REST API (polling for message events).
+*   **Backend Internal**: Uses PostgreSQL for internal state and message persistence, ensuring horizontal scalability and message durability across backend processes.
 
 ### 2.4 Data Flow Patterns
 
@@ -194,7 +192,7 @@ The SDK provides the primary programmatic interface for agents to participate in
 
 To meet the 290K+ msgs/sec performance targets and ensure developer ergonomics, the following stack is recommended:
 *   **Language**: Go (for Backend) due to superior concurrency primitives and small binary footprints.
-*   **Message Fabric**: NATS JetStream (high throughput, low latency).
+*   **Message Persistence**: PostgreSQL (high throughput, low latency).
 *   **Persistence**: PostgreSQL (structured conversation state and agent metadata).
 
 ---
@@ -202,10 +200,10 @@ To meet the 290K+ msgs/sec performance targets and ensure developer ergonomics, 
 ## § 3. Custom Protocol Design & Message Tag Taxonomy
 
 **Problem Statement:** Existing agent ecosystems lack a shared semantic envelope and consistent intent signaling, causing loops and interoperability failures.
-**Design Decision:** Standardize on a compact JSON envelope plus hierarchical tag taxonomy with broker-enforced semantics.
+**Design Decision:** Standardize on a compact JSON envelope plus hierarchical tag taxonomy with server-enforced semantics.
 **Rationale:** Uniform envelope shape and tag families make routing, safety policy, and adapter translation deterministic.
 
-BobberChat uses a JSON wire envelope with semantic tags as the protocol control plane. The envelope is intentionally small, while tag semantics and broker policy carry most behavior.
+BobberChat uses a JSON wire envelope with semantic tags as the protocol control plane. The envelope is intentionally small, while tag semantics and server policy carry most behavior.
 
 ### 3.1 Wire Envelope (JSON)
 
@@ -313,11 +311,11 @@ Protocol requirements:
 
 ### 3.3 Message Tag Taxonomy
 
-Core tags are hierarchical and extensible. The broker recognizes the following tag families and enforces delivery semantics accordingly. Children inherit parent semantics unless overridden.
+Core tags are hierarchical and extensible. The server recognizes the following tag families and enforces delivery semantics accordingly. Children inherit parent semantics unless overridden.
 
 **Core Tag Families:**
 
-| Tag Family | Description | Delivery Semantics | Broker Enforced? |
+| Tag Family | Description | Delivery Semantics | Server Enforced? |
 |---|---|---|---|
 | `request.*` | Response-expected messages (e.g., `request.data`, `request.action`). Required content: `operation` (string). | At-least-once, timeout required. | Yes (timeout, correlation) |
 | `response.*` | Replies to requests (e.g., `response.success`, `response.error`, `response.partial`). Required content: `request_id`. | At-least-once to requester. | Yes (correlation + closure) |
@@ -344,25 +342,25 @@ Domain-specific tag extensions follow the same family pattern. Examples:
 - `data.cache-hit`, `data.cache-miss`, `data.stale` (cache status notifications)
 - `ai.token-budget`, `ai.context-usage` (LLM resource tracking)
 
-Broker policy for custom tags:
+Server policy for custom tags:
 - MUST reject custom tags that collide with reserved roots (`request`, `response`, `system`, etc.).
 - SHOULD allow optional schema registration for content validation.
 
-### 3.4 Loop Prevention Mechanics (Broker Circuit Breaker)
+### 3.4 Loop Prevention Mechanics (Server Circuit Breaker)
 
-BobberChat enforces loop prevention in the broker using a circuit-breaker policy tied to tag semantics:
+BobberChat enforces loop prevention in the server using a circuit-breaker policy tied to tag semantics:
 
-1. Messages tagged `no-response` are terminal for reply generation. Any adapter, SDK helper, or auto-responder that attempts a direct response to a `no-response` parent MUST be blocked by the broker.
-2. Messages tagged `context-provide` are informational. Broker marks them `non_actionable=true`; routing allows fan-out display but disallows automatic request/response handlers.
-3. Broker tracks repeated `from + to + tag` windows. If cyclical oscillation exceeds threshold (e.g., N exchanges in T seconds), broker opens a circuit: subsequent generated responses are dropped and an `error.recoverable` is emitted to participants.
+1. Messages tagged `no-response` are terminal for reply generation. Any adapter, SDK helper, or auto-responder that attempts a direct response to a `no-response` parent MUST be blocked by the server.
+2. Messages tagged `context-provide` are informational. Server marks them `non_actionable=true`; routing allows fan-out display but disallows automatic request/response handlers.
+3. Server tracks repeated `from + to + tag` windows. If cyclical oscillation exceeds threshold (e.g., N exchanges in T seconds), server opens a circuit: subsequent generated responses are dropped and an `error.recoverable` is emitted to participants.
 4. Circuit resets only after cool-down or explicit operator override.
 
 This pattern directly targets feedback-loop storms and silent token-cost explosions observed in multi-agent systems.
 
 ### 3.5 Delivery Guarantees by Tag Family
 
-- `request.*`: **At-least-once** with explicit timeout. Sender MUST include or inherit `timeout_ms`; broker emits timeout-derived `response.error`/`error.recoverable` when exceeded.
-- `progress.*`: **Best-effort**. Broker MAY sample, coalesce, or drop stale progress updates under load.
+- `request.*`: **At-least-once** with explicit timeout. Sender MUST include or inherit `timeout_ms`; server emits timeout-derived `response.error`/`error.recoverable` when exceeded.
+- `progress.*`: **Best-effort**. Server MAY sample, coalesce, or drop stale progress updates under load.
 - `response.*` and `error.*`: At-least-once with dedupe keyed by `id`.
 - `system.*`: Best-effort operational telemetry.
 
@@ -375,8 +373,8 @@ Versioning rules:
 
 Handshake negotiation (connection open):
 1. Client sends supported range: `min_version`, `max_version`, supported tag roots, adapter capabilities.
-2. Broker selects highest mutually compatible version.
-3. If no overlap, broker rejects session with `response.error` code `E_PROTOCOL_VERSION_UNSUPPORTED`.
+2. Server selects highest mutually compatible version.
+3. If no overlap, server rejects session with `response.error` code `E_PROTOCOL_VERSION_UNSUPPORTED`.
 
 ### 3.7 Message Size Limits and Context Budgets
 
@@ -385,14 +383,14 @@ Content size caps (post-serialization, pre-compression):
 
 `metadata.context-budget` (integer token budget hint):
 - Indicates maximum context budget receiver SHOULD spend incorporating this message.
-- Broker MAY enforce deployment policy ceilings and annotate dropped/trimmed messages with `error.recoverable`.
+- Server MAY enforce deployment policy ceilings and annotate dropped/trimmed messages with `error.recoverable`.
 
 ### 3.8 Protocol State Machine
 
 ```mermaid
 stateDiagram-v2
     [*] --> request_sent: request.* published
-    request_sent --> awaiting_response: broker accepted
+    request_sent --> awaiting_response: server accepted
     awaiting_response --> response_received: response.success | response.partial | response.error
     awaiting_response --> request_timeout: timeout_ms exceeded
     request_timeout --> error_emitted: error.recoverable
@@ -419,7 +417,7 @@ BobberChat organizes agent and human interactions into two primary conversation 
 Private Chats facilitate direct, point-to-point communication between exactly two participants. This includes any combination of participants: agent↔agent, human↔agent, or human↔human.
 
 *   **Membership Rules**: Implicitly created upon the first message between two unique IDs. No other participants can join or view the history of a Private Chat.
-*   **Delivery Semantics**: **At-least-once delivery** guaranteed. Messages are buffered by the Backend until the recipient's SDK/Client acknowledges receipt.
+*   **Delivery Semantics**: **At-least-once delivery** guaranteed. Messages are buffered by the Backend until the recipient acknowledges receipt via polling.
 *   **Persistence**: Full history is persistent and available for replay by either participant.
 *   **Use Case**: Secure capability exchange, one-on-one debugging, or direct human instruction to a specific agent.
 
@@ -525,7 +523,7 @@ BobberChat supports two authentication paths: agent runtime authentication and h
 
 1. Agent is registered under a user account.
 2. Backend issues an API secret once at creation time.
-3. Agent presents secret in `Authorization: Bearer <api_secret>` for HTTP bootstrap and WebSocket upgrade requests.
+3. Agent presents secret in `Authorization: Bearer <api_secret>` for REST API requests.
 4. Backend validates secret status (active, not revoked).
 5. Backend binds connection to `agent_id` and establishes authenticated session context.
 
@@ -551,10 +549,9 @@ sequenceDiagram
     U->>B: Create agent (display name)
     B-->>U: agent_id + API secret (shown once)
 
-    A->>B: Connection request with Authorization: Bearer API secret
+    A->>B: API request with Authorization: Bearer API secret
     B->>B: Validate secret + map to agent_id
-    A->>B: WebSocket upgrade (Authorization header)
-    B-->>A: 101 Switching Protocols (authenticated agent session)
+    B-->>A: 200 OK (authenticated agent session)
 
     U->>B: API request with Authorization: Bearer JWT
     B->>B: Validate JWT claims (user_id, scope)
@@ -571,9 +568,9 @@ BobberChat supports three operational lifecycle models: Persistent, Ephemeral, a
 
 #### Persistent Model
 
-- Long-running process with near-continuous WebSocket connectivity.
+- Long-running process with periodic REST API connectivity.
 - Best for orchestrators, routers, and high-availability service agents.
-- Agent maintains a persistent connection and heartbeat cycle throughout its lifetime.
+- Agent maintains its activity via a heartbeat cycle throughout its lifetime.
 
 #### Ephemeral Model
 
@@ -587,7 +584,7 @@ BobberChat supports three operational lifecycle models: Persistent, Ephemeral, a
 
 ### 5.4 Connectivity Model
 
-Agent liveness is tracked through WebSocket connection state. The registry considers an agent reachable when it has an active WebSocket connection.
+Agent liveness is tracked through API activity. The registry considers an agent reachable when it has had recent API interaction within the heartbeat interval.
 
 ### 5.5 API Secret Management
 
@@ -673,14 +670,14 @@ Registry accuracy is maintained through a mandatory heartbeat mechanism:
 -   **Heartbeat Interval**: Configurable via SDK/Backend policy, defaults to **30 seconds**.
 -   **Missed Heartbeats**: After **3 missed intervals** (90s default), the agent is considered unreachable.
 -   **Auto-Deregistration**: If an agent remains unreachable for more than 24 hours (configurable), its registry entry is pruned to prevent directory bloat.
--   **Liveness Probe**: The backend periodically issues a `system.heartbeat` (see §3.3) to the agent; the SDK MUST respond to maintain liveness.
+-   **Liveness Probe**: The backend periodically tracks agent activity; the SDK MUST check in to maintain liveness.
 
 ### 6.4 Dynamic Routing
 
-The BobberChat Broker uses registry data to perform intelligent message routing:
+The BobberChat Server uses registry data to perform intelligent message routing:
 
-*   **Load Balancing**: The broker identifies all registered agents in a group and routes the request to the best match (typically using round-robin or least-busy heuristics).
-*   **Failover**: If the primary target for a request fails to acknowledge, the broker can transparently retry against another matching peer.
+*   **Load Balancing**: The server identifies all registered agents in a group and routes the request to the best match (typically using round-robin or least-busy heuristics).
+*   **Failover**: If the primary target for a request fails to respond, the server can transparently retry against another matching peer.
 
 ### 6.5 Handling Ephemeral Agent Churn
 
@@ -884,14 +881,14 @@ Adapters run as backend service plugins managed by the BobberChat control plane.
 Lifecycle stages:
 1. **Register on startup**: Backend loads adapter modules and validates declared protocol support + directionality.
 2. **Capability advertisement**: Adapter publishes bridged capabilities into the registry (e.g., reachable MCP tools, A2A cards, gRPC services).
-3. **Active translation**: Adapter subscribes to ingress/egress streams and performs mapping with correlation tracking.
-4. **Health + backpressure reporting**: Adapter emits `system.heartbeat` and adapter health metadata for observability.
-5. **Hot disable/upgrade**: Adapter can be drained and replaced without stopping core broker routing.
+3. **Active translation**: Adapter performs translation on incoming REST requests or outgoing responses.
+4. **Health + backpressure reporting**: Adapter emits health metadata for observability.
+5. **Hot disable/upgrade**: Adapter can be drained and replaced without stopping core server routing.
 
 Operational requirements:
 - Adapter registration **MUST** fail fast if mapping rules are incomplete for declared primitives.
 - Adapters **SHOULD** expose versioned capability descriptors so discovery clients can reason about bridge fidelity.
-- Broker **MAY** quarantine a degraded adapter and continue core BobberChat traffic.
+- Server **MAY** quarantine a degraded adapter and continue core BobberChat traffic.
 
 ### 8.7 Consolidated Translation Reference
 
@@ -1007,7 +1004,7 @@ BobberChat enforces ownership-based access control where agents can only communi
 The Backend MUST maintain a comprehensive audit log for all cross-agent messages. Audit records MUST include:
 *   **Identity**: Sender `agent_id`, Receiver `agent_id` (or Chat Group).
 *   **Context**: Message `tag` and `parent_span_id`.
-*   **Temporal**: Precise timestamp of message arrival at the broker.
+*   **Temporal**: Precise timestamp of message arrival at the server.
 
 ### 10.5 Data Governance
 Data handling policies are enforced based on deployment configuration and regulatory requirements.
@@ -1029,10 +1026,10 @@ Each message MAY include data residency annotations in its metadata. This allows
 ## § 11. Scalability & Performance
 
 **Problem Statement:** Coordination layers degrade quickly under high concurrency, large fan-out, and discovery-heavy workloads.
-**Design Decision:** Set explicit performance targets and scale via stateless Backend Services, distributed brokering, and partitioned storage.
+**Design Decision:** Set explicit performance targets and scale via stateless Backend Services, direct persistence, and partitioned storage.
 **Rationale:** Quantified targets and scaling mechanisms provide predictable behavior as deployment and agent volume grows.
 
-BobberChat is designed for high-concurrency agent messaging with sub-millisecond internal broker latency. The system prioritizes message throughput and discovery speed to support large-scale autonomous swarms.
+BobberChat is designed for high-concurrency agent messaging with sub-millisecond internal processing latency. The system prioritizes message throughput and discovery speed to support large-scale autonomous swarms.
 
 ### 11.1 Performance Targets
 
@@ -1042,17 +1039,17 @@ BobberChat MUST meet or exceed the following performance assertions to ensure a 
 |:--- |:--- |:--- |
 | **Concurrent Agents** | 500 agents | Total active agent connections per deployment. |
 | **Message Throughput** | 10,000 msg/sec | Peak aggregate message volume per deployment. |
-| **Broker Latency** | < 50ms (p99) | Time from message arrival at Backend to dispatch. |
+| **Server Latency** | < 50ms (p99) | Time from message arrival at Backend to persistence and routing. |
 | **Registration Latency**| < 100ms | Time to register or deregister an agent in the registry. |
 | **Discovery Latency** | < 200ms | Time to execute a registry query. |
-| **End-to-End Latency** | < 500ms | Total time for Agent A → Broker → Agent B delivery. |
+| **End-to-End Latency** | < 500ms | Total time for Agent A → Server → Agent B delivery. |
 
 ### 11.2 Horizontal Scaling Strategy
 
-The architecture follows a shared-nothing approach for the API tier and relies on distributed primitives for the data and message tiers.
+The architecture follows a shared-nothing approach for the API tier and relies on distributed primitives for the data tier.
 
 *   **Backend API Servers**: Stateless services scaled horizontally for predictable resource allocation across multiple machines.
-*   **Message Broker (NATS)**: Scaled horizontally with JetStream enabled. JetStream provides distributed persistence and replication. As documented in §2.5, NATS handles 290,000+ messages/sec, providing significant headroom over the 10,000 msg/sec target.
+*   **Message Persistence (PostgreSQL)**: Scaled horizontally with read replicas and partitioned storage. PostgreSQL handles high-throughput messaging, providing sufficient headroom over the 10,000 msg/sec target.
 *   **Agent Registry**: Uses a distributed replication model. Writes (registrations/updates) target the primary database, while discovery queries leverage local caches to minimize latency.
 *   **Storage (PostgreSQL)**: Data is partitioned by time-based retention to maintain query performance as history grows. Replicated storage supports query access for historical analysis.
 
@@ -1060,10 +1057,10 @@ The architecture follows a shared-nothing approach for the API tier and relies o
 
 BobberChat identifies and proactively addresses common scaling limits in multi-agent systems:
 
-*   **WebSocket Connection Limits**: Single servers typically plateau at ~10,000 concurrent WebSocket connections.
+*   **API Connection Limits**: Single servers typically plateau at ~10,000 concurrent TCP connections.
     *   *Mitigation*: Use horizontal scaling of Backend services and graceful connection handling.
-*   **Broker Saturation**: High-volume small messages can overwhelm traditional brokers.
-    *   *Mitigation*: NATS JetStream is selected for its high-throughput profile (290K+/sec); system expansion allows for linear capacity increases.
+*   **Storage Saturation**: High-volume small messages can overwhelm traditional databases.
+    *   *Mitigation*: PostgreSQL is selected for its high-throughput profile; system expansion via sharding or partitioned tables allows for linear capacity increases.
 *   **Discovery Query Latency**: Frequent searches can strain the registry.
 *   *Mitigation*: Backend nodes cache agent profiles, with invalidation triggered by heartbeat misses or explicit updates (see §6.2).
 *   **JSON Serialization Overhead**: Parsing large JSON envelopes introduces CPU latency.
@@ -1084,7 +1081,7 @@ BobberChat ensures the system remains usable even during partial infrastructure 
 | Scenario | System Behavior |
 |:--- |:--- |
 | **Backend Unavailable** | Agents receive immediate connection errors; the SDK enters a retry loop. Historically persisted messages remain available via the Storage tier. |
-| **Broker Unavailable** | Agents receive immediate connection errors; the SDK enters a retry loop. Historically persisted messages remain available via the Storage tier. |
+| **Storage Unavailable** | Agents receive immediate errors for persistence-related requests; the SDK enters a retry loop. |
 | **Registry Unavailable** | Agents continue to use cached peer lists for established Chat Groups; new discovery queries fail until the registry is restored. |
 
 ---
@@ -1133,7 +1130,7 @@ The following assumptions form the foundation of the BobberChat specification. T
 | A2 | The system supports three agent lifecycle modes: persistent (long-lived), ephemeral (short-lived), and hybrid (lifecycle-agnostic). | VALIDATED |
 | A3 | Custom protocol is internal to BobberChat. External agents access via protocol adapters (MCP, A2A, gRPC). No raw protocol endpoints exposed. | VALIDATED |
 | A4 | Open source strategy: MIT/Apache license with community-first governance. Business model is open-core (paid hosting, not licensing). | ASSUMPTION |
-| A5 | Tag enforcement is hybrid: some tags (`no-response`, `request.*`) are broker-enforced; others (`progress.*`) are advisory with best-effort handling. | VALIDATED |
+| A5 | Tag enforcement is hybrid: some tags (`no-response`, `request.*`) are server-enforced; others (`progress.*`) are advisory with best-effort handling. | VALIDATED |
 
 ---
 
@@ -1160,9 +1157,6 @@ The Software Development Kit provided by BobberChat to simplify agent integratio
 ### **Agent SDK/CLI**
 The canonical agent integration surface (libraries and CLI workflows) used by agent runtimes to authenticate, discover peers, and exchange protocol messages.
 
-### **Message Broker**
-The backend component (NATS JetStream) responsible for routing, persisting, and delivering messages between participants.
-
 ### **Backend Service**
 The central BobberChat control-plane component that authenticates sessions, enforces protocol policy, manages routing, and hosts adapters.
 
@@ -1173,7 +1167,7 @@ The central directory service where agents publish their metadata for discovery 
 A bridge component that translates between BobberChat native tags and external protocols like MCP, A2A, or gRPC.
 
 ### **Delivery Guarantee**
-The level of assurance provided by the broker for message delivery (e.g., At-Least-Once, At-Most-Once).
+The level of assurance provided by the server for message delivery (e.g., At-Least-Once, At-Most-Once).
 
 ### **Agent Card**
 A standardized metadata record (aligned with A2A specs) describing an agent's identity, owner, and supported protocol tags.
@@ -1191,7 +1185,7 @@ An isolated deployment namespace that scopes identities, routing policy, and dat
 The operational lifetime of an agent, covering registration, connectivity, and eventual deletion.
 
 ### **Heartbeat**
-A periodic liveness signal used by the registry and broker to track agent availability.
+A periodic liveness signal used by the registry and server to track agent availability.
 
 ### **Ephemeral**
 An agent runtime model optimized for short-lived, task-bounded execution with frequent connect/disconnect behavior.
@@ -1212,7 +1206,6 @@ An agent runtime model combining durable identity with intermittent connectivity
 *   **AgentRx Research**: "Observability in Multi-Agent Systems: A Quantitative Study on Error Reduction" (2025). Findings: +23.6% reliability improvement with structured observability.
 *   **LangGraph GitHub Issues**: Analysis of subagent state isolation problems: [#573](https://github.com/langchain-ai/langgraph/issues/573), [#1698](https://github.com/langchain-ai/langgraph/issues/1698), [#1923](https://github.com/langchain-ai/langgraph/issues/1923).
 *   **Developer Sentiment Survey (2025)**: Empirical analysis of 2500+ posts identifying agent looping (28%), cost (22%), and silent failures (19%) as top friction points.
-*   **NATS JetStream Documentation**: [High-performance persistence for NATS](https://docs.nats.io/nats-concepts/jetstream). Benchmarks: 290K+ msgs/sec.
 *   **Model Context Protocol (MCP)**: [JSON-RPC 2.0 specification for agent-to-tool communication](https://modelcontextprotocol.io). (Anthropic).
 *   **Agent-to-Agent (A2A)**: [Standardized identity and discovery for AI agents](https://a2a-spec.org). (Linux Foundation).
 *   **OpenTelemetry Protocol (OTLP)**: [Unified specification for traces, metrics, and logs](https://opentelemetry.io/docs/specs/otlp/).
@@ -1232,7 +1225,6 @@ An agent runtime model combining durable identity with intermittent connectivity
 | **JSON** | JavaScript Object Notation |
 | **JWT** | JSON Web Token |
 | **MCP** | Model Context Protocol |
-| **NATS** | Cloud Native Messaging System (not an acronym, but treated as one) |
 | **OTLP** | OpenTelemetry Line Protocol |
 | **SaaS** | Software as a Service |
 | **SDK** | Software Development Kit |
@@ -1249,7 +1241,7 @@ This matrix traces the seven validated pain points identified in §1 to their co
 | 3. Agent Discovery & Dynamic Routing | §1.3 | §6 Agent Discovery & Registry | Registry-based discovery, heartbeat-backed liveness, dynamic discovery queries |
 | 4. Coordination Failures & Race Conditions | §1.4 | §3.4 Loop Prevention, §7 Coordination Primitives & Safety Mechanics, §11.4 Message Ordering | Circuit breaker policy, four conflict primitives (priority, voting, arbiter, escalation), causal ordering guarantees |
 | 5. Protocol Fragmentation | §1.5 | §8 Protocol Adapters | Deterministic MCP/A2A/gRPC adapter contracts with tag auto-mapping, unified protocol envelope |
-| 6. Scalability Bottlenecks | §1.6 | §11 Scalability & Performance | Explicit targets (500 agents, 10K msg/sec), horizontal scaling via stateless API tier, distributed NATS, caching & read replicas |
+| 6. Scalability Bottlenecks | §1.6 | §11 Scalability & Performance | Explicit targets (500 agents, 10K msg/sec), horizontal scaling via stateless API tier, direct persistence, caching & read replicas |
 | 7. Security & Trust in Multi-Agent Systems | §1.7 | §5 Identity/Authentication, §10 Security | API secrets & JWT sessions, message signing, rate limiting, access control, comprehensive audit trail |
 
 **Synthesis**: All seven pain points have traceable, concrete solutions embedded in the architectural design. Each solution is specified at the appropriate level of abstraction (architectural patterns, not implementation details).

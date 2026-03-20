@@ -198,40 +198,14 @@ CREATE INDEX idx_agents_owner ON agents (owner_user_id);
 CREATE INDEX idx_messages_conv_tag_time ON messages (conversation_id, tag, "timestamp" DESC);
 ```
 
-## 4. NATS JetStream Subject & Stream Design
+## 4. Message Persistence
 
-Subject namespace (Design Spec §2.3, §3, §11.3):
+Messages are persisted directly to PostgreSQL via `repos.Messages.Save()`. The `publishAndAudit` function in `main.go` handles rate limiting and delegates to `defaultPersistMessage` which resolves conversations and persists to the database.
 
-- `bobberchat.msg.{to_id}` — direct point-to-point messages.
-- `bobberchat.group.{group_id}` — group broadcasts.
-- `bobberchat.system.*` — lifecycle/system events (`system.heartbeat`, `system.join`, `system.leave`).
-
-### 4.1 Stream definitions
-
-| Stream | Subjects | Retention | Max Age | Replicas | Notes |
-|---|---|---|---|---|---|
-| `BOBBER_MSG` | `bobberchat.msg.*`, `bobberchat.group.*` | Interest | 30d | 3 | Warm-tier replay source; dedupe window 2m using `Nats-Msg-Id`. |
-| `BOBBER_SYSTEM` | `bobberchat.system.*` | Limits | 24h | 3 | Heartbeat and lifecycle telemetry; high churn, short retention. |
-| `BOBBER_AUDIT` | `bobberchat.>` | Limits | 90d | 3 | Optional full-bus append-only stream for compliance export. |
-
-### 4.2 Consumer configuration (SDK clients)
-
-| Consumer type | Durable | Ack policy | Ack wait | Replay | Filter subject | Use |
-|---|---|---|---|---|---|---|
-| Agent inbox | Yes (`agent-{id}`) | Explicit | 30s | Instant | `bobberchat.msg.{agent_id}` | Direct delivery to an agent. |
-| Group stream | Yes (`group-{id}`) | Explicit | 30s | Instant | `bobberchat.group.{group_id}` | Group membership fanout. |
-| System observer | No (ephemeral) | None | n/a | Instant | `bobberchat.system.*` | Non-critical status updates. |
-
-### 4.3 Delivery guarantees mapped to tag families (Design Spec §3.5)
-
-| Tag family | JetStream handling | Guarantee realization |
-|---|---|---|
-| `request.*` | Persistent stream + explicit ack + retry on timeout | At-least-once |
-| `response.*`, `error.*` | Persistent stream + explicit ack + dedupe by envelope `id` | At-least-once |
-| `progress.*` | Interest retention + optional drop/coalesce on pressure | Best-effort |
-| `context-provide` | Interest retention; no reply expectation | Best-effort |
-| `no-response` | Standard delivery + broker reply suppression | Best-effort with policy enforcement |
-| `system.*` | Limits retention, no-ack observer path | At-most-once accepted / best-effort emitted |
+The message flow is:
+1. HTTP POST `/v1/messages/send` → `handleSendMessage`
+2. `publishAndAudit` — rate limit check
+3. `defaultPersistMessage` — resolve conversation, build `persistence.Message`, save to PostgreSQL
 
 ## 5. API Contracts
 
@@ -287,73 +261,15 @@ Authentication model:
 | GET | `/v1/health` | None | n/a | `{ "status": "ok", "time": "...", "version": "1.0.0" }` | 200, 503 |
 | GET | `/v1/metrics` | Internal auth/network policy | n/a | Prometheus plaintext exposition | 200, 401 |
 
-### 5.2 WebSocket API
-
-- **Upgrade endpoint**: `GET /v1/ws/connect`
-- **Headers**:
-  - `Authorization: Bearer <jwt-or-api-secret>`
-  - `Sec-WebSocket-Protocol: bobberchat.v1`
-
-Message frame format (JSON envelope from Design Spec §3.1):
-
-```json
-{
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "from": "agent.planner",
-  "to": "agent.researcher",
-  "tag": "request.data",
-  "content": "latest incident report",
-  "metadata": {
-    "protocol_version": "1.0.0",
-    "context-budget": 8192,
-    "timeout_ms": 30000
-  },
-  "timestamp": "2026-03-13T12:30:45Z"
-}
-```
-
-#### 5.2.1 Envelope Field Semantics: User vs System Data
-
-**Tag** and **Content** are purely user-controlled fields. Protocol adapters and system code MUST NOT write to them. All system-injected information lives in **Metadata** under underscore-prefixed keys.
-
-- `tag` is optional (`json:"tag,omitempty"`). When a user provides a tag, it takes precedence for routing. When empty, the system uses `metadata._tag` (set by adapters) via `protocol.EffectiveTag()`.
-- `content` is a plain string containing application data chosen by the user or SDK caller.
-- `metadata` holds both user-defined keys (no prefix) and system keys (underscore prefix).
-
-System metadata keys (`_`-prefixed, set by adapters and system code):
-
-| Key | Type | Set By | Description |
-|-----|------|--------|-------------|
-| `_tag` | string | Adapters | System-derived routing tag (e.g. `request.action`, `response.success`) |
-| `_action` | string | Adapters | Action name (MCP tool name, gRPC method, A2A intent) |
-| `_args` | any | Adapters | Action arguments |
-| `_result` | any | Adapters | Response result data |
-| `_request_id` | string | Adapters | Request correlation ID |
-| `_code` | string | Adapters | Error/status code |
-| `_message` | string | Adapters | Error/status message |
-| `_stream_id` | string | gRPC adapter | Stream correlation ID |
-| `_update` | any | gRPC adapter | Progress update body |
-| `_percentage` | number | gRPC adapter | Progress percentage (0-100) |
-| `_replayed` | bool | Replay handler | Replay flag |
-| `_original_message_id` | string | Replay handler | Original message ID |
-| `_replay_reason` | string | Replay handler | Replay reason |
-| `_task_id` | string | A2A adapter | A2A task ID |
-| `_status` | string | A2A adapter | A2A task status |
-
-Helper functions in `internal/adapter/adapter.go`:
-- `SetSystemMeta(env, key, value)` — write a system metadata key
-- `SystemMeta(env, key)` — read a system metadata value (returns `any, bool`)
-- `SystemMetaString(env, key)` — read as string (returns empty string if missing)
+### 5.2 Heartbeat & Reconnection behavior
 
 Heartbeat protocol:
-- Server emits `system.heartbeat` every 30s.
-- Client must respond with pong-equivalent heartbeat acknowledgement within 10s.
-- After 3 missed intervals, backend marks session offline and closes socket.
+- Server tracks agent activity via API calls.
+- After 3 missed heartbeat intervals (if implemented via poll/heartbeat endpoint), backend marks session offline.
 
 Reconnection behavior:
 - SDK and CLI clients perform exponential backoff (1s, 2s, 4s, capped at 30s).
-- On reconnect, client sends last acknowledged message cursor for resumable delivery.
-- Backend replays unacked durable messages from JetStream consumer state.
+- On reconnect, client fetches missed messages via poll API.
 
 ## 6. Go SDK Public API (pkg/sdk)
 
@@ -426,11 +342,6 @@ server:
   read_timeout_seconds: 15
   write_timeout_seconds: 15
 
-nats:
-  url: "nats://localhost:4222"
-  jetstream_domain: ""
-  stream_replicas: 3
-
 postgres:
   dsn: "postgres://bobberchat:bobberchat@localhost:5432/bobberchat?sslmode=disable"
   max_open_conns: 50
@@ -465,12 +376,10 @@ request_timeout_ms: 30000
 
 | Dependency | Version | Purpose |
 |---|---|---|
-| `github.com/nats-io/nats.go` | `v1.49.0` | NATS/JetStream client |
 | `github.com/jackc/pgx/v5` | `v5.8.0` | PostgreSQL driver/pool |
 | `github.com/golang-jwt/jwt/v5` | `v5.3.1` | JWT parsing/signing |
 | `github.com/google/uuid` | `v1.6.0` | UUID generation/parsing |
 | `github.com/rs/zerolog` | `v1.34.0` | Structured logging |
-| `github.com/gorilla/websocket` | `v1.5.3` | WebSocket server/client |
 | `github.com/prometheus/client_golang` | `v1.23.2` | Prometheus metrics |
 | `golang.org/x/crypto` | `v0.49.0` | Argon2id, bcrypt |
 | `github.com/spf13/viper` | `v1.21.0` | Config loading |
@@ -494,11 +403,6 @@ Use Docker Compose for local dependencies and backend integration:
 
 ```yaml
 services:
-  nats:
-    image: nats:2.10
-    command: ["-js"]
-    ports: ["4222:4222", "8222:8222"]
-
   postgres:
     image: postgres:15
     environment:
@@ -510,7 +414,7 @@ services:
   bobberd:
     build: .
     command: ["/app/bobberd", "--config", "/app/configs/backend.yaml"]
-    depends_on: [nats, postgres]
+    depends_on: [postgres]
     ports: ["8080:8080"]
 ```
 
@@ -518,7 +422,7 @@ services:
 
 - **Unit tests**: per package in `backend/internal/*`, `backend/pkg/sdk`, and `cli/cmd/bobber`.
 - **Integration tests**: under `backend/test/`, covering discovery, routing, replay, and access control.
-- **Contract tests**: OpenAPI schema validation for REST, envelope validation for WebSocket frames.
+- **Contract tests**: OpenAPI schema validation for REST endpoints.
 - **Performance tests**: load profile for 10k msg/sec per deployment and p99 latency assertions (Design Spec §12.1).
 
 ### 9.4 CI pipeline outline
@@ -526,7 +430,7 @@ services:
 1. `go mod download`
 2. `make lint`
 3. `make test`
-4. Spin up ephemeral NATS/PostgreSQL; run integration suite
+4. Spin up ephemeral PostgreSQL; run integration suite
 5. Build binaries and Docker image
 6. Publish artifacts on tagged releases
 
@@ -569,10 +473,10 @@ Claims:
 
 Aligned with Design Spec §10.
 
-### 11.1 OpenTelemetry trace propagation through NATS
+### 11.1 OpenTelemetry trace propagation
 
-- Broker creates spans named `agent:{agent_id}:{tag}` (Design Spec §10.1).
-- Propagate trace context via message headers and envelope metadata.
+- Server creates spans named `agent:{agent_id}:{tag}` (Design Spec §10.1).
+- Propagate trace context via API headers and envelope metadata.
 
 ### 11.2 Prometheus metrics endpoint
 
@@ -590,7 +494,7 @@ JSON logs using zerolog with required fields:
 - `tag`
 - `agent_id` and/or `user_id`
 - `group_id` (when present)
-- `component` (`broker`, `registry`, `auth`, etc.)
+- `component` (`server`, `registry`, `auth`, etc.)
 
 Example log event:
 
@@ -598,7 +502,7 @@ Example log event:
 {
   "level": "info",
   "time": "2026-03-13T12:35:03Z",
-  "component": "broker",
+  "component": "server",
   "tag": "response.success",
   "agent_id": "agent.search",
   "msg": "message delivered"
@@ -620,7 +524,7 @@ Emit internal alert events (and optional external sink plugins) for:
 |---|---|---|
 | §1 Overview | §2 | §1, §5 |
 | §3 Database | §4, §5, §6, §11 | §4 ACs, §8 |
-| §4 NATS/JetStream | §2.3, §3.5 | §2 metrics, §5 |
+| §4 Message Persistence | §2.3, §3.5 | §2 metrics, §5 |
 | §5 API Contracts | §3.1, §5.2, §6.7, §10.3 | §4 user stories |
 | §6 SDK API | §2.2, §6 | §5 MVP |
 | §10 Security | §11 | §8.2 |

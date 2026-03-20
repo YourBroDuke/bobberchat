@@ -360,7 +360,6 @@ bobberchat/
 │   │   │   ├── email.go                  # Email sender interface
 │   │   │   ├── azurecs/azurecs.go        # Azure Communication Services sender (HMAC-SHA256 REST API)
 │   │   │   └── console/console.go        # Console sender for local/dev
-│   │   ├── broker/broker.go              # NATS JetStream routing
 │   │   ├── conversation/conversation.go  # Groups, history
 │   │   ├── observability/observability.go# Metrics, logging (~110 lines)
 │   │   ├── persistence/                  # PostgreSQL repositories
@@ -394,7 +393,6 @@ bobberchat/
 │   │   ├── namespace.yml
 │   │   ├── configmap.yml
 │   │   ├── secrets.yml
-│   │   ├── nats.yml
 │   │   ├── postgres.yml
 │   │   ├── bobberd.yml                   # Backend + migration Job + migrations ConfigMap
 │   │   └── cert-manager-issuers.yaml     # Let's Encrypt ClusterIssuer definitions
@@ -404,7 +402,6 @@ bobberchat/
 │       └── templates/
 │           ├── _helpers.tpl
 │           ├── deployment.yaml
-│           ├── nats.yaml
 │           ├── postgres.yaml
 │           ├── secrets.yaml
 │           ├── configmap.yaml

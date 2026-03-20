@@ -25,7 +25,7 @@ BobberChat aims to provide a reliable, transparent, and scalable environment for
 
 ### 2.1 Strategic Goals
 *   Reduce agent "black box" behavior through structured, real-time observability.
-*   Prevent runaway agent loops and token cost explosions using broker-enforced semantic tags.
+*   Prevent runaway agent loops and token cost explosions using server-enforced semantic tags.
 *   Provide a unified interface for human intervention in autonomous workflows.
 *   Bridge disparate agent protocols (MCP, A2A, gRPC) into a single communication plane.
 
@@ -33,7 +33,7 @@ BobberChat aims to provide a reliable, transparent, and scalable environment for
 *   **System Capacity**: Support at least 500 concurrent agents per deployment.
 *   **Throughput**: Maintain stable performance at 10,000 messages per second per deployment.
 *   **Latency**:
-    *   Broker Latency: < 50ms (p99).
+    *   Server Latency: < 50ms (p99).
     *   Discovery Latency: < 200ms for capability-based queries.
     *   End-to-End Latency: < 500ms for agent-to-agent delivery.
 *   **Reliability**: Zero message loss for at-least-once delivery tags (`request.*`).
@@ -76,13 +76,13 @@ Organized by the seven validated production pain points defined in §1.
 ### 4.3 Agent Discovery & Dynamic Routing
 *   **User Story 1**: As an Agent, I want to find peers based on their "capability" rather than a hardcoded ID, so that I can dynamically scale my sub-task delegation.
     *   **AC1**: Registry supports `POST /v1/registry/discover` with capability filters per §6.7.
-    *   **AC2**: Broker routes messages addressed to `capability:<name>` using round-robin or least-busy heuristics.
+    *   **AC2**: Server routes messages addressed to `capability:<name>` using round-robin or least-busy heuristics.
 *   **User Story 2**: As an Operator, I want to see a live list of agents and their current health, so that I can identify offline or busy components.
-    *   **AC1**: Agent Directory reflects heartbeat-driven liveness per §6.3.
+    *   **AC1**: Agent Directory reflects activity-driven liveness per §6.3.
 
 ### 4.4 Coordination Failures
 *   **User Story 1**: As an Operator, I want the system to automatically block message loops, so that I can prevent runaway token costs and system stalls.
-    *   **AC1**: Broker enforces circuit-breaker policy for cyclical message oscillation per §3.4.
+    *   **AC1**: Server enforces circuit-breaker policy for cyclical message oscillation per §3.4.
     *   **AC2**: Messages tagged `no-response` strictly block any reply generation.
 
 ### 4.5 Protocol Fragmentation
@@ -93,14 +93,14 @@ Organized by the seven validated production pain points defined in §1.
 
 ### 4.6 Scalability Bottlenecks
 *   **User Story 1**: As an Operator, I want to scale my agent swarm to 500 nodes without performance degradation, so that I can handle enterprise-grade workloads.
-    *   **AC1**: Backend maintains < 50ms p99 broker latency under 10K msg/sec load per §12.1.
+    *   **AC1**: Backend maintains < 50ms p99 server latency under 10K msg/sec load per §12.1.
 *   **User Story 2**: As a Developer, I want to use ephemeral agents that spin up for single tasks, so that I can optimize compute resource usage.
     *   **AC1**: Registry handles high-churn registration/deregistration with < 100ms latency per §12.1.
 
 ### 4.7 Security & Trust
 *   **User Story 1**: As an Operator, I want to ensure only authorized agents can join my deployment's mesh, so that I can protect sensitive data.
-    *   **AC1**: Agents must present an API secret for WebSocket/gRPC upgrade per §5.2.
-    *   **AC2**: Access control is enforced by default in the message broker.
+    *   **AC1**: Agents must present an API secret for REST API requests per §5.2.
+    *   **AC2**: Access control is enforced by default in the message routing logic.
 *   **User Story 2**: As an Evaluator, I want a complete audit trail of all cross-agent messages, so that I can comply with regulatory requirements.
     *   **AC1**: Backend logs all messages with `sender_id`, `receiver_id`, `tag`, and `timestamp` per §11.4.
 
@@ -108,7 +108,7 @@ Organized by the seven validated production pain points defined in §1.
 
 ### 5.1 In-Scope (MVP)
 *   **Core Protocol**: JSON wire envelope with hierarchical tag taxonomy (§3).
-*   **Backend Service**: Go-based service using NATS JetStream and PostgreSQL (§2.2).
+*   **Backend Service**: Go-based service using PostgreSQL (§2.2).
 *   **Agent SDK**: Go SDK for identity, discovery, and messaging (§2.2).
 *   **Registry**: Capability-indexed directory with heartbeat monitoring (§6).
 *   **Auth**: API secret-based agent auth and JWT-based human auth (§5).
@@ -138,10 +138,10 @@ Organized by the seven validated production pain points defined in §1.
 ## 7. Milestones & Timeline
 
 ### M1: Foundation (Weeks 1-3)
-*   Setup Go project structure and NATS JetStream integration.
+*   Setup Go project structure and PostgreSQL persistence layer.
 *   Implement canonical JSON envelope and basic message routing.
 *   Implement three-tier persistence stubs (Hot/Warm).
-*   **Deliverable**: Prototype broker capable of routing tagged JSON messages.
+*   **Deliverable**: Prototype server capable of routing tagged JSON messages.
 
 ### M2: Core Services (Weeks 4-6)
 *   Build the Agent Registry with capability indexing.
@@ -152,7 +152,7 @@ Organized by the seven validated production pain points defined in §1.
 ### M3: SDK & Adapters (Weeks 7-9)
 *   Develop the Go Agent SDK for messaging and discovery.
 *   Build the MCP Adapter and A2A translation layer.
-*   Implement broker-enforced loop prevention and `no-response` logic.
+*   Implement server-enforced loop prevention and `no-response` logic.
 *   **Deliverable**: SDK and adapters enabling heterogeneous agent coordination.
 
 ### M4: CLI & Operator Controls Integration (Weeks 10-12)
@@ -171,7 +171,7 @@ Organized by the seven validated production pain points defined in §1.
 
 ### 8.1 Performance (per §12.1)
 *   **Throughput**: Aggregate peak of 10,000 messages/second per deployment.
-*   **Latency**: Internal broker processing < 50ms (p99).
+*   **Latency**: Internal server processing < 50ms (p99).
 *   **Concurrency**: 500 active agent connections per deployment.
 
 ### 8.2 Security (per §11)
@@ -186,8 +186,7 @@ Organized by the seven validated production pain points defined in §1.
 ## 9. Dependencies & Risks
 
 ### 9.1 External Dependencies
-*   **NATS JetStream**: Core message bus for high-throughput pub/sub.
-*   **PostgreSQL**: Primary storage for registry metadata and warm history.
+*   **PostgreSQL**: Primary storage for registry metadata, warm history, and message persistence.
 *   **Go 1.25+**: Primary language for all components.
 
 ### 9.2 Technical Risks
