@@ -39,8 +39,6 @@ spec:
                 secretKeyRef:
                   name: bobberchat-secrets
                   key: jwt-secret
-            - name: BOBBERD_NATS_URL
-              value: nats://nats.bobberchat.svc.cluster.local:4222
             - name: BOBBERD_SERVER_LISTEN_ADDRESS
               value: ":8080"
           readinessProbe:

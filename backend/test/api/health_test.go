@@ -33,9 +33,3 @@ func TestMetrics_Success(t *testing.T) {
 		t.Fatalf("expected prometheus metric names in response")
 	}
 }
-
-func TestWebSocket_NoToken(t *testing.T) {
-	env := setupTestEnv(t)
-	resp := env.doRequest(t, http.MethodGet, "/v1/ws/connect", nil, "")
-	assertStatus(t, resp, http.StatusUnauthorized)
-}

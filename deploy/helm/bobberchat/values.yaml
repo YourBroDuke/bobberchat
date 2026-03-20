@@ -36,19 +36,6 @@ config:
     perTag: 200
     burstFactor: 2.0
 
-nats:
-  enabled: true
-  image:
-    repository: nats
-    tag: "2.10"
-  resources:
-    requests:
-      cpu: 100m
-      memory: 128Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi
-
 postgres:
   enabled: true
   image:

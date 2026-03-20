@@ -66,7 +66,7 @@ check "POST /v1/agents" "201" "POST" "/v1/agents" "{\"display_name\":\"smoke-age
 AGENT_ID=$(jp "['agent_id']")
 AGENT_SECRET=$(jp "['api_secret']")
 
-check "GET /v1/agents/{id}" "200" "GET" "/v1/agents/$AGENT_ID" "" -H "Authorization: Bearer $TOKEN"
+check "GET /v1/info/{id}" "200" "GET" "/v1/info/$AGENT_ID" "" -H "Authorization: Bearer $TOKEN"
 check "POST /v1/agents/{id}/rotate-secret" "200" "POST" "/v1/agents/$AGENT_ID/rotate-secret" "{}" -H "Authorization: Bearer $TOKEN"
 AGENT_SECRET=$(jp "['api_secret']")
 
@@ -77,18 +77,15 @@ check "DELETE /v1/agents/{id}" "200" "DELETE" "/v1/agents/$DEL_ID" "" -H "Author
 
 echo ""
 echo "▸ Registry"
-check "GET /v1/registry/agents" "200" "GET" "/v1/registry/agents" "" -H "Authorization: Bearer $TOKEN"
 check "POST /v1/registry/discover" "200" "POST" "/v1/registry/discover" "{\"capability\":\"chat\"}" -H "X-Agent-ID: $AGENT_ID" -H "X-API-Secret: $AGENT_SECRET"
 
 echo ""
 echo "▸ Groups"
 check "POST /v1/groups" "201" "POST" "/v1/groups" "{\"name\":\"smoke-group-${TS}\"}" -H "Authorization: Bearer $TOKEN"
 GROUP_ID=$(jp "['id']")
-check "GET /v1/groups" "200" "GET" "/v1/groups" "" -H "Authorization: Bearer $TOKEN"
 
 echo ""
-echo "▸ Group Join/Leave"
-check "POST /v1/groups/{id}/join" "200" "POST" "/v1/groups/$GROUP_ID/join" "{}" -H "X-Agent-ID: $AGENT_ID" -H "X-API-Secret: $AGENT_SECRET"
+echo "▸ Group Leave"
 check "POST /v1/groups/{id}/leave" "200" "POST" "/v1/groups/$GROUP_ID/leave" "{}" -H "X-Agent-ID: $AGENT_ID" -H "X-API-Secret: $AGENT_SECRET"
 
 echo ""
@@ -100,7 +97,7 @@ check "GET /v1/adapter" "200" "GET" "/v1/adapter" "" -H "Authorization: Bearer $
 
 echo ""
 echo "▸ Negative Tests"
-check "No auth → 401" "401" "GET" "/v1/groups" ""
+check "No auth → 401" "401" "GET" "/v1/conversations" ""
 check "Duplicate email → 400" "400" "POST" "/v1/auth/register" "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}"
 check "Wrong password → 401" "401" "POST" "/v1/auth/login" "{\"email\":\"$EMAIL\",\"password\":\"wrong\"}"
 

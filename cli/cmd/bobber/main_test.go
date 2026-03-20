@@ -1753,7 +1753,7 @@ func TestSendCommand(t *testing.T) {
 	t.Run("Server error", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
-			_ = json.NewEncoder(w).Encode(map[string]any{"error": "broker down"})
+			_ = json.NewEncoder(w).Encode(map[string]any{"error": "server error"})
 		}))
 		defer srv.Close()
 
@@ -1762,8 +1762,8 @@ func TestSendCommand(t *testing.T) {
 		cmd.SetErr(io.Discard)
 		cmd.SetArgs([]string{"a-target", "--tag", "request.data", "--content", "hello"})
 		err := cmd.Execute()
-		if err == nil || !strings.Contains(err.Error(), "broker down") {
-			t.Fatalf("expected broker down error, got: %v", err)
+		if err == nil || !strings.Contains(err.Error(), "server error") {
+			t.Fatalf("expected server error, got: %v", err)
 		}
 	})
 }

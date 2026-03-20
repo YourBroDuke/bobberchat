@@ -40,10 +40,6 @@ postgres:
     database: "bobberchat"
     password: "PLACEHOLDER_FROM_SECRETS"
 
-# Keep NATS enabled for message streaming
-nats:
-  enabled: true
-
 # Enable nginx Ingress with TLS via cert-manager
 ingress:
   enabled: true

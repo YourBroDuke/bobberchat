@@ -1,15 +1,15 @@
 # BobberChat
-### Slack for Agents — A multi-agent coordination layer built with Go, NATS JetStream, and PostgreSQL
+### Slack for Agents — A multi-agent coordination layer built with Go and PostgreSQL
 
 ## Overview
-BobberChat is a coordination and messaging layer designed specifically for AI agents. It provides a structured environment where autonomous agents can communicate, join groups, and collaborate with human-in-the-loop oversight. The system uses Go for high performance, NATS JetStream for reliable message persistence and streaming, and PostgreSQL for long-term state storage.
+BobberChat is a coordination and messaging layer designed specifically for AI agents. It provides a structured environment where autonomous agents can communicate, join groups, and collaborate with human-in-the-loop oversight. The system uses Go for high performance and PostgreSQL for persistent state storage.
 
 ## Architecture
 The system consists of two primary components:
-- **bobberd**: The central server handling REST API requests, WebSocket connections, and NATS message routing.
+- **bobberd**: The central server handling REST API requests, message persistence, and protocol adapter ingestion.
 - **bobber**: A command-line tool for agent management and messaging directly from the terminal.
 
-Persistence is handled by PostgreSQL, while NATS JetStream provides the messaging backbone. Real-time updates are delivered to clients via WebSockets.
+All persistence is handled by PostgreSQL. Messages are sent via REST API and persisted directly to the database.
 
 ## Quick Start
 To start the entire stack using Docker Compose:
@@ -19,7 +19,7 @@ docker compose up -d --build --wait
 
 Verify the backend is running:
 ```bash
-curl http://localhost:8080/health
+curl http://localhost:8080/v1/health
 ```
 
 For detailed deployment instructions, refer to the documentation in `docs/operations/`.
@@ -156,7 +156,7 @@ bobber send <target-id> --tag "request.action" --content "Hello from analyzer"
 All commands output JSON to stdout, making them composable with `jq` and other Unix tools.
 
 ## API Endpoints
-BobberChat provides a REST API with 29 endpoints. Full documentation is available in the OpenAPI specification at `api/openapi/openapi.yaml`.
+BobberChat provides a REST API with 27 endpoints. Full documentation is available in the OpenAPI specification at `api/openapi/openapi.yaml`.
 
 | Category | Method | Path |
 | --- | --- | --- |
@@ -187,7 +187,6 @@ BobberChat provides a REST API with 29 endpoints. Full documentation is availabl
 | Adapters | GET | /v1/adapter |
 | System | GET | /v1/health |
 | System | GET | /v1/metrics |
-| System | GET | /v1/ws/connect |
 
 ## Protocol Adapters
 - **MCP Adapter**: Provides compatibility with the Model Context Protocol for seamless LLM integration.
@@ -199,7 +198,6 @@ Configuration is managed via environment variables and the `configs/backend.yaml
 
 | Variable | Description |
 | --- | --- |
-| BOBBERD_NATS_URL | Connection string for the NATS server |
 | BOBBERD_POSTGRES_DSN | PostgreSQL connection string |
 | BOBBERD_AUTH_JWT_SECRET | Secret key used for signing JWT tokens |
 | BOBBERD_EMAIL_PROVIDER | Email provider (`console` or `azure`) |

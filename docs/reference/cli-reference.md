@@ -769,7 +769,7 @@ All commands output JSON to stdout, making them composable with `jq` and other U
 
 ## bobberd — Backend Server
 
-The central server handling REST API requests, WebSocket connections, NATS message routing, and protocol adapter ingestion.
+The central server handling REST API requests, message persistence, and protocol adapter ingestion.
 
 **Source**: `backend/cmd/bobberd/main.go` | **Framework**: `flag` + Viper
 
@@ -804,7 +804,6 @@ Configuration is loaded from the YAML file and can be overridden with environmen
 | `BOBBERD_SERVER_LISTEN_ADDRESS` | `server.listen_address` | `:8080` | Address and port to listen on |
 | `BOBBERD_SERVER_READ_TIMEOUT_SECONDS` | `server.read_timeout_seconds` | `15` | HTTP read timeout |
 | `BOBBERD_SERVER_WRITE_TIMEOUT_SECONDS` | `server.write_timeout_seconds` | `15` | HTTP write timeout |
-| `BOBBERD_NATS_URL` | `nats.url` | — | NATS server connection string |
 | `BOBBERD_POSTGRES_DSN` | `postgres.dsn` | — | PostgreSQL connection string |
 | `BOBBERD_AUTH_JWT_SECRET` | `auth.jwt_secret` | — | JWT signing secret |
 | `BOBBERD_EMAIL_PROVIDER` | `email.provider` | `console` | Email provider (`console` or `azure`) |
@@ -818,13 +817,13 @@ Configuration is loaded from the YAML file and can be overridden with environmen
 
 ### bobberd Behavior
 
-- Connects to NATS JetStream and PostgreSQL on startup
+- Connects to PostgreSQL on startup
 - Registers 3 protocol adapters: MCP, A2A, gRPC
-- Serves 28 REST + WebSocket endpoints on the configured address
+- Serves 27 REST endpoints on the configured address
 - Enforces ownership-based access control
 - Applies per-agent, per-group, per-tag rate limiting (when enabled)
 - Logs audit trail for every published message
-- Graceful shutdown on `SIGINT` / `SIGTERM` with 15-second drain timeout for active WebSocket connections
+- Graceful shutdown on `SIGINT` / `SIGTERM` with 15-second timeout
 
 ---
 

@@ -12,8 +12,6 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -22,7 +20,6 @@ import (
 	grpcadapter "github.com/bobberchat/bobberchat/backend/internal/adapter/grpc"
 	"github.com/bobberchat/bobberchat/backend/internal/adapter/mcp"
 	"github.com/bobberchat/bobberchat/backend/internal/auth"
-	"github.com/bobberchat/bobberchat/backend/internal/broker"
 	"github.com/bobberchat/bobberchat/backend/internal/conversation"
 	"github.com/bobberchat/bobberchat/backend/internal/email"
 	"github.com/bobberchat/bobberchat/backend/internal/email/azurecs"
@@ -33,7 +30,6 @@ import (
 	"github.com/bobberchat/bobberchat/backend/internal/ratelimit"
 	"github.com/bobberchat/bobberchat/backend/internal/registry"
 	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
 	"github.com/jackc/pgx/v5"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -46,9 +42,6 @@ type config struct {
 		ReadTimeoutSeconds  int    `mapstructure:"read_timeout_seconds"`
 		WriteTimeoutSeconds int    `mapstructure:"write_timeout_seconds"`
 	} `mapstructure:"server"`
-	NATS struct {
-		URL string `mapstructure:"url"`
-	} `mapstructure:"nats"`
 	Postgres struct {
 		DSN string `mapstructure:"dsn"`
 	} `mapstructure:"postgres"`
@@ -75,29 +68,24 @@ type config struct {
 
 type contextKey string
 
-type messagePublisher interface {
-	PublishMessage(ctx context.Context, env *protocol.Envelope) error
-}
-
 const (
 	ctxUserID  contextKey = "user_id"
 	ctxAgentID contextKey = "agent_id"
 )
 
 type app struct {
-	db           *persistence.DB
-	authSvc      *auth.Service
-	registrySvc  *registry.Service
-	convSvc      *conversation.Service
-	broker       *broker.Broker
-	publisher    messagePublisher
-	adapters     map[string]adapter.Adapter
-	metricsReg   *prometheus.Registry
-	metrics      *observability.Metrics
-	limiter      *ratelimit.Limiter
-	wsUpgrader   websocket.Upgrader
-	heartbeatTTL time.Duration
-	activeConns  sync.WaitGroup
+	db          *persistence.DB
+	authSvc     *auth.Service
+	registrySvc *registry.Service
+	convSvc     *conversation.Service
+	adapters    map[string]adapter.Adapter
+	metricsReg  *prometheus.Registry
+	metrics     *observability.Metrics
+	limiter     *ratelimit.Limiter
+
+	// persistMessage saves a message to the database and returns the resolved
+	// conversation ID. Extracted as a func field to allow test injection.
+	persistMessage func(ctx context.Context, env *protocol.Envelope) (uuid.UUID, error)
 }
 
 func main() {
@@ -118,16 +106,6 @@ func main() {
 		logger.Fatal().Err(err).Msg("failed to connect postgres")
 	}
 	defer db.Close()
-
-	brok, err := broker.NewBroker(cfg.NATS.URL, db, metrics)
-	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to connect nats")
-	}
-	defer brok.Close()
-
-	if err := brok.Setup(context.Background()); err != nil {
-		logger.Fatal().Err(err).Msg("failed to setup jetstream")
-	}
 
 	adapters := map[string]adapter.Adapter{
 		"mcp":  mcp.NewMCPAdapter(),
@@ -157,19 +135,12 @@ func main() {
 		authSvc:     auth.NewService(db, cfg.Auth.JWTSecret, emailSender, verificationTTL),
 		registrySvc: registry.NewService(db),
 		convSvc:     conversation.NewService(db),
-		broker:      brok,
-		publisher:   brok,
 		adapters:    adapters,
 		metricsReg:  metricsReg,
 		metrics:     metrics,
 		limiter:     ratelimit.New(rlCfg),
-		wsUpgrader: websocket.Upgrader{
-			ReadBufferSize:  4096,
-			WriteBufferSize: 4096,
-			CheckOrigin:     func(_ *http.Request) bool { return true },
-		},
-		heartbeatTTL: 30 * time.Second,
 	}
+	a.persistMessage = a.defaultPersistMessage
 
 	logger.Info().Int("count", len(adapters)).Msg("protocol adapters registered")
 
@@ -199,18 +170,6 @@ func main() {
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		logger.Error().Err(err).Msg("graceful shutdown failed")
-	}
-
-	done := make(chan struct{})
-	go func() {
-		a.activeConns.Wait()
-		close(done)
-	}()
-	select {
-	case <-done:
-		logger.Info().Msg("all connections drained")
-	case <-ctx.Done():
-		logger.Warn().Msg("connection drain timed out")
 	}
 }
 
@@ -282,7 +241,6 @@ func (a *app) registerRoutes(mux *http.ServeMux) {
 
 	mux.HandleFunc("GET /v1/health", a.handleHealth)
 	mux.Handle("GET /v1/metrics", promhttp.HandlerFor(a.metricsReg, promhttp.HandlerOpts{}))
-	mux.HandleFunc("GET /v1/ws/connect", a.handleWebSocket)
 
 	mux.HandleFunc("POST /v1/adapter/{name}/ingest", a.requireAuth(true, true, a.handleAdapterIngest))
 	mux.HandleFunc("GET /v1/adapter", a.requireJWT(a.handleListAdapters))
@@ -1056,7 +1014,8 @@ func (a *app) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.publishAndAudit(r.Context(), env); err != nil {
+	conversationID, err := a.publishAndAudit(r.Context(), env)
+	if err != nil {
 		if errors.Is(err, errRateLimited) {
 			writeError(w, http.StatusTooManyRequests, "rate limited")
 			return
@@ -1066,33 +1025,9 @@ func (a *app) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := map[string]any{
-		"sent":       true,
-		"message_id": messageID,
-	}
-
-	fromID, _ := uuid.Parse(from)
-	toID, _ := uuid.Parse(req.To)
-	if fromID != uuid.Nil && toID != uuid.Nil {
-		var fromKind, toKind persistence.ParticipantType
-		if contextString(r.Context(), ctxAgentID) != "" {
-			fromKind = persistence.ParticipantTypeAgent
-		} else {
-			fromKind = persistence.ParticipantTypeUser
-		}
-
-		repos := persistence.NewPostgresRepositories(a.db)
-		if group, err := repos.Groups.GetByID(r.Context(), toID); err == nil && group.ConversationID != nil {
-			resp["conversation_id"] = *group.ConversationID
-		} else {
-			if _, err := repos.Agents.GetByID(r.Context(), toID); err == nil {
-				toKind = persistence.ParticipantTypeAgent
-			} else {
-				toKind = persistence.ParticipantTypeUser
-			}
-			if conv, err := a.convSvc.GetOrCreateDirect(r.Context(), fromID, toID, fromKind, toKind); err == nil {
-				resp["conversation_id"] = conv.ID
-			}
-		}
+		"sent":            true,
+		"message_id":      messageID,
+		"conversation_id": conversationID,
 	}
 
 	writeJSON(w, http.StatusAccepted, resp)
@@ -1171,7 +1106,7 @@ func (a *app) handleReplayMessage(w http.ResponseWriter, r *http.Request) {
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	}
 
-	if err := a.publishAndAudit(r.Context(), env); err != nil {
+	if _, err := a.publishAndAudit(r.Context(), env); err != nil {
 		if errors.Is(err, errRateLimited) {
 			writeError(w, http.StatusTooManyRequests, "rate limited")
 			return
@@ -1227,7 +1162,7 @@ func (a *app) handleAdapterIngest(w http.ResponseWriter, r *http.Request) {
 		env.Metadata = map[string]any{}
 	}
 
-	if err := a.publishAndAudit(r.Context(), env); err != nil {
+	if _, err := a.publishAndAudit(r.Context(), env); err != nil {
 		if errors.Is(err, errRateLimited) {
 			writeError(w, http.StatusTooManyRequests, "rate limited")
 			return
@@ -1263,124 +1198,6 @@ func (a *app) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-func (a *app) handleWebSocket(w http.ResponseWriter, r *http.Request) {
-	token := strings.TrimSpace(r.URL.Query().Get("token"))
-	if token == "" {
-		token = bearerToken(r.Header.Get("Authorization"))
-	}
-	if token == "" {
-		writeError(w, http.StatusUnauthorized, "missing token")
-		return
-	}
-
-	claims, err := a.authSvc.ValidateJWT(token)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, "invalid token")
-		return
-	}
-
-	conn, err := a.wsUpgrader.Upgrade(w, r, nil)
-	if err != nil {
-		return
-	}
-	defer conn.Close()
-
-	a.activeConns.Add(1)
-	if a.metrics != nil {
-		a.metrics.ActiveWSConns.Inc()
-	}
-	defer func() {
-		a.activeConns.Done()
-		if a.metrics != nil {
-			a.metrics.ActiveWSConns.Dec()
-		}
-	}()
-
-	ctx, cancel := context.WithCancel(r.Context())
-	defer cancel()
-
-	outbound := make(chan *protocol.Envelope, 128)
-	if err := a.broker.SubscribeAgent(ctx, claims.UserID, func(env *protocol.Envelope) {
-		select {
-		case outbound <- env:
-		default:
-		}
-	}); err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
-		return
-	}
-
-	var missedPongs int32
-	_ = conn.SetReadDeadline(time.Now().Add(a.heartbeatTTL * 3))
-	conn.SetPongHandler(func(string) error {
-		atomic.StoreInt32(&missedPongs, 0)
-		return conn.SetReadDeadline(time.Now().Add(a.heartbeatTTL * 3))
-	})
-
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	go func() {
-		defer wg.Done()
-		for {
-			var env protocol.Envelope
-			if err := conn.ReadJSON(&env); err != nil {
-				cancel()
-				return
-			}
-			if env.ID == "" {
-				env.ID = uuid.NewString()
-			}
-			if env.Timestamp == "" {
-				env.Timestamp = time.Now().UTC().Format(time.RFC3339)
-			}
-			if env.Metadata == nil {
-				env.Metadata = map[string]any{}
-			}
-			if env.From == "" {
-				env.From = claims.UserID
-			}
-			if err := env.Validate(); err != nil {
-				_ = conn.WriteJSON(map[string]any{"error": err.Error()})
-				continue
-			}
-			if err := a.publishAndAudit(ctx, &env); err != nil {
-				_ = conn.WriteJSON(map[string]any{"error": err.Error()})
-			}
-		}
-	}()
-
-	go func() {
-		defer wg.Done()
-		pingTicker := time.NewTicker(a.heartbeatTTL)
-		defer pingTicker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case env := <-outbound:
-				if err := conn.WriteJSON(env); err != nil {
-					cancel()
-					return
-				}
-			case <-pingTicker.C:
-				if err := conn.WriteControl(websocket.PingMessage, []byte("ping"), time.Now().Add(5*time.Second)); err != nil {
-					cancel()
-					return
-				}
-				if atomic.AddInt32(&missedPongs, 1) >= 3 {
-					cancel()
-					return
-				}
-			}
-		}
-	}()
-
-	<-ctx.Done()
-	_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "bye"), time.Now().Add(2*time.Second))
-	wg.Wait()
-}
-
 func readJSON(r *http.Request, dst any) error {
 	defer r.Body.Close()
 	dec := json.NewDecoder(r.Body)
@@ -1395,14 +1212,14 @@ var (
 	errRateLimited = errors.New("rate limited")
 )
 
-func (a *app) publishAndAudit(ctx context.Context, env *protocol.Envelope) error {
+func (a *app) publishAndAudit(ctx context.Context, env *protocol.Envelope) (uuid.UUID, error) {
 	if a.limiter != nil {
 		agentKey := ratelimit.AgentKey(env.From)
 		if !a.limiter.Allow(ratelimit.DimensionAgent, agentKey) {
 			if a.metrics != nil {
 				a.metrics.RateLimited.WithLabelValues(ratelimit.DimensionAgent, agentKey).Inc()
 			}
-			return errRateLimited
+			return uuid.Nil, errRateLimited
 		}
 
 		if strings.HasPrefix(env.To, "group:") {
@@ -1411,7 +1228,7 @@ func (a *app) publishAndAudit(ctx context.Context, env *protocol.Envelope) error
 				if a.metrics != nil {
 					a.metrics.RateLimited.WithLabelValues(ratelimit.DimensionGroup, groupKey).Inc()
 				}
-				return errRateLimited
+				return uuid.Nil, errRateLimited
 			}
 		}
 
@@ -1420,15 +1237,76 @@ func (a *app) publishAndAudit(ctx context.Context, env *protocol.Envelope) error
 			if a.metrics != nil {
 				a.metrics.RateLimited.WithLabelValues(ratelimit.DimensionTag, tagKey).Inc()
 			}
-			return errRateLimited
+			return uuid.Nil, errRateLimited
 		}
 	}
 
-	if err := a.publisher.PublishMessage(ctx, env); err != nil {
-		return err
+	return a.persistMessage(ctx, env)
+}
+
+func (a *app) defaultPersistMessage(ctx context.Context, env *protocol.Envelope) (uuid.UUID, error) {
+	repos := persistence.NewPostgresRepositories(a.db)
+
+	fromID, err := uuid.Parse(env.From)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("invalid from id: %w", err)
 	}
 
-	return nil
+	msgID, err := uuid.Parse(env.ID)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("invalid message id: %w", err)
+	}
+
+	ts, err := time.Parse(time.RFC3339, env.Timestamp)
+	if err != nil {
+		ts = time.Now().UTC()
+	}
+
+	var fromKind persistence.ParticipantType
+	if _, agentErr := repos.Agents.GetByID(ctx, fromID); agentErr == nil {
+		fromKind = persistence.ParticipantTypeAgent
+	} else {
+		fromKind = persistence.ParticipantTypeUser
+	}
+
+	toID, err := uuid.Parse(env.To)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("invalid to id: %w", err)
+	}
+
+	var conversationID uuid.UUID
+	if group, groupErr := repos.Groups.GetByID(ctx, toID); groupErr == nil && group.ConversationID != nil {
+		conversationID = *group.ConversationID
+	} else {
+		var toKind persistence.ParticipantType
+		if _, agentErr := repos.Agents.GetByID(ctx, toID); agentErr == nil {
+			toKind = persistence.ParticipantTypeAgent
+		} else {
+			toKind = persistence.ParticipantTypeUser
+		}
+		conv, convErr := a.convSvc.GetOrCreateDirect(ctx, fromID, toID, fromKind, toKind)
+		if convErr != nil {
+			return uuid.Nil, fmt.Errorf("resolve conversation: %w", convErr)
+		}
+		conversationID = conv.ID
+	}
+
+	msg := persistence.Message{
+		ID:              msgID,
+		FromID:          fromID,
+		ConversationID:  conversationID,
+		ParticipantKind: fromKind,
+		Tag:             env.Tag,
+		Content:         env.Content,
+		Metadata:        env.Metadata,
+		Timestamp:       ts,
+	}
+
+	if _, err := repos.Messages.Save(ctx, msg); err != nil {
+		return uuid.Nil, fmt.Errorf("save message: %w", err)
+	}
+
+	return conversationID, nil
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) {

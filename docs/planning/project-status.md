@@ -57,7 +57,6 @@ go test -tags=integration ./backend/test/integration/ -v    # ✅ 3/3 pass
 | `backend/internal/auth` | `auth.go` | ~503 | Argon2id hashing, JWT (HS256, 1hr TTL), bcrypt for passwords, email verification and resend flows |
 | `backend/internal/email` | `email.go`, `azurecs/azurecs.go`, `console/console.go` | ~214 | Provider-agnostic email sender interface with console and Azure Communication Services (ACS) sender implementations. ACS sender uses HMAC-SHA256 signed REST API calls (`/emails:send`) with connection-string auth |
 | `backend/internal/registry` | `registry.go` | ~115 | Agent discovery and listing |
-| `backend/internal/broker` | `broker.go` | ~232 | NATS JetStream message routing, 3 streams, subject mapping |
 | `backend/internal/conversation` | `conversation.go` | ~202 | Conversations (DM & group), membership via conversation_participants, message history, list by type |
 | `backend/internal/observability` | `observability.go` | ~110 | Prometheus metrics (incl. rate limit, audit, active WS conn gauges), structured logging |
 
@@ -100,7 +99,7 @@ All system-injected data has been moved from `Tag` and `Payload` fields into `Me
 - `SetSystemMeta(env, key, value)` — write system metadata
 - `SystemMeta(env, key)` / `SystemMetaString(env, key)` — read system metadata
 
-**Broker & main server**: Use `protocol.EffectiveTag(env)` for routing, rate limiting, metrics, and audit.
+**Main server**: Uses `protocol.EffectiveTag(env)` for rate limiting, metrics, and audit.
 
 **Replay handler**: Replay keys (`_replayed`, `_original_message_id`, `_replay_reason`, `_tag`) in Metadata.
 
@@ -122,14 +121,14 @@ Server endpoints for adapters:
 Key implementation details:
 - **Ownership-based access control**: `publishAndAudit` verifies message sender ownership and group membership (returns 403 on violation)
 - **Rate limiting**: Token bucket per-agent, per-group, per-tag. Configurable via `configs/backend.yaml`. Returns 429 when exceeded
-- **Graceful shutdown**: `activeConns sync.WaitGroup` tracks live WebSocket connections; shutdown drains with timeout
-- **All 4 publish call sites** (`handleSendMessage`, `handleReplayMessage`, `handleAdapterIngest`, `handleWebSocket`) route through `publishAndAudit`
+- **Graceful shutdown**: Tracks active requests and drains with timeout
+- **All 3 publish call sites** (`handleSendMessage`, `handleReplayMessage`, `handleAdapterIngest`) route through `publishAndAudit`
 
 ### Binaries (2 commands — Go Workspace)
 
 | Binary | Source | Lines | Description |
 |--------|--------|-------|-------------|
-| `bobberd` | `backend/cmd/bobberd/main.go` | ~1,350 | Backend server — 28 REST endpoints + WebSocket + message replay + adapter ingest + production hardening |
+| `bobberd` | `backend/cmd/bobberd/main.go` | ~1,100 | Backend server — 27 REST endpoints + message replay + adapter ingest + production hardening |
 | `bobber` | `cli/cmd/bobber/main.go` | ~880 | CLI tool — account, agent (create/use/rotate-secret/delete), session, connection, messaging, conversation, blacklist (add/remove/list), and group management commands. `agent use` fetches info, rotates secret, and saves credentials. Tests in `main_test.go` |
 
 ### SDK
@@ -138,7 +137,7 @@ Key implementation details:
 |------|-------------|
 | `backend/pkg/sdk/types.go` | SDK type definitions |
 | `backend/pkg/sdk/helpers.go` | Message construction helpers |
-| `backend/pkg/sdk/client.go` | WebSocket client with auto-reconnect |
+| `backend/pkg/sdk/client.go` | REST HTTP client for message sending |
 | `backend/pkg/sdk/config.go` | Configuration loader |
 
 ### Tests (15 packages, ~245+ subtests)
@@ -149,7 +148,6 @@ Key implementation details:
 | `backend/internal/protocol/tags_test.go` | 28 | Tag parsing, validation, family classification |
 | `backend/internal/protocol/version_test.go` | 21 | Version negotiation, compatibility checks |
 | `backend/internal/auth/auth_test.go` | 10 | Argon2id hash/verify, JWT sign/validate, bcrypt |
-| `backend/internal/broker/broker_test.go` | 8 | Subject construction, routing logic |
 | `backend/internal/registry/registry_test.go` | — | Input validation |
 | `backend/internal/conversation/conversation_test.go` | — | Input validation |
 | `backend/internal/adapter/mcp/mcp_test.go` | 13 | MCP ingest/emit, validation, error cases |
@@ -167,7 +165,7 @@ Key implementation details:
 | File | Description |
 |------|-------------|
 | `Dockerfile` | Multi-stage build (`golang:latest` → `alpine:3.19`), workspace-aware, copies migrations |
-| `docker-compose.yml` | 4 services: `nats`, `postgres`, `init-db` (migration), `bobberd` with health checks |
+| `docker-compose.yml` | 3 services: `postgres`, `init-db` (migration), `bobberd` with health checks |
 | `migrations/001_initial_schema.sql` | Full schema — 7 tables, 4 enum types, 8 indexes, default partition |
 | `migrations/002_email_verification.sql` | Adds `users.email_verified`, verification token columns, and partial token index |
 | `migrations/003_connections_blacklist.sql` | Adds `connection_requests` and `blacklist_entries` tables, enum, and indexes |
@@ -187,23 +185,21 @@ Key implementation details:
 
 - [x] Rate limiting middleware (design spec §11.2) — Token bucket per-agent/group/tag in `backend/internal/ratelimit/`
 - [x] Ownership-based access control (design spec §11.3) — `publishAndAudit` verifies message sender ownership
-- [x] Graceful shutdown with drain (design spec §12.5) — `activeConns` WaitGroup with timeout
-- [x] WebSocket ping/pong keepalive — already existed in `handleWebSocket`
+- [x] Graceful shutdown with drain (design spec §12.5) — 15-second timeout
 - [x] Agent heartbeat timeout detection — already existed (`missedPongs` counter, `heartbeatTTL`)
-- [ ] NATS JetStream consumer recovery on reconnect — deferred (NATS client handles basic reconnect)
 
 ### Priority 3: CI/CD & Deployment ✅ COMPLETE
 
 - [x] GitHub Actions CI workflow (lint, build, unit tests, integration tests, E2E tests, Docker build)
 - [x] GitHub Actions release workflow (Docker image publish to GHCR, release binaries)
-- [x] Kubernetes raw manifests (namespace, configmap, secrets, nats, postgres, bobberd, migration Job)
-- [x] Helm chart (deployment, nats, postgres, secrets, configmap, migration hook, ingress)
+- [x] Kubernetes raw manifests (namespace, configmap, secrets, postgres, bobberd, migration Job)
+- [x] Helm chart (deployment, postgres, secrets, configmap, migration hook, ingress)
 - [x] Database migration runner (psql-based via Makefile, K8s Job, and Helm hook)
 
 CI/CD files added:
 - `.github/workflows/ci.yml` — 7-job CI pipeline (lint, build, test, integration, E2E, Docker build, Docker push)
 - `.github/workflows/release.yml` — Release pipeline (multi-platform Docker push to GHCR, cross-compiled binaries)
-- `deploy/k8s/` — 7 raw Kubernetes manifests (namespace, configmap, secrets, nats, postgres, bobberd+migration, cert-manager-issuers)
+- `deploy/k8s/` — 6 raw Kubernetes manifests (namespace, configmap, secrets, postgres, bobberd+migration, cert-manager-issuers)
 - `deploy/helm/bobberchat/` — Full Helm chart with 8 templates + helpers + configurable values
 
 ### Priority 4: Email Verification & Azure Communication Services ✅ COMPLETE
@@ -229,9 +225,7 @@ Azure resources:
 
 1. **Persistence models missing JSON tags**: All structs in `backend/internal/persistence/models.go` had no `json` struct tags, causing API responses to use Go's default capitalized field names (e.g., `ID` instead of `id`). Added proper `json` tags with `json:"-"` for sensitive fields (`PasswordHash`, `APISecretHash`).
 
-2. **NATS Docker healthcheck**: NATS 2.10 image doesn't include `wget` binary. Changed healthcheck from `wget -qO- http://localhost:8222/healthz` to `CMD /nats-server --help` and added `-m 8222` flag to enable monitoring endpoint.
-
-3. **Integration test setup**: `setupDB()` failed when running against an already-migrated database (from `init-db` container). Added schema drop before migration re-apply.
+2. **Integration test setup**: `setupDB()` failed when running against an already-migrated database (from `init-db` container). Added schema drop before migration re-apply.
 
 ---
 
@@ -243,11 +237,9 @@ Azure resources:
 Go Workspace (go.work) with 2 independent modules:
 
   backend/go.mod — github.com/bobberchat/bobberchat/backend
-    nats.go v1.49.0         — NATS JetStream messaging
     pgx/v5 v5.8.0           — PostgreSQL driver
     jwt/v5 v5.3.1           — JWT tokens
     uuid v1.6.0             — UUID generation
-    gorilla/websocket v1.5.3 — WebSocket server
     prometheus v1.23.2      — Metrics
     cobra v1.10.2           — CLI framework (unused, can remove)
     viper v1.21.0           — Configuration
@@ -266,7 +258,7 @@ Go version: 1.25.0 (go.mod)
 
 Backend config: `configs/backend.yaml`
 - Viper prefix: `BOBBERD`, key replacer `.` → `_`
-- Example: `BOBBERD_NATS_URL` → `nats.url`, `BOBBERD_POSTGRES_DSN` → `postgres.dsn`
+- Example: `BOBBERD_POSTGRES_DSN` → `postgres.dsn`
 - JWT secret: `auth.jwt_secret` (must change from default `change-me`)
 
 ### Database
@@ -281,15 +273,6 @@ Backend config: `configs/backend.yaml`
 - `pgMessageRepository.Save` atomically inserts the message and updates `conversations.last_message_id/last_message_at` in a single transaction
 - Migration: `migrations/001_initial_schema.sql` through `migrations/022_conversation_group_id.sql`
 
-### NATS JetStream Streams
-
-| Stream | Subject Pattern | Retention |
-|--------|----------------|-----------|
-| `BOBBER_MSG` | `bobberchat.msg.>`, `bobberchat.group.>` | 30 days |
-| `BOBBER_SYSTEM` | `bobberchat.system.>` | 24 hours |
-
-Subject pattern: `bobberchat.msg.{to_id}` for direct messages, `bobberchat.group.{group_id}` for groups
-
 ### REST API Endpoints (27 total)
 
 ```
@@ -301,7 +284,6 @@ Messages:   GET /v1/messages/poll, POST /v1/messages/send, POST /v1/messages/:id
 Connections: POST /v1/connections/request, GET /v1/connections/inbox, POST /v1/connections/:id/accept, POST /v1/connections/:id/reject
 Blacklist:  GET /v1/blacklist, POST /v1/blacklist, DELETE /v1/blacklist/:id
 Adapters:   POST /v1/adapter/{name}/ingest, GET /v1/adapter
-WebSocket:  GET /v1/ws/connect
 System:     GET /v1/health, /v1/metrics
 ```
 
@@ -334,7 +316,7 @@ System:     GET /v1/health, /v1/metrics
 
 I'm continuing work on the BobberChat project. Read docs/planning/project-status.md for full context.
 
-The project is a "Slack for Agents" — a multi-agent coordination layer built with Go, NATS JetStream, and PostgreSQL.
+The project is a "Slack for Agents" — a multi-agent coordination layer built with Go and PostgreSQL.
 
 The codebase uses a Go workspace (go.work) with 2 independent modules: backend/, cli/. Each has its own go.mod.
 

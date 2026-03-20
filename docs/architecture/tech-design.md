@@ -26,7 +26,7 @@ Confirmed technology stack (Design Spec §2.5, PRD §9.1):
 | Layer | Technology |
 |---|---|
 | Language/runtime | Go 1.25+ |
-| Message fabric | NATS JetStream |
+| Message fabric | PostgreSQL (direct persistence) |
 | Persistence | PostgreSQL 15+ |
 
 Design alignment notes:
@@ -52,8 +52,7 @@ bobberchat/
 │   ├── cmd/bobberd/       # Backend Service binary
 │   │   └── main.go
 │   ├── internal/
-│   │   ├── broker/        # NATS JetStream message routing
-│   │   ├── registry/      # Agent registry & discovery
+│   ├── registry/      # Agent registry & discovery
 │   │   ├── auth/          # API secret & JWT authentication
 │   │   ├── protocol/      # Wire envelope, tag taxonomy, validation
 │   │   ├── conversation/  # Chat groups, private chats
@@ -91,7 +90,6 @@ bobberchat/
 
 | Package | Responsibility |
 |---|---|
-| `backend/internal/broker` | Owns JetStream stream/consumer setup, subject routing, dedupe handling, and delivery policy enforcement by tag family (Design Spec §3.5). |
 | `backend/internal/registry` | Manages agent registration, heartbeat liveness, and discovery query execution (Design Spec §6). |
 | `backend/internal/auth` | Handles human auth (JWT) and machine auth (API secret verification, rotation, revocation) (Design Spec §5, §11). |
 | `backend/internal/protocol` | Defines canonical envelope structs, tag taxonomy constants, content validators, and protocol version negotiation logic (Design Spec §3.6). |

@@ -3,11 +3,6 @@ server:
   read_timeout_seconds: 15
   write_timeout_seconds: 15
 
-nats:
-  url: "nats://localhost:4222"
-  jetstream_domain: ""
-  stream_replicas: 3
-
 postgres:
   dsn: "postgres://bobberchat:bobberchat@localhost:5432/bobberchat?sslmode=disable"
   max_open_conns: 50

@@ -29,6 +29,8 @@ tags:
     description: Asynchronous communication and message replays
   - name: Health
     description: System monitoring and metrics
+  - name: Adapters
+    description: Protocol adapter ingestion and discovery
 
 paths:
   /v1/auth/register:
@@ -960,32 +962,102 @@ paths:
               schema:
                 type: string
 
-  /v1/ws/connect:
+
+  /v1/adapter/{name}/ingest:
+    post:
+      tags:
+        - Adapters
+      summary: Ingest a raw message via protocol adapter
+      description: >
+        Submits raw protocol-specific data (MCP, A2A, etc.) for ingestion.
+        The server resolves the protocol by the `name` path parameter, 
+        ingests the message, and publishes the resulting envelope.
+      operationId: adapterIngest
+      security:
+        - BearerAuth: []
+        - AgentSecret: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: Adapter name (e.g. "mcp", "a2a", "grpc")
+          schema:
+            type: string
+        - name: X-Connection-ID
+          in: header
+          required: false
+          description: Optional correlation ID for the connection
+          schema:
+            type: string
+        - name: X-Target-Agent
+          in: header
+          required: false
+          description: Optional target agent override
+          schema:
+            type: string
+      requestBody:
+        required: true
+        description: Raw protocol data
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        '202':
+          description: Message accepted for ingestion
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accepted:
+                    type: boolean
+                  adapter:
+                    type: string
+                  message_id:
+                    type: string
+                    format: uuid
+                  tag:
+                    type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: Failed to ingest/validate protocol data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /v1/adapter:
     get:
       tags:
-        - Messages
-      summary: WebSocket connection upgrade
-      description: >
-        Initiates a WebSocket connection for real-time agent/user interaction. 
-        Requires standard HTTP Upgrade headers. 
-        Note: This is described for documentation purposes; 
-        OpenAPI 3.1 does not provide a full model for WebSocket protocols.
-      parameters:
-        - name: Connection
-          in: header
-          required: true
-          schema:
-            type: string
-            example: Upgrade
-        - name: Upgrade
-          in: header
-          required: true
-          schema:
-            type: string
-            example: websocket
+        - Adapters
+      summary: List registered protocol adapters
+      operationId: listAdapters
+      security:
+        - BearerAuth: []
       responses:
-        '101':
-          description: Switching Protocols to WebSocket
+        '200':
+          description: List of adapters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  adapters:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name:
+                          type: string
+                        protocol:
+                          type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
 components:
   securitySchemes:

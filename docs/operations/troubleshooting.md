@@ -19,32 +19,11 @@ The `-v` flag removes volumes, giving you a clean database.
 
 ---
 
-### NATS container keeps restarting (health check flapping)
-
-**Symptom**: The NATS container shows `unhealthy` or enters a restart loop.
-
-**Cause**: Earlier versions of the health check used `wget` which is not available in the NATS Docker image. The correct health check uses `/nats-server --help`.
-
-**Fix**: Ensure `docker-compose.yml` has this health check for NATS:
-
-```yaml
-healthcheck:
-  test: ["CMD", "/nats-server", "--help"]
-  interval: 2s
-  timeout: 5s
-  retries: 10
-  start_period: 5s
-```
-
-The `start_period` is important to avoid premature failure detection.
-
----
-
 ### bobberd container won't start
 
 **Symptom**: The bobberd container exits immediately or shows connection errors in logs.
 
-**Cause**: Usually means NATS or PostgreSQL is not ready, or the migration has not completed.
+**Cause**: Usually means PostgreSQL is not ready, or the migration has not completed.
 
 **Fix**:
 1. Check that `init-db` completed successfully:
@@ -59,8 +38,6 @@ The `start_period` is important to avoid premature failure detection.
    ```yaml
    bobberd:
      depends_on:
-       nats:
-         condition: service_healthy
        postgres:
          condition: service_healthy
        init-db:
@@ -69,7 +46,7 @@ The `start_period` is important to avoid premature failure detection.
 
 ---
 
-### Port conflict on 8080, 4222, or 5432
+### Port conflict on 8080 or 5432
 
 **Symptom**: `docker compose up` fails with "port is already allocated".
 
@@ -87,30 +64,6 @@ ports:
 ```
 
 ## API Issues
-
-### WebSocket returns 401
-
-**Symptom**: Connecting to `/v1/ws/connect` returns HTTP 401 Unauthorized.
-
-**Cause**: Missing or invalid JWT token. The WebSocket endpoint accepts authentication via either:
-- Query parameter: `?token=<JWT>`
-- Header: `Authorization: Bearer <JWT>`
-
-**Fix**:
-1. Verify your token is valid and not expired (default TTL: 3600 seconds):
-   ```bash
-   # Register and login to get a fresh token
-   curl -s -X POST http://localhost:8080/v1/auth/register \
-     -H "Content-Type: application/json" \
-     -d '{"email":"test@test.com","password":"pass1234"}'
-
-   curl -s -X POST http://localhost:8080/v1/auth/login \
-     -H "Content-Type: application/json" \
-     -d '{"email":"test@test.com","password":"pass1234"}'
-   ```
-2. Use the token from the login response.
-
----
 
 ### 400 Bad Request with "unknown field"
 
@@ -175,7 +128,7 @@ For method 2, the `X-API-Secret` must be the raw secret returned at agent creati
    ```bash
    kubectl get secret bobberchat-secrets -n bobberchat -o yaml
    ```
-3. Verify NATS and PostgreSQL services are running:
+3. Verify PostgreSQL service is running:
    ```bash
    kubectl get pods -n bobberchat
    kubectl get svc -n bobberchat

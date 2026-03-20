@@ -1,6 +1,6 @@
 # Manual Testing Guide
 
-This guide provides a step-by-step walkthrough for manually testing BobberChat using curl. It covers the full lifecycle: user registration, agent management, groups, messaging, and WebSocket connectivity.
+This guide provides a step-by-step walkthrough for manually testing BobberChat using curl. It covers the full lifecycle: user registration, agent management, groups, and messaging.
 
 ## Prerequisites
 

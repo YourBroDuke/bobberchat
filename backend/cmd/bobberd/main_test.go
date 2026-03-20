@@ -13,22 +13,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-type fakeBroker struct {
-	published []*protocol.Envelope
-	err       error
+func fakePersist(_ context.Context, _ *protocol.Envelope) (uuid.UUID, error) {
+	return uuid.New(), nil
 }
 
-func (f *fakeBroker) PublishMessage(_ context.Context, env *protocol.Envelope) error {
-	if f.err != nil {
-		return f.err
-	}
-	f.published = append(f.published, env)
-	return nil
-}
-
-func newTestApp(limiterCfg *ratelimit.Config) (*app, *fakeBroker) {
-	fb := &fakeBroker{}
-
+func newTestApp(limiterCfg *ratelimit.Config) *app {
 	var lim *ratelimit.Limiter
 	if limiterCfg != nil {
 		lim = ratelimit.New(*limiterCfg)
@@ -37,12 +26,11 @@ func newTestApp(limiterCfg *ratelimit.Config) (*app, *fakeBroker) {
 	reg := prometheus.NewRegistry()
 	metrics := observability.NewMetrics(reg)
 
-	a := &app{
-		limiter:   lim,
-		metrics:   metrics,
-		publisher: fb,
+	return &app{
+		limiter:        lim,
+		metrics:        metrics,
+		persistMessage: fakePersist,
 	}
-	return a, fb
 }
 
 func makeEnvelope(from, to, tag string) *protocol.Envelope {
@@ -66,17 +54,17 @@ func TestPublishAndAudit_RateLimited(t *testing.T) {
 		CleanupSecs: 60,
 		Enabled:     true,
 	}
-	a, _ := newTestApp(&cfg)
+	a := newTestApp(&cfg)
 
 	env := makeEnvelope("agent1", "agent2", "chat.message")
 
-	err := a.publishAndAudit(context.Background(), env)
+	_, err := a.publishAndAudit(context.Background(), env)
 	if err != nil {
 		t.Fatalf("first call should succeed, got %v", err)
 	}
 
 	env2 := makeEnvelope("agent1", "agent2", "chat.message")
-	err = a.publishAndAudit(context.Background(), env2)
+	_, err = a.publishAndAudit(context.Background(), env2)
 	if !errors.Is(err, errRateLimited) {
 		t.Fatalf("second call should be rate-limited, got %v", err)
 	}
@@ -89,11 +77,11 @@ func TestPublishAndAudit_RateLimitDisabled(t *testing.T) {
 		CleanupSecs: 60,
 		Enabled:     false,
 	}
-	a, _ := newTestApp(&cfg)
+	a := newTestApp(&cfg)
 
 	for i := 0; i < 100; i++ {
 		env := makeEnvelope("agent1", "agent2", "chat.message")
-		err := a.publishAndAudit(context.Background(), env)
+		_, err := a.publishAndAudit(context.Background(), env)
 		if err != nil {
 			t.Fatalf("disabled limiter should not block, iteration %d: %v", i, err)
 		}
@@ -109,16 +97,16 @@ func TestPublishAndAudit_GroupRateLimit(t *testing.T) {
 		CleanupSecs: 60,
 		Enabled:     true,
 	}
-	a, _ := newTestApp(&cfg)
+	a := newTestApp(&cfg)
 
 	env := makeEnvelope("agent1", "group:g1", "chat.message")
-	err := a.publishAndAudit(context.Background(), env)
+	_, err := a.publishAndAudit(context.Background(), env)
 	if err != nil {
 		t.Fatalf("first group message should succeed, got %v", err)
 	}
 
 	env2 := makeEnvelope("agent1", "group:g1", "chat.message")
-	err = a.publishAndAudit(context.Background(), env2)
+	_, err = a.publishAndAudit(context.Background(), env2)
 	if !errors.Is(err, errRateLimited) {
 		t.Fatalf("second group message should be rate-limited, got %v", err)
 	}
@@ -133,16 +121,16 @@ func TestPublishAndAudit_TagRateLimit(t *testing.T) {
 		CleanupSecs: 60,
 		Enabled:     true,
 	}
-	a, _ := newTestApp(&cfg)
+	a := newTestApp(&cfg)
 
 	env := makeEnvelope("agent1", "agent2", "request.action")
-	err := a.publishAndAudit(context.Background(), env)
+	_, err := a.publishAndAudit(context.Background(), env)
 	if err != nil {
 		t.Fatalf("first call should succeed, got %v", err)
 	}
 
 	env2 := makeEnvelope("agent1", "agent2", "request.action")
-	err = a.publishAndAudit(context.Background(), env2)
+	_, err = a.publishAndAudit(context.Background(), env2)
 	if !errors.Is(err, errRateLimited) {
 		t.Fatalf("second call should be rate-limited by tag, got %v", err)
 	}

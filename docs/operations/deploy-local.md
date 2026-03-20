@@ -1,11 +1,11 @@
 # Deploy Locally (Development)
 
-This guide covers running BobberChat natively on your development machine with Go, using Docker only for infrastructure dependencies (NATS and PostgreSQL).
+This guide covers running BobberChat natively on your development machine with Go, using Docker only for infrastructure dependencies (PostgreSQL).
 
 ## Prerequisites
 
 - Go 1.25+
-- Docker Engine 20.10+ and Docker Compose v2+ (for NATS and PostgreSQL)
+- Docker Engine 20.10+ and Docker Compose v2+ (for PostgreSQL)
 - `psql` client (for running migrations)
 - The BobberChat repository cloned locally
 
@@ -13,10 +13,10 @@ This guide covers running BobberChat natively on your development machine with G
 
 ### 1. Start Infrastructure Dependencies
 
-Start only NATS and PostgreSQL using Docker Compose:
+Start only PostgreSQL using Docker Compose:
 
 ```bash
-docker compose up -d nats postgres
+docker compose up -d postgres
 ```
 
 Wait for both services to be healthy:
@@ -25,7 +25,7 @@ Wait for both services to be healthy:
 docker compose ps
 ```
 
-Both `nats` and `postgres` should show `healthy` status.
+`postgres` should show `healthy` status.
 
 ### 2. Run Database Migration
 
@@ -47,7 +47,7 @@ PGHOST=localhost PGUSER=bobberchat PGPASSWORD=bobberchat PGDB=bobberchat make mi
 make run-backend
 ```
 
-This executes `go run ./backend/cmd/bobberd --config configs/backend.yaml`. The default config connects to `nats://localhost:4222` and `postgres://bobberchat:bobberchat@localhost:5432/bobberchat?sslmode=disable`.
+This executes `go run ./backend/cmd/bobberd --config configs/backend.yaml`. The default config connects to `postgres://bobberchat:bobberchat@localhost:5432/bobberchat?sslmode=disable`.
 
 Verify:
 
@@ -77,7 +77,6 @@ The default configuration file is `configs/backend.yaml`. Key settings for local
 | Setting | Default | Notes |
 | --- | --- | --- |
 | server.listen_address | :8080 | HTTP server bind address |
-| nats.url | nats://localhost:4222 | Matches Docker Compose NATS port |
 | postgres.dsn | postgres://bobberchat:bobberchat@localhost:5432/bobberchat?sslmode=disable | Matches Docker Compose PostgreSQL |
 | auth.jwt_secret | change-me | Acceptable for local dev |
 | rate_limits.enabled | true | Can disable for testing |

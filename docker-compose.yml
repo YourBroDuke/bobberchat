@@ -1,17 +1,4 @@
 services:
-  nats:
-    image: nats:2.10
-    command: ["-js", "-m", "8222"]
-    ports:
-      - "4222:4222"
-      - "8222:8222"
-    healthcheck:
-      test: ["CMD", "/nats-server", "--help"]
-      interval: 2s
-      timeout: 5s
-      retries: 10
-      start_period: 5s
-
   postgres:
     image: postgres:15
     environment:
@@ -42,14 +29,11 @@ services:
     build: .
     command: ["/app/bobberd", "--config", "/app/configs/backend.yaml"]
     depends_on:
-      nats:
-        condition: service_healthy
       postgres:
         condition: service_healthy
       init-db:
         condition: service_completed_successfully
     environment:
-      BOBBERD_NATS_URL: nats://nats:4222
       BOBBERD_POSTGRES_DSN: postgres://bobberchat:bobberchat@postgres:5432/bobberchat?sslmode=disable
       BOBBERD_SERVER_LISTEN_ADDRESS: :8080
     ports:

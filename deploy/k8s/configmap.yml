@@ -10,8 +10,6 @@ data:
   backend.yaml: |
     server:
       listen_address: ":8080"
-    nats:
-      url: "nats://nats.bobberchat.svc.cluster.local:4222"
     postgres:
       dsn: ""
     auth:

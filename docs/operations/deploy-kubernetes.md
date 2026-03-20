@@ -18,7 +18,6 @@ The `deploy/k8s/` directory contains:
 | namespace.yml | Namespace `bobberchat` |
 | secrets.yml | Secret `bobberchat-secrets` (postgres-dsn, jwt-secret) |
 | configmap.yml | ConfigMap `bobberchat-config` (backend.yaml) |
-| nats.yml | NATS Deployment + Service |
 | postgres.yml | PostgreSQL Deployment + PVC + Service + Secret `bobberchat-db-credentials` |
 | bobberd.yml | bobberd Deployment + Service + Migration Job + placeholder ConfigMap |
 
@@ -71,7 +70,6 @@ openssl rand -base64 32
 kubectl apply -f deploy/k8s/namespace.yml
 kubectl apply -f deploy/k8s/secrets.yml
 kubectl apply -f deploy/k8s/postgres.yml
-kubectl apply -f deploy/k8s/nats.yml
 kubectl apply -f deploy/k8s/configmap.yml
 kubectl apply -f deploy/k8s/bobberd.yml
 ```
@@ -92,7 +90,6 @@ Expected output (after a minute or so):
 
 ```
 NAME                        READY   STATUS      RESTARTS   AGE
-nats-xxxxx                  1/1     Running     0          60s
 postgres-xxxxx              1/1     Running     0          60s
 migrate-xxxxx               0/1     Completed   0          45s
 bobberd-xxxxx               1/1     Running     0          30s
@@ -123,7 +120,6 @@ Default resource requests and limits:
 | Component | CPU Request | CPU Limit | Memory Request | Memory Limit |
 | --- | --- | --- | --- | --- |
 | bobberd | 100m | 500m | 64Mi | 256Mi |
-| NATS | 100m | 500m | 128Mi | 512Mi |
 | PostgreSQL | 250m | 1000m | 256Mi | 1Gi |
 
 PostgreSQL uses a 10Gi PersistentVolumeClaim for data storage.
@@ -137,11 +133,10 @@ kubectl scale deployment bobberd --replicas=4 -n bobberchat
 ```
 
 Multiple bobberd replicas are safe because:
-- NATS JetStream handles message routing across instances
 - PostgreSQL provides shared state
 - Each replica is stateless
 
-Do **not** scale PostgreSQL or NATS beyond 1 replica without additional configuration (replication/clustering).
+Do **not** scale PostgreSQL beyond 1 replica without additional configuration (replication/clustering).
 
 ## Monitoring
 
@@ -155,13 +150,6 @@ annotations:
 ```
 
 If you have a Prometheus instance in-cluster, it will auto-discover bobberd pods.
-
-NATS monitoring is available on port 8222 of the NATS service:
-
-```bash
-kubectl port-forward svc/nats 8222:8222 -n bobberchat
-curl http://localhost:8222/jsz
-```
 
 ## Updating the Application
 

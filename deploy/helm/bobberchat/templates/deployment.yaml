@@ -41,8 +41,6 @@ spec:
                 secretKeyRef:
                   name: {{ include "bobberchat.fullname" . }}-secrets
                   key: jwt-secret
-            - name: BOBBERD_NATS_URL
-              value: "nats://{{ include "bobberchat.fullname" . }}-nats:4222"
             - name: BOBBERD_SERVER_LISTEN_ADDRESS
               value: {{ .Values.config.listenAddress | quote }}
           readinessProbe:

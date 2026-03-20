@@ -10,11 +10,10 @@ This guide covers deploying BobberChat using Docker Compose for development and 
 
 ## Architecture
 
-Docker Compose starts four services:
+Docker Compose starts three services:
 
 | Service | Image | Purpose | Exposed Port |
 | --- | --- | --- | --- |
-| nats | nats:2.10 | Message broker with JetStream | 4222 (client), 8222 (monitoring) |
 | postgres | postgres:15 | Persistent storage | 5432 |
 | init-db | postgres:15 | Runs schema migration then exits | none |
 | bobberd | Built from Dockerfile | Application server | 8080 |
@@ -39,8 +38,8 @@ docker compose up -d --build --wait
 
 The `--wait` flag blocks until all services report healthy. The startup order is:
 
-1. `nats` and `postgres` start in parallel
-2. Both pass health checks (NATS: `--help` exit code, Postgres: `pg_isready`)
+1. `postgres` starts first
+2. `postgres` passes health check (`pg_isready`)
 3. `init-db` runs `migrations/001_initial_schema.sql` against Postgres, then exits
 4. `bobberd` starts after `init-db` completes successfully
 
@@ -56,22 +55,7 @@ Expected response:
 {"status":"ok"}
 ```
 
-### 3. Check NATS Monitoring
-
-NATS exposes monitoring endpoints on port 8222:
-
-```bash
-# Server health
-curl -s http://localhost:8222/healthz
-
-# JetStream status
-curl -s http://localhost:8222/jsz
-
-# Active connections
-curl -s http://localhost:8222/connz
-```
-
-### 4. View Logs
+### 3. View Logs
 
 ```bash
 # All services
@@ -87,7 +71,6 @@ The following environment variables are set in `docker-compose.yml` for the `bob
 
 | Variable | Default Value | Description |
 | --- | --- | --- |
-| BOBBERD_NATS_URL | nats://nats:4222 | NATS connection string (uses Docker DNS) |
 | BOBBERD_POSTGRES_DSN | postgres://bobberchat:bobberchat@postgres:5432/bobberchat?sslmode=disable | PostgreSQL connection string |
 | BOBBERD_SERVER_LISTEN_ADDRESS | :8080 | Listen address inside the container |
 
@@ -97,9 +80,7 @@ Additional variables can be added to override values in `configs/backend.yaml`. 
 
 | Host Port | Container Port | Service |
 | --- | --- | --- |
-| 8080 | 8080 | bobberd (REST API + WebSocket) |
-| 4222 | 4222 | NATS client connections |
-| 8222 | 8222 | NATS monitoring HTTP |
+| 8080 | 8080 | bobberd (REST API) |
 | 5432 | 5432 | PostgreSQL |
 
 ## Data Persistence

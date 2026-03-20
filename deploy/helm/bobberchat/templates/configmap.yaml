@@ -8,8 +8,6 @@ data:
   backend.yaml: |
     server:
       listen_address: {{ .Values.config.listenAddress | quote }}
-    nats:
-      url: "nats://{{ include "bobberchat.fullname" . }}-nats:4222"
     postgres:
       dsn: ""
     auth:

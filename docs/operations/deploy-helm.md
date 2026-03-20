@@ -21,7 +21,6 @@ This guide covers deploying BobberChat using the Helm chart in `deploy/helm/bobb
 The chart deploys:
 - bobberd Deployment (2 replicas by default)
 - bobberd Service (ClusterIP on port 8080)
-- NATS Deployment + Service (optional, enabled by default)
 - PostgreSQL Deployment + PVC + Service (optional, enabled by default)
 - Database migration Job
 - ConfigMap for backend configuration
@@ -60,9 +59,6 @@ secrets:
   postgresDsn: "postgres://bobberchat:CHANGE_ME@postgres:5432/bobberchat?sslmode=require"
   jwtSecret: "CHANGE_ME_TO_A_RANDOM_SECRET"
   postgresPassword: "CHANGE_ME"
-
-nats:
-  enabled: true
 
 postgres:
   enabled: true
@@ -150,8 +146,6 @@ curl -s http://localhost:8080/v1/health
 
 | Value | Default | Description |
 | --- | --- | --- |
-| nats.enabled | true | Deploy NATS alongside bobberd |
-| nats.image.tag | 2.10 | NATS image version |
 | postgres.enabled | true | Deploy PostgreSQL alongside bobberd |
 | postgres.image.tag | 15 | PostgreSQL image version |
 | postgres.storage | 10Gi | PVC size for PostgreSQL data |
